@@ -25,6 +25,7 @@ from hunch import core
 
 ROOT = Path(os.environ.get("HUNCH_PROJECTS", ".")).resolve()
 TOKEN = os.environ.get("HUNCH_SERVER_TOKEN")
+core.MAX_COST = float(os.environ.get("HUNCH_SERVER_MAX_COST", "0.01"))  # per judgment asked by one request
 DRIFT_ALERT = 0.10  # total variation distance between two runs' label shares that is flagged
 
 
@@ -106,12 +107,19 @@ def runs_of(project: dict) -> list[dict]:
 @guarded
 async def api_judge(request: Request):
     """{"path": spec, "row": {...}, "node"?: name, "shadow"?: candidate path, "log"?: bool} → the answers."""
-    body = await request.json()
+    try:
+        body = await request.json()
+    except ValueError:
+        raise Refused(400, "body must be JSON")
+    if not isinstance(body, dict) or not isinstance(body.get("row", {}), dict):
+        raise Refused(400, 'expected {"path": ..., "row": {column: value}}')
     path = project_path(body.get("path"))
+    if not (path.is_file() or any(path.glob("*.yml"))):
+        raise Refused(422, f"{body.get('path')!r} is not a spec or a folder of specs")
     shadow = project_path(body["shadow"]) if body.get("shadow") else None
     try:
-        out = await core.ajudge(path, body.get("node"), shadow, bool(body.get("log")), **(body.get("row") or {}))
-    except SystemExit as e:
+        out = await core.ajudge(path, body.get("row") or {}, node=body.get("node"), shadow=shadow, log=bool(body.get("log")))
+    except SystemExit as e:  # spec errors and the cost cap report by exiting
         raise Refused(422, str(e))
     except KeyError as e:
         raise Refused(422, f"row is missing {e}")
@@ -199,6 +207,16 @@ async def runs_page(request: Request):
                              f"<h2>Label mix, latest run</h2><ul>{''.join(drift) or '<li>no runs yet</li>'}</ul>"))
 
 
+async def queue_for(project: dict, node: str, audit: int = 30, with_answers: bool = False):
+    """The review queue over answers already in the store (asks nothing)."""
+    spec = project["nodes"][node]
+    res = (await core.aexecute(project, dry=True))[node]
+    items = [it for it in res["items"] if it["key"] in res["answers"]]
+    core.attach_gold(items, core.load_reviews(spec))
+    queue = core.review_queue(items, res["answers"], audit)
+    return (queue, res["answers"]) if with_answers else queue
+
+
 def node_of(project: dict, name: str | None) -> str:
     try:
         return core.pick(project, name)
@@ -212,15 +230,12 @@ async def review_page(request: Request):
     project = load(rel)
     node = node_of(project, request.query_params.get("node"))
     spec = project["nodes"][node]
-    res = (await core.aexecute(project, dry=True))[node]  # asks nothing: the queue is over answers already in the store
-    items = [it for it in res["items"] if it["key"] in res["answers"]]
-    core.attach_gold(items, core.load_reviews(spec))
-    queue = core.review_queue(items, res["answers"], int(request.query_params.get("audit", 30)))
+    queue, answers = await queue_for(project, node, int(request.query_params.get("audit", 30)), with_answers=True)
     kinds = Counter(k for k, _ in queue)
     token, reviewer = request.query_params.get("token", ""), request.query_params.get("reviewer", "")
     cards = []
     for kind, it in queue[:25]:
-        a = res["answers"][it["key"]]
+        a = answers[it["key"]]
         top = core.ranked(a)[:3]
         key = core.gold_str(it["raw_gold"])
         state = "".join(f"<div><span class='k'>{html.escape(c)}</span><br>{html.escape(str(it['state'][c]))[:1500]}</div>"
@@ -256,6 +271,12 @@ async def review_post(request: Request):
     spec = project["nodes"][node]
     if form.get("verdict") not in {"model_right", "key_right", "both_ok", "confirmed", "labeled", "ambiguous"}:
         raise Refused(400, f"unknown verdict {form.get('verdict')!r}")
+    # only rows the queue offers, with the kind it offers them as: `audit` must stay a random sample for the
+    # estimator, so a verdict can't be filed as one for a row picked by hand
+    queue = await queue_for(project, node)
+    offered = {(it["qid"], it["id"], it["shash"]): kind for kind, it in queue}
+    if offered.get((form.get("qid"), form.get("row_id"), form.get("state_hash"))) != form.get("kind"):
+        raise Refused(409, "that row is not in the review queue as that kind (already reviewed, or changed)")
     core.append_review(spec, {"qid": form["qid"], "row_id": form["row_id"], "state_hash": form["state_hash"],
                               "kind": form["kind"], "verdict": form["verdict"], "label": form.get("label", ""),
                               "reviewer": request.headers.get("x-reviewer") or form.get("reviewer") or "server",

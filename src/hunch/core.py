@@ -60,7 +60,7 @@ NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside 
 DIAL = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
 SHOW = 12  # rows listed per section; summaries always cover everything
 MAX_COST: float | None = None  # --max-cost: refuse to ask if a single fill would cost more (USD, estimated)
-RESERVED = {"answers"}  # the store's own table; a judgment of that name would drop the cache when materialized
+RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
 # stand in for unreviewed agreeing rows; rows picked for any other reason are not a random sample of anything.
@@ -330,7 +330,8 @@ REDACTIONS = {
         (r"\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abpr]-[\w-]{10,}|AKIA[0-9A-Z]{16}"
          r"|AIza[\w-]{30,})", "[SECRET]"),
         (r"(?i)\b(bearer)\s+[\w.~+/-]{16,}=*", r"\1 [SECRET]"),
-        (r"(?i)\b([\w-]*(?:api[_-]?key|token|secret|password|passwd)[\w-]*)(\s*[=:]\s*)['\"]?[^\s'\"]{8,}", r"\1\2[SECRET]"),
+        (r"(?i)\b([\w-]*(?:api[_-]?key|token|secret|password|passwd)[\w-]*)(['\"]?\s*[=:]\s*['\"]?)[^\s'\",}]{8,}",
+         r"\1\2[SECRET]"),  # key=value, key: value, and JSON "key": "value"
         (r"\b[A-Fa-f0-9]{32,}\b|\b[A-Za-z0-9+/_-]{48,}={0,2}", "[BLOB]"),
     ],
     "emails": [(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b", "[EMAIL]")],
@@ -398,8 +399,10 @@ def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:
     return [item(spec, r, qid) for r in (rows(spec) if rs is None else rs) for qid in spec["questions"]]
 
 
-def label_of(spec: dict, row: dict, width: int = 60) -> str:
-    text = " | ".join(row[c] for c in spec["state"]).replace("\n", " ")
+def label_of(it: dict, width: int = 60, cols: list[str] | None = None) -> str:
+    """The item's input as shown to people and to suggest's writer: the state that is sent (redacted, clipped),
+    never the raw row."""
+    text = " | ".join(str(it["state"][c]) for c in (cols or list(it["state"]))).replace("\n", " ")
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
@@ -513,7 +516,8 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                     errors += tag([f"branch {b['judgment']!r} has no question {spec.get('question')!r}"])
                 elif q["type"] != branches[0]["questions"].get(spec.get("question"), q)["type"]:
                     errors += tag([f"branch {b['judgment']!r} asks {spec['question']!r} as {q['type']}, others differently"])
-            columns[name] = sorted({c for u in ups for c in columns[u]} | {"_branch"})
+            known = [columns[u] for u in ups]
+            columns[name] = None if None in known else sorted({c for cs in known for c in cs} | {"_branch"})
             continue
         if ups:
             header = columns[ups[0]]
@@ -533,7 +537,8 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 errors += tag([f"weights.by column {wt.get('by')!r} not in the source"])
             elif abs(sum(wt.get("population", {}).values()) - 1) > 0.01:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
-        columns[name] = (header or []) + answer_columns(spec) + ["_path_p"] + (["_w"] if "weights" in spec else [])
+        # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
+        columns[name] = None if header is None else header + answer_columns(spec) + ["_path_p"] + (["_w"] if "weights" in spec else [])
     if len(project["nodes"]) == 1:  # a single spec: no need to name it in every message
         name = project["order"][0]
         errors = [x.removeprefix(f"{name}: ") for x in errors]
@@ -787,7 +792,8 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
     missing: dict[str, dict[str, dict]] = {}
     for it in items:
         if it["key"] not in have:
-            missing.setdefault(it["id"], {})[it["key"]] = it  # dedupe identical keys within a row
+            # one request per distinct state (not per row id: two rows can share an id and differ in text)
+            missing.setdefault(it["shash"], {})[it["key"]] = it  # dedupe identical keys within a request
     group = [list(g.values()) for g in missing.values()]
     model = spec["model"]
     stats = {"cached": sum(it["key"] in have for it in items), "asked": 0, "tokens": 0, "cost": 0.0,
@@ -943,9 +949,17 @@ def sign_test(fixed: int, broke: int) -> float:
 
 
 def auroc(pos: list[float], neg: list[float]) -> float:
-    """Chance a random positive scores above a random negative (ties count half)."""
-    wins = sum((p > n) + 0.5 * (p == n) for p in pos for n in neg)
-    return wins / (len(pos) * len(neg))
+    """Chance a random positive scores above a random negative (ties count half): the Mann-Whitney U statistic
+    from ranks, O(n log n) (the pairwise version took 150 s at 100k rows)."""
+    both = sorted([(v, 1) for v in pos] + [(v, 0) for v in neg])
+    rank_sum, i = 0.0, 0
+    while i < len(both):
+        j = i
+        while j < len(both) and both[j][0] == both[i][0]:
+            j += 1
+        rank_sum += (i + 1 + j) / 2 * sum(b[1] for b in both[i:j])  # tied block: its average rank
+        i = j
+    return (rank_sum - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg))
 
 
 def calibration(pairs: list[tuple], bins: int = 10) -> tuple[float, list[tuple]]:
@@ -1059,7 +1073,7 @@ def sample(its: list[dict], n: int) -> list[dict]:
 ZERO = {"cached": 0, "asked": 0, "requests": 0, "tokens": 0, "cost": 0.0}
 
 
-async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool = False) -> dict[str, dict]:
+async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool = False, hold: bool = False) -> dict[str, dict]:
     """Run every judgment in dependency order. A judgment's input rows are its source file, `rows_in` (online),
     or its upstream judgment's output rows (every input column plus the upstream answers). `where` drops rows
     before anything is asked. `dry` asks nothing: missing answers are reported, and rows whose where-clause
@@ -1104,8 +1118,14 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
                     by_row.setdefault(it["id"], {})[it["qid"]] = up["answers"].get(it["key"])
             key_col = up["spec"]["key"]
             path_ps = [r.get("_path_p", 1.0) * p_where(pred, r, by_row.get(str(r.get(key_col)), {})) for r in keep]
+        if rows_in is None and not ups:
+            dup = [i for i, c in Counter(str(r.get(spec["key"])) for r in keep).items() if c > 1]
+            if dup:
+                print(f"{name}: warning: {len(dup)} key values repeat (e.g. {dup[:3]}); rows are paired by key in "
+                      f"diff, review and on_change, so make `{spec['key']}` unique", file=sys.stderr)
         items = plan(spec, keep)
-        held = hold_answers(spec, open_store(spec), items)
+        if hold:
+            hold_answers(spec, open_store(spec), items)
         nq = len(spec["questions"])
         for i, it in enumerate(items):
             it["path_p"] = path_ps[i // nq]
@@ -1115,7 +1135,7 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
             hits, stats = set(answers), {**ZERO, "cached": len(answers)}
         else:
             hits = set(cached(db, [it["key"] for it in items]))
-            answers, stats = await fill(spec, db, [it for it in items if id(it) not in held])
+            answers, stats = await fill(spec, db, items)
         answers, by, stats = await escalate(spec, db, items, answers, stats, dry)
         out_rows = []
         for i, r in enumerate(keep):
@@ -1166,34 +1186,29 @@ async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict
         for it, e in zip(its, eitems):
             ea = got.get(e["key"])
             if ea and route(it["q"], ea, it.get("path_p", 1.0)) == "act":
-                final[it["key"]], by[it["key"]] = ea, model
+                it["key"] = e["key"]  # the row's answer is now the escalated one (lineage, drift and tests follow)
+                final[e["key"]], by[e["key"]] = ea, model
     return final, by, stats
 
 
-def hold_answers(spec: dict, db, items: list[dict]) -> set[int]:
-    """on_change: what a spec edit does to rows answered before.
-      reask (default): every row is asked again under the new spec (new keys; old answers stay in the store).
-      new_rows_only: rows answered before keep the answer they got (their previous key); only new rows are asked.
-      freeze: nothing is asked; rows answered before keep their answers, new rows stay unanswered.
-    Rewrites item keys in place; returns the items that must not be asked (freeze: every item without an answer)."""
-    policy = spec.get("on_change", "reask")
-    if policy == "reask":
+def hold_answers(spec: dict, db, items: list[dict]) -> None:
+    """on_change: new_rows_only: after a spec edit, a row answered before keeps the answer it got, as long as its
+    input is unchanged (same id and same state; edited text is a new row); only new rows are asked. Applied by
+    `run` and `compile` (what run will cost); test, diff, review and judge always see the spec as written.
+    (freeze is checked before a run; reask, the default, asks every row under the new spec.) Rewrites keys."""
+    if spec.get("on_change", "reask") != "new_rows_only":
         return set()
     prev = previous_keys(db, table_name(spec))
-    held = set()
     for it in items:
         old = prev.get((it["id"], it["qid"]))
-        if old:
-            it["key"] = old
-        elif policy == "freeze":
-            held.add(id(it))
-    return held
+        if old and old[1] == it["shash"]:
+            it["key"] = old[0]
 
 
-def previous_keys(db, judgment: str) -> dict[tuple[str, str], str]:
+def previous_keys(db, judgment: str) -> dict[tuple[str, str], tuple[str, str]]:
     try:
-        return {(r, q): k for r, q, k in db.execute(  # run ids start with their time: the last one wins
-            "select row_id, qid, key from _hunch_row_answers where judgment = ? order by run_id", (judgment,))}
+        return {(r, q): (k, s) for r, q, k, s in db.execute(  # run ids start with their time: the last one wins
+            "select row_id, qid, key, shash from _hunch_row_answers where judgment = ? order by run_id", (judgment,))}
     except sqlite3.OperationalError:
         return {}
 
@@ -1236,7 +1251,10 @@ def cmd_lint(project: dict, _args) -> None:
 
 
 def cmd_compile(project: dict, args) -> None:
-    results = execute(project, dry=True)
+    results = execute(project, dry=True, hold=True)  # what `run` would ask, on_change included
+    for n in frozen_changes(project):
+        print(f"# {n}: on_change: freeze and the spec changed since the last complete run: `run` will refuse "
+              f"without --allow-change")
     first = next(n for n in project["order"] if "union" not in project["nodes"][n])
     name = args.node or first
     its = results[name]["items"]
@@ -1328,9 +1346,9 @@ def record_run(db, run: dict) -> None:
 def record_row_answers(db, judgment: str, items: list[dict], run_id: str) -> None:
     # one entry per row, question and run: the history drift checks compare; on_change reads each row's latest
     db.execute("""create table if not exists _hunch_row_answers (judgment text, row_id text, qid text, key text,
-        run_id text, primary key (judgment, row_id, qid, run_id))""")
-    write(db, "insert or replace into _hunch_row_answers values (?, ?, ?, ?, ?)",
-          [(judgment, it["id"], it["qid"], it["key"], run_id) for it in items])
+        shash text, run_id text, primary key (judgment, row_id, qid, run_id))""")
+    write(db, "insert or replace into _hunch_row_answers values (?, ?, ?, ?, ?, ?)",
+          [(judgment, it["id"], it["qid"], it["key"], it["shash"], run_id) for it in items])
 
 
 def git_sha(path: Path) -> str:
@@ -1341,11 +1359,32 @@ def git_sha(path: Path) -> str:
         return ""
 
 
-def cmd_run(project: dict, _args) -> None:
+def frozen_changes(project: dict) -> list[str]:
+    """on_change: freeze: judgments whose spec differs from their last complete run."""
+    out = []
+    for n in project["order"]:
+        spec = project["nodes"][n]
+        if spec.get("on_change") != "freeze":
+            continue
+        try:
+            last = open_store(spec).execute("select spec_hash from _hunch_runs where judgment = ? and status = 'complete' "
+                                            "order by finished_at desc limit 1", (table_name(spec),)).fetchone()
+        except sqlite3.OperationalError:
+            last = None
+        if last and last[0] != spec_hash(spec):
+            out.append(n)
+    return out
+
+
+def cmd_run(project: dict, args) -> None:
+    changed = frozen_changes(project)
+    if changed and not getattr(args, "allow_change", False):
+        sys.exit(f"on_change: freeze, and {changed} changed since the last complete run: nothing asked. "
+                 f"`hunch diff` shows what the change does; `hunch run --allow-change` accepts it")
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
     run_id = f"{started}-{digest([started, os.getpid(), time.time_ns()])[:6]}"
     try:
-        results = execute(project)
+        results = execute(project, hold=True)
     except BaseException as e:  # a failed run is recorded too; tables keep the last complete run
         for n in project["order"]:
             spec = project["nodes"][n]
@@ -1389,7 +1428,9 @@ def table_name(spec: dict) -> str:
 
 
 def spec_hash(spec: dict) -> str:
-    return digest({k: v for k, v in spec.items() if not k.startswith("_") and not isinstance(v, Path)})[:12]
+    """What the judgment asks and of what: switching on_change itself is not a change to freeze against."""
+    return digest({k: v for k, v in spec.items()
+                   if not k.startswith("_") and k != "on_change" and not isinstance(v, Path)})[:12]
 
 
 def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> float | None:
@@ -1583,7 +1624,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
     for it in wrong[:SHOW]:
         got = f"{decide(answers[it['key']])[0]} {conf_of(it, answers[it['key']]):.2f}"
-        print(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {got:<38} {label_of(it['spec'], it['row'], 50)}")
+        print(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {got:<38} {label_of(it, 50)}")
     print("       most confused (gold → got):")
     for (g, got), n in Counter((gold_str(it["gold"]), decide(answers[it["key"]])[0]) for it in wrong).most_common(8):
         print(f"         {n:>3}  {g} → {got}")
@@ -1609,7 +1650,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
               f"order stability: {len(flips)}/{len(variants)} answers flip ({rate:.1%}, {noisy} within noise band), "
               f"mean |Δp| of original answer {sum(dp) / len(dp):.3f} (max flip rate {order.get('max_flip_rate', 1):.0%})")
         for b, v in flips[:SHOW]:
-            print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b['spec'], b['row'], 40)}")
+            print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
 
 
 def cmd_test(project: dict, args) -> None:
@@ -1703,7 +1744,7 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
     for n, oa, na, noisy in flips[:SHOW]:
         g = n["gold"]
         mark = "✓" if g and hit(n, na) and not hit(n, oa) else ("✗" if g and hit(n, oa) and not hit(n, na) else " ")
-        print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n['spec'], n['row'], 40)}")
+        print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n, 40)}")
     if len(flips) > SHOW:
         print(f"  … {len(flips) - SHOW} more")
 
@@ -1826,7 +1867,7 @@ def cmd_review(project: dict, args) -> None:
         for kind, it in queue:
             vs = f"{show(other[(it['id'], it['qid'])])} → " if kind == "shadow" else ""
             print(f"  {kind:<9} #{it['id']:>5} {it['qid']:<10} {vs}{show(answers[it['key']]):<36} "
-                  f"gold={gold_str(it['raw_gold']):<24} {label_of(it['spec'], it['row'], 50)}")
+                  f"gold={gold_str(it['raw_gold']):<24} {label_of(it, 50)}")
         return
 
     reviewer = args.reviewer or getpass.getuser()
@@ -1838,7 +1879,7 @@ def cmd_review(project: dict, args) -> None:
         options = set(it["aq"].get("criteria") or {}) if a["type"] == "choice" else {"yes", "no"}
         print(f"\n[{kind} {n}/{len(queue)}] #{it['id']}  {it['qid']}")
         for col in it["spec"]["state"]:
-            print(f"  {col}: {label_of({'state': [col]}, it['row'], 400)}")
+            print(f"  {col}: {label_of(it, 400, [col])}")
         if kind == "shadow":
             old_label = decide(other[(it["id"], it["qid"])])[0]
             print(f"  --against: {show(other[(it['id'], it['qid'])])}")
@@ -1975,7 +2016,8 @@ def cmd_suggest(project: dict, args) -> None:
     attach_gold(its, load_reviews(spec))
     gold = [it for it in its if it["gold"]]
     learn = [it for it in gold if int(digest(["split", it["id"]])[:8], 16) % 2 == 0]
-    judge_on = [it for it in gold if it not in learn]
+    learn_ids = {it["id"] for it in learn}
+    judge_on = [it for it in gold if it["id"] not in learn_ids]
     wrong = [it for it in learn if not hit(it, res["answers"][it["key"]])]
     print(f"{name}.{qid}: {len(gold)} rows with gold → {len(learn)} to learn from ({len(wrong)} mistakes), "
           f"{len(judge_on)} to judge on; writer {args.writer}")
@@ -1983,7 +2025,7 @@ def cmd_suggest(project: dict, args) -> None:
         sys.exit("no mistakes to learn from")
     rnd = random.Random(0)
     shown = rnd.sample(wrong, min(len(wrong), 60))
-    mistakes = [(label_of({"state": spec["state"]}, it["row"], 300), gold_str(it["gold"]), decide(res["answers"][it["key"]])[0])
+    mistakes = [(label_of(it, 300), gold_str(it["gold"]), decide(res["answers"][it["key"]])[0])
                 for it in shown]
     base = {it["id"]: res["answers"][it["key"]] for it in judge_on}
     base_acc = sum(hit(it, base[it["id"]]) for it in judge_on) / len(judge_on)
@@ -2001,7 +2043,8 @@ def cmd_suggest(project: dict, args) -> None:
             continue
         cspec = {**spec, "questions": {**spec["questions"], qid: nq}}
         path = out_dir / f"{name}.{qid}.{k}.yml"
-        path.write_text(f"# hunch suggest: rewrite {k} of {name}.{qid}, not yet adopted\n" + spec_yaml(cspec))
+        saved = {**cspec, "source": str(absolute_source(spec))} if "source" in spec else cspec  # readable from .hunch/
+        path.write_text(f"# hunch suggest: rewrite {k} of {name}.{qid}, not yet adopted\n" + spec_yaml(saved))
         citems = [item(cspec, it["row"], qid) for it in judge_on]
         cans, cstats = asyncio.run(fill(cspec, open_store(cspec), citems))
         fixed = broke = 0
@@ -2076,12 +2119,20 @@ def _project(path: str | Path) -> dict:
 async def _shadow(path: str | Path, fields: dict) -> None:
     try:
         await aexecute(_project(path), rows_in=[fields])
-    except Exception as e:  # a failing candidate never fails the live answer
+    except (Exception, SystemExit) as e:  # a failing candidate (even one that won't load) never fails the live answer
         print(f"shadow {path}: {e!r}", file=sys.stderr)
 
 
-async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, log: bool = False,
-                 **fields) -> dict | None:
+def _shadow_names(live: dict, shadow: str | Path) -> list[str]:
+    try:
+        return [n for n in roots(_project(shadow)) if n not in roots(live)]
+    except (Exception, SystemExit) as e:
+        print(f"shadow {shadow}: {e!r}", file=sys.stderr)
+        return []
+
+
+async def ajudge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
+                 shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None:
     """Judge one row inside an app: the whole project runs on it, same keys as batch (a row the batch already
     judged is a cache hit; a row judged online is a hit for the next batch). Returns {judgment: {question:
     answer}}; a judgment the row never reached (its where-clause said no) is None. For a one-judgment project,
@@ -2091,12 +2142,13 @@ async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path |
     in this event loop; never returned, never fails the live answer). Its answers are cached, so
     `hunch diff CANDIDATE --against LIVE --traffic` compares them on real traffic for free.
     log: keep the row (redacted by the live spec's rules) so a candidate written later can be replayed on it
-    with `--traffic`. Shadowing implies logging."""
+    with `--traffic`. Shadowing implies logging.
+    The row is `row` (a dict: use it when a column is named node, shadow or log) and/or keyword fields."""
+    fields = {**(row or {}), **fields}
     project = _project(path)
     results = await aexecute(project, rows_in=[fields])
     if shadow or log:
-        names = roots(project) + (roots(_project(shadow)) if shadow else [])
-        log_traffic(project, list(dict.fromkeys(names)), fields)
+        log_traffic(project, roots(project) + (_shadow_names(project, shadow) if shadow else []), fields)
     if shadow:
         task = asyncio.get_running_loop().create_task(_shadow(shadow, fields))
         _background.add(task)
@@ -2122,13 +2174,14 @@ async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path |
     return next(iter(out.values())) if len(out) == 1 else out
 
 
-def judge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, log: bool = False,
-          **fields) -> dict | None:
+def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = None, shadow: str | Path | None = None,
+          log: bool = False, **fields) -> dict | None:
     """Sync ajudge. A shadow candidate runs in a thread after the live answer returns; the thread is not a
     daemon, so a script waits for it at exit and the candidate's answers are recorded."""
-    out = asyncio.run(ajudge(path, node, None, log or bool(shadow), **fields))
+    fields = {**(row or {}), **fields}
+    out = asyncio.run(ajudge(path, fields, node=node, log=log or bool(shadow)))
     if shadow:  # the row was logged under the live names; add the candidate's own
-        extra = [n for n in roots(_project(shadow)) if n not in roots(_project(path))]
+        extra = _shadow_names(_project(path), shadow)
         if extra:
             log_traffic(_project(path), extra, fields)
         threading.Thread(target=lambda: asyncio.run(_shadow(shadow, fields)), name="hunch-shadow").start()
@@ -2148,6 +2201,7 @@ def main() -> None:
     p.add_argument("--n", type=int, default=3, help="suggest: rewrites to try (default 3)")
     p.add_argument("--writer", default=WRITER, help=f"suggest: the LLM that writes rewrites (default {WRITER})")
     p.add_argument("--model", help="use this engine for every judgment instead of the spec's (e.g. openrouter:<id>)")
+    p.add_argument("--allow-change", action="store_true", help="run: accept a changed spec under on_change: freeze")
     p.add_argument("--traffic", action="store_true", help="run the root judgments on rows logged by judge(..., shadow=...)")
     p.add_argument("--list", action="store_true", help="review: print the queue without prompting")
     p.add_argument("--limit", type=int, help="review: at most N items")

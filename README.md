@@ -41,7 +41,22 @@ Companies now classify tickets, transactions, companies, documents, leads, and L
 
 ## Status
 
-Throwaway prototype in [`prototype/`](prototype/README.md): content-addressed store shared by batch and online `judge()` (SQLite WAL), lint, statistical tests, backtest diff with significance, review queue with gold correction. Validated on BANKING77 (intent classification, dev + holdout) and SWE-agent trajectories (agent-run evals). Findings that shape the real build are in [docs/04-design.md](docs/04-design.md).
+A package (`src/hunch`, v0.1, not published) grown out of the prototype, plus a server (`server/`, ELv2). The prototype's examples, review panels and results stay in [`prototype/`](prototype/README.md); `prototype/hunch.py` is a shim over the package, so every documented command still runs.
+
+```sh
+uv tool install .                   # or: uvx --from . hunch …
+hunch init agent-eval my_eval       # a recipe to adapt
+hunch compile my_eval               # what it will ask and cost
+hunch run my_eval --max-cost 1      # ask what the store lacks, materialize tables (with lineage)
+hunch test my_eval                  # accuracy / calibration / AUROC / dial against gold
+hunch diff my_eval --against git:HEAD      # or --model deepseek:deepseek-flash: another engine, row by row
+hunch review my_eval                # the queue that turns disagreements into gold
+hunch suggest my_eval --question claim     # rewrites kept only if they win on held-out gold
+```
+
+Library: `hunch.judge(spec, **row)`, `hunch.run(spec)`, `hunch.results(spec)`, and Pydantic classes (or Pydantic AI output types) as specs: `hunch.spec_from_model(Cls, …)`, `hunch.judge_model(Cls, spec, **row)`. Engines: TypeSafe's Jev, or an LLM through answer-token logprobs (`deepseek:…`, `openrouter:…`). Sources: CSV, agent traces (`traces(<glob>)`: Claude Code, Cursor, OpenCode, OpenTelemetry GenAI), or any Python function (`py(file:fn)`, e.g. a dlt resource).
+
+Validated on BANKING77 (intent, flat and tree), SWE-agent runs, real Claude Code conversations, and a 100k-review scale test; every headline number was checked by a blind review panel or an adversarial review. Findings by round: [docs/04-design.md](docs/04-design.md).
 
 ## Name availability (checked 2026-09-24)
 
@@ -52,4 +67,4 @@ Throwaway prototype in [`prototype/`](prototype/README.md): content-addressed st
 
 Everything in this repository is licensed under the [Apache License 2.0](LICENSE), except third-party data listed in [NOTICE](NOTICE).
 
-Planned split (see [docs/05-licensing.md](docs/05-licensing.md)): the spec, compiler, CLI, SDKs and engine adapters stay Apache 2.0. A future `server/` directory (review UI, online serving, trace ingestion) will be under the Elastic License 2.0 and will carry its own `LICENSE` file. No ELv2 code exists yet.
+Split by layer (see [docs/05-licensing.md](docs/05-licensing.md)): the spec, engine, CLI, library and adapters are Apache 2.0. [`server/`](server/README.md) (online serving, the review UI, runs and drift) is under the Elastic License 2.0 and carries its own [`LICENSE`](server/LICENSE).

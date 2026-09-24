@@ -124,4 +124,6 @@ def _to_model(cls, answers: dict[str, dict]):
 def _value(t, label: str):
     if isinstance(t, type) and issubclass(t, enum.Enum):
         return next(m for m in t if (str(m.value) if isinstance(m.value, str) else m.name) == label)
+    if get_origin(t) is Literal:  # Literal[1, 2] was asked as "1", "2": return the declared value
+        return next((a for a in get_args(t) if str(a) == label), label)
     return label

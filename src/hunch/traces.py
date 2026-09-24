@@ -138,8 +138,13 @@ def read(path: str | Path) -> list[tuple[str, list[dict]]]:
         except json.JSONDecodeError:
             continue  # a session still being written can end mid-line
     first = next((r for r in lines if isinstance(r, dict)), {})
-    if "spans" in first or "attributes" in first:
+    if "spans" in first:
         return otel(path, lines)
+    if "attributes" in first:  # one span per line (OTLP file exporters): group them into traces first
+        traces: dict[str, list] = {}
+        for s in lines:
+            traces.setdefault(s.get("trace_id") or s.get("traceId") or "", []).append(s)
+        return otel(path, [{"trace_id": tid, "spans": spans} for tid, spans in traces.items()])
     if "sessionId" in first or any("sessionId" in r for r in lines[:20]):
         return claude_code(path, lines)
     if "role" in first or any("role" in r for r in lines[:20]):

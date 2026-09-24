@@ -122,10 +122,16 @@ hunch review CANDIDATE --against LIVE --traffic   # review only those rows (kind
 - Claimed done after editing: the developer reports a problem in 33% of turns where the agent ran nothing after its last edit vs 16% where it ran a command (142 vs 31 turns; session bootstrap CI −1 to +30 points: suggestive).
 - Cost $0.020. Details: docs/04-design.md round 9.
 
+### second engine, suggest, scale (docs/04-design.md rounds 10, 12, 14)
+
+- Same specs on DeepSeek V4.1 Flash (answer-token logprobs): BANKING77 92.3% vs Jev 95.8% (paired p = 0.001, Jev better); SWE patch AUROC 0.866 vs 0.831 and Claude Code outcome/claims level (n.s.); ~1.5× Jev's cost as billed.
+- `hunch suggest` on a bare-label BANKING77 spec: a rewrite gained +5.1% on the held-out half (p = 0.008) but +2.4% (n.s.) on the untouched holdout; now Bonferroni-corrected, and confirming on a holdout is part of the workflow.
+- 100,000 Amazon reviews: 57.5 requests/s, no rate limiting, 0.03% retried, $1.55; accuracy 97.0%, AUROC 0.993; a cached re-run takes 4 s.
+
 ### Phase 2 (the graph)
 
 - BANKING77 tree vs flat (holdout): flat 95.8% vs tree 87.5% estimated accuracy (all 69 tree disagreements reviewed blind); tree fixed 3, broke 35 (p < 0.001); tree 48% cheaper; 33 rows routed to a group without their answer. Chained confidence (`chain: true`) separates right from wrong answers with AUROC 0.897 vs 0.796 own-only.
 - agent_eval on 200 SWE-agent runs: 149 claim a fix; auto-reject at 0.80 handles 23.3% of claimed runs at 3.4% error (0.90: 9.3% at 0%); verified-before-claim runs pass 28.9% vs 17.8% (suggestive, p = 0.079).
 - Adversarial review of Phase 2 (Fable): 14 findings, all verified; fixes and corrections in `docs/04-design.md` round 6.
 
-Total API spend for everything: **about $0.51**, of which ~$0.08 was accidental re-asking in Phase 2 (per-folder stores, a spec outside the workspace; see docs/04-design.md rounds 6–7).
+Total API spend for everything: **about $2.76** (the 100k-row scale test was $1.55 of it), of which ~$0.08 was accidental re-asking in Phase 2 (per-folder stores, a spec outside the workspace; see docs/04-design.md rounds 6–7).
