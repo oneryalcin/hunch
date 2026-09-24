@@ -1,0 +1,29 @@
+judgment: ticket_triage
+model: jev-1.13.0
+source: tickets.csv
+key: id
+state: [subject, body]
+
+questions:
+  department:
+    type: choice
+    instructions: Which team should handle this support ticket?
+    criteria:
+      billing: Problems with money already charged or owed - charges, invoices, refunds, receipts, payment methods, tax on bills
+      technical: Something is broken, slow, or misbehaving in the product, API, or integrations
+      sales: Buying more or buying differently - pricing, discounts, plan changes, seats, quotes, contracts, demos
+    act: 0.80            # hunch-only: route below this to review (not sent, not in the cache key)
+    gold: gold_department
+
+  urgent:
+    type: noul
+    instructions: Does the customer convey that this is urgent?
+
+  frustration:
+    type: score
+    instructions: How frustrated is the customer?
+    criteria: [Calm, Mildly annoyed, Frustrated, Very angry]
+
+tests:
+  department:
+    min_accuracy: 0.90

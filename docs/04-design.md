@@ -146,3 +146,19 @@ No extraction/loading, no general orchestration, no general LLM app framework, n
 3. Change question wording → `diff` prints flipped rows with before/after probabilities.
 
 Success criterion: the diff feels magical.
+
+**Built 2026-09-24 → `prototype/`** (results table in `prototype/README.md`). Verdict: it does. A wording change surfaced "Custom contract now counts as urgent" before shipping, for $0.0005.
+
+## Findings from the prototype (measured on jev-1.13.0)
+
+- **Jev is not deterministic.** Identical requests: ambiguous choice p ranged 0.70–0.80 (sd 0.029, n=12); noul sd ≈0.005; clear cases sd 0. Consequences:
+  - Reproducibility must come from the **cache**, not the model. Content addressing is not an optimization, it's the only way labels stay stable across runs.
+  - `diff` must separate real flips from noise: prototype flags flips within 0.10 of the boundary as `~noise`. Better later: estimate per-row noise by resampling borderline rows.
+  - Tests near thresholds are flaky if they re-ask; always evaluate on cached answers.
+- **Per-question cache keys are valid.** Asking a question alone vs with others, or under a different id, stayed within the noise band (0.71 / 0.73 / 0.74 / 0.78). So keys are per (row, question), and requests still batch all missing questions of a row (read once).
+- **Pin exact model versions.** `jev-1.13.0` accepted; `jev-1.13` rejected. `jev-latest` in a key would silently mix model versions → spec should require an exact version (or resolve and record).
+- **Fixed overhead ≈275 input tokens per request** (beyond ~chars/4). Estimate = chars/4 + 275 × requests; landed within 5.5% of actual.
+- **Backtest semantics: old logic on today's data.** The old spec must resolve sources against the current spec's location, else the diff compares different inputs. (First bug hit.)
+- **Routing and test config must stay out of the key.** Changing `act` re-routes rows at $0, no calls.
+- **Option descriptions matter a lot.** Bare labels → 97.5%, 2 rows below 0.80; with one-line descriptions → 100%, 1 row below 0.95.
+- Latency: 40 requests in ~1.8 s wall with concurrency 16.
