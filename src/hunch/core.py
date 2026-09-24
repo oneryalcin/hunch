@@ -32,9 +32,11 @@ import operator
 import os
 import random
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
+import textwrap
 import threading
 import time
 from collections import Counter
@@ -1872,10 +1874,9 @@ def cmd_review(project: dict, args) -> None:
         other = {k: oa for k, oa in other.items() if k in by and decide(oa)[0] != decide(by[k])[0]}
     queue = review_queue(items, answers, args.audit, other)
     kinds = Counter(k for k, _ in queue)
-    print(f"review queue: {kinds['shadow']} shadow (--against answers differently), {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows: where "
-          f"model = key, or any row if no key), {kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
     queue = queue[: args.limit] if args.limit else queue
     if args.list:
+        print("review queue: " + ", ".join(f"{c} {k}" for k, c in kinds.items()))
         for kind, it in queue:
             vs = f"{show(other[(it['id'], it['qid'])])} → " if kind == "shadow" else ""
             print(f"  {kind:<9} #{it['id']:>5} {it['qid']:<10} {vs}{show(answers[it['key']]):<36} "
@@ -1883,73 +1884,100 @@ def cmd_review(project: dict, args) -> None:
         return
 
     reviewer = args.reviewer or getpass.getuser()
+    width = min(shutil.get_terminal_size().columns, 100)
+    tty = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+    bold, dim = [(lambda s, c=c: f"\033[{c}m{s}\033[0m" if tty else s) for c in ("1", "2")]
+    wrap = lambda s: textwrap.fill(s, width, initial_indent="  ", subsequent_indent="  ")
+    print(f"{bold(name)}: {len(queue)} of {sum(kinds.values())} rows to review ("
+          + ", ".join(f"{c} {REVIEW_KINDS[k]}" for k, c in kinds.items()) + f"). Each answer is saved to "
+          f"{reviews_path(spec).name} as you go.")
     done = 0
     for n, (kind, it) in enumerate(queue, 1):
         a = answers[it["key"]]
-        top = ranked(a)[:3]
-        key = gold_str(it["raw_gold"])
-        options = set(it["aq"].get("criteria") or {}) if a["type"] == "choice" else {"yes", "no"}
-        print(f"\n[{kind} {n}/{len(queue)}] #{it['id']}  {it['qid']}")
-        for col in it["spec"]["state"]:
-            print(f"  {col}: {label_of(it, 400, [col])}")
+        model = decide(a)[0]
+        keyed = sorted(it["raw_gold"] or [])
+        marks = {}  # label → who says it is the answer
         if kind == "shadow":
             old_label = decide(other[(it["id"], it["qid"])])[0]
-            print(f"  --against: {show(other[(it['id'], it['qid'])])}")
-            print("  this spec: " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
-            keys = "[o] --against is right   [n] this spec is right   [b] both acceptable   [1-3] pick   "
+            marks = {old_label: "--against", model: "this spec"}
         elif kind == "disputed":
-            print(f"  answer key: {key}")
-            print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
-            keys = "[m] model is right   [k] answer key is right   [b] both acceptable   [1-3] pick   "
-        elif kind == "audit":
-            print(f"  label: {key}")
-            print("  other options: " + "   ".join(f"{i}) {lab}" for i, (lab, _) in enumerate(top, 1)))
-            keys = "[y] label is right   [1-3] pick the right one   "
+            marks = {**{k: "answer key" for k in keyed}, model: "model"}
         else:
-            print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
-            keys = "[1-3] pick   "
-        print(f"  {keys}[a] ambiguous   [s] skip   [q] quit   or type an option")
+            marks = {review_key(it, a): "answer key" if keyed else "model"}
+        default = None if kind in ("shadow", "disputed") else next(iter(marks))
+        ranking = ranked(a)
+        shown = [(lab, p) for i, (lab, p) in enumerate(ranking) if i < 5 or lab in marks]
+        shown += [(lab, 0.0) for lab in marks if lab not in dict(ranking)]  # a key label the model never gave
+        w = min(max(len(lab) for lab, _ in shown), 40)
+
+        rule = f"─── {n} of {len(queue)} · {it['qid']} · {REVIEW_KINDS[kind]} · #{it['id']} "
+        print("\n" + bold(rule + "─" * max(0, width - len(rule))))
+        for col in it["spec"]["state"]:
+            print(f"\n{bold(col.upper())}\n{wrap(label_of(it, 600, [col]))}")
+        instructions = " ".join(str(it["aq"].get("instructions", "")).split())
+        print("\n" + dim(wrap(instructions if len(instructions) <= 300 else instructions[:299] + "…")))
+        for i, (lab, p) in enumerate(shown, 1):
+            mark = f"  ← {marks[lab]}" if lab in marks else ""
+            line = f"  {i:>2}  {lab[:40]:<{w}}  {'█' * round(p * 20):<20} {p:.2f}{mark}"
+            print(bold(line) if mark else line)
+        if len(ranking) > len(shown):
+            print(dim(f"      … {len(ranking) - len(shown)} more; type an option's name to pick it"))
+        choice = "Enter = agree with the marked answer · " if default else ""
+        both = " · b both acceptable" if kind in ("shadow", "disputed") else ""
+        print(dim(f"{choice}1-{len(shown)} pick{both} · a ambiguous · s skip · q quit"))
         while True:
             try:
                 ans = input("> ").strip()
             except EOFError:
                 ans = "q"
-            verdict = label = None
             if ans == "q":
-                print(f"\n{done} verdicts saved to {reviews_path(spec).name}")
+                print(f"\n{done} answers saved to {reviews_path(spec).name}")
                 return
             if ans == "s":
                 break
+            label = None
             if ans == "a":
                 verdict = "ambiguous"
-            elif ans == "o" and kind == "shadow":
-                verdict, label = "against_right", old_label
-            elif ans == "n" and kind == "shadow":
-                verdict, label = "spec_right", top[0][0]
             elif ans == "b" and kind == "shadow":
-                verdict, label = "both_ok", f"{old_label}|{top[0][0]}"
-            elif ans == "m" and kind == "disputed":
-                verdict, label = "model_right", top[0][0]
-            elif ans == "k" and kind == "disputed":
-                verdict, label = "key_right", key
+                verdict, label = "both_ok", f"{old_label}|{model}"
             elif ans == "b" and kind == "disputed":
-                verdict, label = "both_ok", f"{key}|{top[0][0]}"
-            elif ans == "y" and kind == "audit":
-                verdict, label = "confirmed", key
-            elif ans in {"1", "2", "3"} and int(ans) <= len(top):
-                verdict, label = "labeled", top[int(ans) - 1][0]
-            elif ans in options:
-                verdict, label = "labeled", ans
+                verdict, label = "both_ok", "|".join(keyed + [model])
             else:
-                print("  ? not an option")
-                continue
+                if ans == "" and default:
+                    label = default
+                elif ans.isdigit() and 1 <= int(ans) <= len(shown):
+                    label = shown[int(ans) - 1][0]
+                elif ans in dict(ranking):
+                    label = ans
+                else:
+                    print("  ? " + ("pick a number" if ans == "" else "not an option"))
+                    continue
+                verdict = picked_verdict(kind, label, marks)
+                if verdict == "key_right":
+                    label = gold_str(it["raw_gold"])
             append_review(spec, {"qid": it["qid"], "row_id": it["id"], "state_hash": it["shash"], "kind": kind,
                                  "verdict": verdict, "label": label or "", "reviewer": reviewer,
                                  "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
             done += 1
             break
-    print(f"\n{done} verdicts saved to {reviews_path(spec).name}")
+    print(f"\n{done} answers saved to {reviews_path(spec).name}")
 
+
+REVIEW_KINDS = {"shadow": "the two specs disagree", "disputed": "model ≠ answer key", "audit": "spot check",
+                "uncertain": "model unsure"}
+
+
+def review_key(it: dict, a: dict) -> str:
+    """The answer a spot check asks you to confirm: the answer key's, or the model's where there is no key."""
+    return gold_str(it["raw_gold"]) if it["raw_gold"] else decide(a)[0]
+
+
+def picked_verdict(kind: str, label: str, marks: dict[str, str]) -> str:
+    """What picking `label` says about the row, in load_reviews' verdict vocabulary."""
+    who = marks.get(label)
+    return {("shadow", "--against"): "against_right", ("shadow", "this spec"): "spec_right",
+            ("disputed", "model"): "model_right", ("disputed", "answer key"): "key_right",
+            ("audit", "answer key"): "confirmed", ("audit", "model"): "confirmed"}.get((kind, who), "labeled")
 
 # ---------- suggest ----------
 

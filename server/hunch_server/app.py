@@ -248,7 +248,7 @@ async def review_page(request: Request):
     for kind, it in queue[:25]:
         a = answers[it["key"]]
         top = core.ranked(a)[:3]
-        key = core.gold_str(it["raw_gold"])
+        key = core.review_key(it, a)  # a spot check without an answer key confirms the model's answer
         state = "".join(f"<div><span class='k'>{html.escape(c)}</span><br>{html.escape(str(it['state'][c]))[:1500]}</div>"
                         for c in spec["state"])
         choices = {"disputed": [("model_right", top[0][0], "model is right"), ("key_right", key, "answer key is right"),
