@@ -241,6 +241,18 @@ An independent reviewer (Fable, no shared context, `--max-cost 0`) found real bu
 - **Re-asking noise is small here:** mean \|Δp\| 0.013, flips concentrated in the 0.4–0.6 band (accuracy 73.5% vs 74.5% between two runs of one spec).
 - **Two silent failures, fixed.** (1) A spec outside the workspace got a fresh empty store, and `diff` gave the old spec the same one, so 400 cached answers were re-asked ($0.012; `--max-cost` is per judgment and didn't stop it). Creating a store now prints where and why. (2) `diff` paired judgments by name only, so `patch_only` vs `patch_eval` compared nothing and printed nothing; a one-judgment project now pairs with the other side's only judgment, and no names in common is an error.
 
+## Findings, round 8: shadow mode (2026-09-24)
+
+Change a live judgment safely: the app keeps answering with the live spec while a candidate answers the same rows on the side; then compare them on that real traffic. Built from existing parts, no new command:
+
+- `judge(LIVE, shadow=CANDIDATE, **row)`: both answer concurrently; the app gets only the live answer; a failing candidate is logged to stderr, never raised. The row goes into a `traffic` table in the store (one entry per distinct row and judgment name, a repeat counter), under both specs' root names.
+- `--traffic` (like `--source`): the root judgments read the logged rows, exported to `.hunch/traffic/<judgment>.csv`. Rows without a key get one from their content (`t<hash>`), stable across exports, so reviews stay attached.
+- The shadow report is `hunch diff CANDIDATE --against LIVE --traffic`: every answer is already cached, so it is free.
+- "Which side is right" needs gold only where they differ (the paired sign test ignores rows that agree). `review --against` queues exactly those first, as `kind=shadow` with verdicts `against_right` / `spec_right` / `both_ok`. The estimator treats them like disputes: they count for their own rows, never extrapolated (only audits are).
+- Demo (`examples/banking77/shadow_demo.py`, $0): live = flat intent spec, candidate = the tree, 40 holdout texts as traffic: 8 differ.
+- Fixed on the way: `diff` said "accuracy on the 40 shared rows" when 3 had gold; it now counts rows with gold (never visible before because every dataset had gold on every row).
+- Not done: the candidate adds latency (the slower of the two, not fire-and-forget; an `asyncio.run` per call can't outlive the call); traffic is logged only when shadowing, so a candidate written later can't be replayed on past traffic; logged rows are raw inputs kept in the local store (redaction, 06, applies here too).
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

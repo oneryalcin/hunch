@@ -13,10 +13,13 @@ PATH is a spec file (a one-node project) or a directory of specs (a project: jud
   uv run hunch.py run     PATH
   uv run hunch.py test    PATH
   uv run hunch.py diff    PATH --against OLD_PATH | git:REF [--node NAME]
-  uv run hunch.py review  PATH [--node NAME] [--list] [--limit N] [--audit N]
-  (all take --source CSV to run the root judgments on other rows, e.g. a holdout)
+  uv run hunch.py review  PATH [--node NAME] [--list] [--limit N] [--audit N] [--against OLD]
+  (all take --source CSV to run the root judgments on other rows, e.g. a holdout,
+   or --traffic for the rows logged in shadow mode)
 
   from hunch import judge, ajudge      # online: same project, same cache keys as batch
+  judge(LIVE, shadow=CANDIDATE, **row) # also answers with the candidate and logs the row; then
+                                       # hunch diff CANDIDATE --against LIVE --traffic   (free: all cached)
 """
 
 import argparse
@@ -685,7 +688,7 @@ def hit(it: dict, a: dict, gold: str = "gold") -> bool:
 
 def attach_gold(items: list[dict], reviews: dict) -> None:
     """Effective gold = a review verdict on this exact row text if there is one, else the source column.
-    Verdicts: model_right / key_right / labeled / confirmed → that label; both_ok → both labels;
+    Verdicts: model_right / key_right / labeled / confirmed / against_right / spec_right → that label; both_ok → both labels;
     ambiguous → row dropped from scoring. A verdict on text that has since changed is ignored."""
     for it in items:
         col = it["q"].get("gold")
@@ -1150,7 +1153,7 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
         p = sign_test(fixed, broke)
         verdict = "significant" if p < 0.05 else "NOT significant: could be noise, get more gold rows"
         common = [n for _, n in pairs]
-        print(f"  gold accuracy on the {len(common)} shared rows {accuracy([o for o, _ in pairs], old_a, qid):.1%} → "
+        print(f"  gold accuracy on the {sum(bool(n['gold']) for n in common)} shared rows with gold {accuracy([o for o, _ in pairs], old_a, qid):.1%} → "
               f"{accuracy(common, new_a, qid):.1%}  (✓ {fixed} fixed, ✗ {broke} broken, {len(flips) - fixed - broke} other)"
               f"\n  paired sign test p={p:.3f} → {verdict}")
     flips.sort(key=lambda f: f[3])  # real flips first, noise-band flips last
@@ -1162,25 +1165,30 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
         print(f"  … {len(flips) - SHOW} more")
 
 
+def twin_of(n: str, names: list[str]) -> str | None:
+    """n's counterpart on the other side: the same name, else the only one there (a renamed copy)."""
+    return n if n in names else (names[0] if len(names) == 1 else None)
+
+
+def load_against(project: dict, args) -> dict:
+    """The --against project (old logic, or the live one in shadow mode), reading today's rows at its roots."""
+    old = load_project_ref(args.against, args.path)
+    for n in roots(old):
+        twin = twin_of(n, roots(project))
+        if twin:
+            old["nodes"][n]["source"] = source_path(project["nodes"][twin]).resolve()
+    return old
+
+
 def cmd_diff(project: dict, args) -> None:
     """Old logic on today's data: the old project's root judgments read the same rows as today's."""
-    old = load_project_ref(args.against, args.path)
-    new_roots = [n for n in project["order"] if not upstream(project["nodes"][n])]
-    for n in old["order"]:
-        spec = old["nodes"][n]
-        if upstream(spec):
-            continue
-        twin = n if n in new_roots else (new_roots[0] if len(new_roots) == 1 else None)
-        if twin:
-            spec["source"] = source_path(project["nodes"][twin]).resolve()
+    old = load_against(project, args)
     new_r, old_r = execute(project), execute(old)
     print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
-    def twin_of(n: str) -> str | None:  # same name, else the only judgment on the other side (a renamed copy)
-        return n if n in old["nodes"] else (old["order"][0] if len(old["nodes"]) == 1 else None)
     if args.node:
-        pairs = [(args.node, twin_of(args.node))]
+        pairs = [(args.node, twin_of(args.node, old["order"]))]
     elif len(project["nodes"]) == 1:
-        pairs = [(project["order"][0], twin_of(project["order"][0]))]
+        pairs = [(project["order"][0], twin_of(project["order"][0], old["order"]))]
     else:
         pairs = [(n, n) for n in project["order"] if n in old["nodes"]]
         if not pairs:
@@ -1208,13 +1216,15 @@ def cmd_diff(project: dict, args) -> None:
                           new_r[n]["answers"], old_r[o]["answers"], same)
 
 
-def review_queue(items: list[dict], answers: dict, audit: int) -> list[tuple[str, dict]]:
-    """disputed: model ≠ source answer key (a model error, or a gold error); all of them, most confident first.
+def review_queue(items: list[dict], answers: dict, audit: int, other: dict | None = None) -> list[tuple[str, dict]]:
+    """shadow (with --against): the other spec answers this row differently. Reviewing just these decides which
+      spec is better (diff's paired test only needs gold where they differ), so they come first.
+    disputed: model ≠ source answer key (a model error, or a gold error); all of them, most confident first.
     audit: a fixed random sample of rows where model = answer key, topped up to `audit` reviewed rows per question.
       Without it, reviewing only disputes can only move accuracy up.
     uncertain: no gold and below the act threshold (a human label makes it gold).
     Rows with a current verdict are done."""
-    disputed, uncertain, agree = [], [], {}
+    shadow, disputed, uncertain, agree = [], [], [], {}
     audited = Counter()
     for it in items:
         a = answers[it["key"]]
@@ -1222,7 +1232,9 @@ def review_queue(items: list[dict], answers: dict, audit: int) -> list[tuple[str
         if it["gold_src"] in ("review", "excluded"):
             audited[it["qid"]] += agrees
             continue
-        if it["raw_gold"] and not agrees:
+        if other and (it["id"], it["qid"]) in other:
+            shadow.append(it)
+        elif it["raw_gold"] and not agrees:
             disputed.append(it)
         elif agrees:
             agree.setdefault(it["qid"], []).append(it)
@@ -1232,7 +1244,8 @@ def review_queue(items: list[dict], answers: dict, audit: int) -> list[tuple[str
               for it in sorted(members, key=lambda it: digest([it["qid"], it["id"]]))[: max(0, audit - audited[qid])]]
     disputed.sort(key=lambda it: -conf_of(it, answers[it["key"]]))
     uncertain.sort(key=lambda it: conf_of(it, answers[it["key"]]))
-    return [("disputed", it) for it in disputed] + [("audit", it) for it in audits] + [("uncertain", it) for it in uncertain]
+    return ([("shadow", it) for it in shadow] + [("disputed", it) for it in disputed] + [("audit", it) for it in audits]
+            + [("uncertain", it) for it in uncertain])
 
 
 def cmd_review(project: dict, args) -> None:
@@ -1241,14 +1254,26 @@ def cmd_review(project: dict, args) -> None:
     res = execute(project)[name]
     items, answers = res["items"], res["answers"]
     attach_gold(items, load_reviews(spec))
-    queue = review_queue(items, answers, args.audit)
+    other = {}  # (row id, question) → the --against spec's answer, where it differs from this one's
+    if args.against:
+        old = load_against(project, args)
+        o = twin_of(name, old["order"])
+        if o is None:
+            sys.exit(f"--against has no judgment matching {name!r}; it has {old['order']}")
+        ores = execute(old)[o]
+        for oi in ores["items"]:
+            other[(oi["id"], oi["qid"])] = ores["answers"][oi["key"]]
+        by = {(it["id"], it["qid"]): answers[it["key"]] for it in items}
+        other = {k: oa for k, oa in other.items() if k in by and decide(oa)[0] != decide(by[k])[0]}
+    queue = review_queue(items, answers, args.audit, other)
     kinds = Counter(k for k, _ in queue)
-    print(f"review queue: {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows where "
+    print(f"review queue: {kinds['shadow']} shadow (--against answers differently), {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows where "
           f"they agree), {kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
     queue = queue[: args.limit] if args.limit else queue
     if args.list:
         for kind, it in queue:
-            print(f"  {kind:<9} #{it['id']:>5} {it['qid']:<10} {show(answers[it['key']]):<36} "
+            vs = f"{show(other[(it['id'], it['qid'])])} → " if kind == "shadow" else ""
+            print(f"  {kind:<9} #{it['id']:>5} {it['qid']:<10} {vs}{show(answers[it['key']]):<36} "
                   f"gold={gold_str(it['raw_gold']):<24} {label_of(it['spec'], it['row'], 50)}")
         return
 
@@ -1262,7 +1287,12 @@ def cmd_review(project: dict, args) -> None:
         print(f"\n[{kind} {n}/{len(queue)}] #{it['id']}  {it['qid']}")
         for col in it["spec"]["state"]:
             print(f"  {col}: {label_of({'state': [col]}, it['row'], 400)}")
-        if kind == "disputed":
+        if kind == "shadow":
+            old_label = decide(other[(it["id"], it["qid"])])[0]
+            print(f"  --against: {show(other[(it['id'], it['qid'])])}")
+            print("  this spec: " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
+            keys = "[o] --against is right   [n] this spec is right   [b] both acceptable   [1-3] pick   "
+        elif kind == "disputed":
             print(f"  answer key: {key}")
             print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
             keys = "[m] model is right   [k] answer key is right   [b] both acceptable   [1-3] pick   "
@@ -1287,6 +1317,12 @@ def cmd_review(project: dict, args) -> None:
                 break
             if ans == "a":
                 verdict = "ambiguous"
+            elif ans == "o" and kind == "shadow":
+                verdict, label = "against_right", old_label
+            elif ans == "n" and kind == "shadow":
+                verdict, label = "spec_right", top[0][0]
+            elif ans == "b" and kind == "shadow":
+                verdict, label = "both_ok", f"{old_label}|{top[0][0]}"
             elif ans == "m" and kind == "disputed":
                 verdict, label = "model_right", top[0][0]
             elif ans == "k" and kind == "disputed":
@@ -1315,14 +1351,68 @@ def cmd_review(project: dict, args) -> None:
 _projects: dict[Path, dict] = {}
 
 
-async def ajudge(path: str | Path, node: str | None = None, **fields) -> dict | None:
+def roots(project: dict) -> list[str]:
+    return [n for n in project["order"] if not upstream(project["nodes"][n])]
+
+
+def log_traffic(project: dict, names: list[str], row: dict) -> None:
+    """Rows judged online in shadow mode, so the candidate can be compared on real traffic (--traffic).
+    One entry per distinct row and judgment name; `n` counts repeats."""
+    db = open_store(project["nodes"][roots(project)[0]])
+    db.execute("""create table if not exists traffic (judgment text, rhash text, row text, n integer,
+        first_at text default current_timestamp, last_at text default current_timestamp,
+        primary key (judgment, rhash))""")
+    body = json.dumps({k: canon(v) for k, v in row.items()}, ensure_ascii=False)
+    write(db, """insert into traffic (judgment, rhash, row, n) values (?, ?, ?, 1) on conflict do update
+                 set n = n + 1, last_at = current_timestamp""", [(n, digest(body)[:16], body) for n in names])
+
+
+def traffic_source(spec: dict) -> Path:
+    """This judgment's logged traffic as a CSV, so every command (diff, test, review) can read it like a source.
+    Rows without a key value get one from their content, stable across exports (reviews stay attached)."""
+    db = open_store(spec)
+    try:
+        got = db.execute("select rhash, row from traffic where judgment = ? order by first_at, rhash",
+                         (spec["judgment"],)).fetchall()
+    except sqlite3.OperationalError:
+        got = []
+    if not got:
+        sys.exit(f"{spec['judgment']}: no logged traffic (judge(..., shadow=...) logs it)")
+    out = [{spec["key"]: f"t{h}", **json.loads(r)} for h, r in got]
+    path = store_path(spec["_dir"]).parent / "traffic" / f"{spec['judgment']}.csv"
+    path.parent.mkdir(exist_ok=True)
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, list(dict.fromkeys(k for r in out for k in r)))
+        w.writeheader()
+        w.writerows(out)
+    return path
+
+
+async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, **fields) -> dict | None:
     """Judge one row inside an app: the whole project runs on it, same keys as batch (a row the batch already
     judged is a cache hit; a row judged online is a hit for the next batch). Returns {judgment: {question:
     answer}}; a judgment the row never reached (its where-clause said no) is None. For a one-judgment project,
-    or with `node`, returns just that judgment's answers."""
-    p = Path(path).resolve()
-    project = _projects.get(p) or _projects.setdefault(p, load_project(p))
-    results = await aexecute(project, rows_in=[fields])
+    or with `node`, returns just that judgment's answers.
+
+    shadow: a candidate project answered alongside (same row, cached, never returned) and the row logged, so
+    `hunch diff CANDIDATE --against LIVE --traffic` compares them on real traffic for free. A failing
+    candidate never fails the live answer. Latency is the slower of the two."""
+    def get(q) -> dict:
+        q = Path(q).resolve()
+        return _projects.get(q) or _projects.setdefault(q, load_project(q))
+
+    project = get(path)
+    if shadow:
+        cand = get(shadow)
+        results, cres = await asyncio.gather(aexecute(project, rows_in=[fields]),
+                                             aexecute(cand, rows_in=[fields]), return_exceptions=True)
+        if isinstance(results, BaseException):
+            raise results
+        if isinstance(cres, BaseException):
+            print(f"shadow {shadow}: {cres!r}", file=sys.stderr)
+        log_traffic(project, list(dict.fromkeys(roots(project) + roots(cand))), fields)
+    else:
+        results = await aexecute(project, rows_in=[fields])
     out: dict[str, dict | None] = {}
     for n in project["order"]:
         res = results[n]
@@ -1342,8 +1432,8 @@ async def ajudge(path: str | Path, node: str | None = None, **fields) -> dict | 
     return next(iter(out.values())) if len(out) == 1 else out
 
 
-def judge(path: str | Path, node: str | None = None, **fields) -> dict | None:
-    return asyncio.run(ajudge(path, node, **fields))
+def judge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, **fields) -> dict | None:
+    return asyncio.run(ajudge(path, node, shadow, **fields))
 
 
 def main() -> None:
@@ -1353,8 +1443,9 @@ def main() -> None:
     p.add_argument("command", choices=list(commands))
     p.add_argument("path", type=Path, help="a spec file, or a directory of specs (a project)")
     p.add_argument("--node", help="one judgment in a project (test, diff, review, compile)")
-    p.add_argument("--against", help="diff: old spec/project path, or git:REF")
+    p.add_argument("--against", help="diff: old spec/project path, or git:REF; review: queue rows it answers differently first")
     p.add_argument("--source", type=Path, help="run the root judgments on this CSV instead (e.g. a holdout set)")
+    p.add_argument("--traffic", action="store_true", help="run the root judgments on rows logged by judge(..., shadow=...)")
     p.add_argument("--list", action="store_true", help="review: print the queue without prompting")
     p.add_argument("--limit", type=int, help="review: at most N items")
     p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
@@ -1364,10 +1455,13 @@ def main() -> None:
     global MAX_COST
     MAX_COST = args.max_cost
     project = load_project(args.path)
-    if args.source:
-        for n in project["order"]:
-            if not upstream(project["nodes"][n]):
-                project["nodes"][n]["source"] = args.source.resolve()
+    if args.source and args.traffic:
+        sys.exit("--source or --traffic, not both")
+    for n in roots(project):
+        if args.source:
+            project["nodes"][n]["source"] = args.source.resolve()
+        elif args.traffic:
+            project["nodes"][n]["source"] = traffic_source(project["nodes"][n])
     errors, warnings = lint(project)
     for w in warnings:
         print(f"lint warning: {w}", file=sys.stderr)

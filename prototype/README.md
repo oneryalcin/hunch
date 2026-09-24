@@ -13,6 +13,7 @@ uv run ../../hunch.py test    intent.yml [--source holdout.csv]   # accuracy, ca
 uv run ../../hunch.py diff    intent.yml --against git:HEAD [--source ...]   # flips, fixed/broken, sign test
 uv run ../../hunch.py review  intent.yml [--list] [--limit N] [--audit N]   # disputed + audit + uncertain rows → <judgment>.reviews.csv
 uv run online_demo.py                                       # judge() from an app, same store as batch
+uv run shadow_demo.py                                       # judge(live, shadow=candidate) + diff/review --traffic
 ```
 
 Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `act` is a number, or `{yes: .., no: ..}` on yes/no questions. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `base_rate` (noul: score as if this share of rows were yes), `order_stability: {sample, permutations, max_flip_rate}` (choice).
@@ -39,6 +40,7 @@ A folder of specs is a project. A judgment can read another's output with `sourc
 - `examples/tickets/`: 40 hand-written support tickets. Smoke test only.
 - `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
 - `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it? `patch_only.yml` is the same question without the agent's messages (an ablation).
+- `examples/claude_code/`: `prepare.py` turns Claude Code transcripts (`~/.claude/projects`) into one row per human turn, redacted before writing; `turns.csv` is gitignored. Not run yet.
 
 ## Results (jev-1.13.0, 2026-09-24)
 
@@ -95,6 +97,17 @@ Three context-free Claude subagents, blind protocol (`review_panel/README.md`): 
 | New text | ~600 ms, then stored for everyone |
 | **`judge()` while a real batch writes 200 answers** (SQLite WAL) | **63 hits, p50 0.6 ms, p99 3.0 ms, 0 errors** (DuckDB: crashed) |
 | Same text, `\r\n` vs `\n` | was a miss (174/200 traces differ); fixed by normalizing line endings |
+
+### shadow mode
+
+`judge(LIVE, shadow=CANDIDATE, **row)` returns the live answer; the candidate answers the same row (cached, never returned) and the row is logged in the store. `--traffic` makes any command read those logged rows as its source:
+
+```
+hunch diff   CANDIDATE --against LIVE --traffic   # where would the candidate have answered differently? ($0: all cached)
+hunch review CANDIDATE --against LIVE --traffic   # review only those rows (kind=shadow) → diff then says which side wins
+```
+
+`examples/banking77/shadow_demo.py`: live = flat intent spec, candidate = the tree, 40 customer messages as traffic; the candidate differs on 8, $0.
 
 ### Phase 2 (the graph)
 

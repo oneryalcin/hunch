@@ -1,3 +1,4 @@
 .hunch/
 __pycache__/
 .cache/
+prototype/examples/claude_code/turns.csv
