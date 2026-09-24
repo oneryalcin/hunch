@@ -2,7 +2,9 @@
 # `outcome` and with `ran_after_edit` (computed in prepare.py: did it run anything after its last edit?).
 judgment: claims
 model: jev-1.13.0
-source: turns.csv
+source: traces(.cache/trace-commons/sessions/claude_code/*.jsonl)   # Trace Commons (CC BY 4.0), see NOTICE.md
+redact: [secrets, emails]
+clip: {request: 3000, final_reply: -3000, next_message: 1500}
 key: id
 state: [request, final_reply]
 questions:

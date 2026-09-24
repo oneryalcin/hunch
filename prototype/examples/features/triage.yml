@@ -1,0 +1,31 @@
+# Spec features in one place (6 hand-written messages): none-of-these, multi-label, escalation to an LLM.
+judgment: triage
+model: jev-1.13.0
+source: messages.csv
+key: id
+state: [subject, body]
+questions:
+  dept:
+    type: choice
+    instructions: Which team should handle this support message?
+    criteria:
+      billing: Money already charged or owed
+      technical: Something broken in the product or API
+      sales: Buying more or differently
+    none: The message needs no team (thanks, spam, chit-chat)
+    act: 0.95
+    escalate: {model: "deepseek:deepseek-flash"}
+    gold: gold_dept
+  topics:
+    type: multi
+    instructions: Which of these topics does the message raise?
+    criteria:
+      refund: asks for money back
+      duplicate_charge: charged more than once
+      login: cannot sign in
+      pricing: asks what something costs
+      outage: the service is down or erroring
+      invoice: invoice details are wrong
+    gold: gold_topics
+tests:
+  topics: {min_accuracy: 0.5}

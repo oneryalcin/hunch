@@ -14,7 +14,12 @@ uv run ../../hunch.py diff    intent.yml --against git:HEAD [--source ...]   # f
 uv run ../../hunch.py review  intent.yml [--list] [--limit N] [--audit N]   # disputed + audit + uncertain rows → <judgment>.reviews.csv
 uv run online_demo.py                                       # judge() from an app, same store as batch
 uv run shadow_demo.py                                       # judge(live, shadow=candidate) + diff/review --traffic
+# judge(spec, log=True, **row) keeps rows so a candidate written later can be replayed with --traffic
 ```
+
+Sources: `source:` is a CSV, `traces(<glob>)` (Claude Code, Cursor, OpenCode, OpenTelemetry GenAI sessions; `view: turns | runs`; see `traces.py`) or `py(<file.py>:<function>)` (any function returning dicts, e.g. a dlt resource). `redact: [secrets, emails, home, <regex>]` and `clip: {column: N | -N}` apply before anything is hashed or sent. Question extras: `none: "<when>"` (a none-of-these option), `type: multi` (several options can apply; one yes/no each), `escalate: {model: <engine>}` (re-ask answers below `act` on another engine). `examples/features/` shows each.
+
+Your own Claude Code sessions: `source: traces(~/.claude/projects/*dev-personal*/*.jsonl)` with `redact: [secrets, emails, home]`.
 
 Engines: `model: jev-1.13.0` (TypeSafe), or an LLM through its answer-token logprobs: `deepseek:<id>` (DeepSeek API, `DEEPSEEK_API_KEY`) or `openrouter:<id>[@provider]` (`OPENROUTER_API_KEY`). `--model X` on any command runs the same specs on another engine (tables get a `__<engine>` suffix); `hunch diff SPEC --against SPEC --model X` compares engines row by row.
 
@@ -42,7 +47,7 @@ A folder of specs is a project. A judgment can read another's output with `sourc
 - `examples/tickets/`: 40 hand-written support tickets. Smoke test only.
 - `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
 - `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it? `patch_only.yml` is the same question without the agent's messages (an ablation).
-- `examples/claude_code/`: 309 turns of real developer ↔ Claude Code sessions (Trace Commons, CC BY 4.0), built by `prepare.py` (also reads your own `~/.claude/projects`; redacts before writing; `turns.csv` is gitignored). `outcome.yml`: how did the turn go, from the developer's next message? `claims.yml`: does the agent say it's done?
+- `examples/claude_code/`: 309 turns of real developer ↔ Claude Code sessions (Trace Commons, CC BY 4.0), read directly with `source: traces(...)` (download command in NOTICE.md; the sessions stay in the gitignored `.cache/`). `outcome.yml`: how did the turn go, from the developer's next message? `claims.yml`: does the agent say it's done?
 
 ## Results (jev-1.13.0, 2026-09-24)
 

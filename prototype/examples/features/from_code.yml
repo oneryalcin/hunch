@@ -1,0 +1,13 @@
+# A source written in Python (any function returning dicts: a dlt resource, a query, a generator), with
+# redaction and clipping applied before anything is hashed or sent. `hunch compile` shows what would be sent.
+judgment: from_code
+model: jev-1.13.0
+source: py(rows.py:tickets)
+redact: [secrets, emails, 'crash\w*']
+clip: {body: 40}
+key: id
+state: [subject, body]
+questions:
+  urgent:
+    type: noul
+    instructions: "Is it urgent?"

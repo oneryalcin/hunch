@@ -1,0 +1,7 @@
+id,subject,body,gold_dept,gold_topics
+1,Charged twice,I see two identical charges for March. Please refund one.,billing,refund|duplicate_charge
+2,Login broken,Since the update I cannot log in and I was also charged for a plan I cancelled.,technical,login|refund
+3,Hello,Just wanted to say your team is great!,none_of_these,-
+4,Need a quote,How much for 50 seats with an annual contract?,sales,pricing
+5,API 500s,Our integration returns 500 errors on every call since this morning.,technical,outage
+6,Wrong invoice address,The invoice shows our old address; can you fix it?,billing,invoice

@@ -62,18 +62,18 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 | Item | Why | Done when |
 |---|---|---|
 | ~~Ablation: does the agent's own claim sway `fix_correct`?~~ DONE | "Adversarial text can move Jev"; the state includes the agent saying it fixed it | **No contagion** (04 round 7): the messages move answers 6× more than re-asking does, but a claim doesn't raise p(passes) and AUROC is unchanged (0.831 vs 0.828). Done as a spec copy + `diff` (`examples/swe_agent/patch_only.yml`), $0.008 |
-| "None of these" as a primitive | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `choice` gets an optional none-option; lint suggests it when state can be incomplete |
-| Multi-label questions | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option |
-| State-size lint | 32k tokens for state + longest question; past it the request fails | `lint`/`compile` warn at ~25k estimated tokens per row, name the largest column |
-| Redaction for traces | State leaves the machine; traces carry secrets and customer data | Per-column redaction rules in the spec (patterns + drop lists), applied before hashing and sending |
-| LLM escalation tier | Pydantic's `FallbackModel` on low confidence | `route` can escalate to an LLM as well as a person; the dial reports fallback rate and cost |
-| Confidence vocabulary | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | Documented side by side; `judge()` can return both |
+| ~~"None of these" as a primitive~~ DONE (04 round 11) | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `none: "<when>"` adds a `none_of_these` option (sent, keyed); `test` reports the declined rate |
+| ~~Multi-label questions~~ DONE (04 round 11) | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option; combined column and exact-set accuracy |
+| ~~State-size lint~~ DONE (04 round 11) | 32k tokens for state + longest question; past it the request fails | `compile`/`run` warn at 80% of the limit, name the largest column and suggest `clip:` |
+| ~~Redaction for traces~~ DONE (04 round 11) | State leaves the machine; traces carry secrets and customer data | `redact: [secrets, emails, home, <regex>]` before hashing and sending, and on rows logged for shadow/replay; `clip:` per column (head or tail) |
+| ~~LLM escalation tier~~ DONE (04 round 11) | Pydantic's `FallbackModel` on low confidence | `escalate: {model: X}` re-asks only answers below `act` on engine X; `test` scores the combined system and reports how many were escalated |
+| ~~Confidence vocabulary~~ DONE | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | `judge()` returns both: `p` and `margin` |
 
 ## Next up, from OpenServ's SERV / Graph Sharding (read 2026-09-24, see 03 related work)
 
 | Item | Why | Done when |
 |---|---|---|
-| ~~Shadow mode~~ DONE (04 round 8) | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | Built without a new command: `judge(..., shadow=...)` logs the row and caches the candidate's answer; `--traffic` makes `diff` the shadow report and `review --against` queue only the rows where they differ. Open: fire-and-forget (the candidate currently adds latency), replay of traffic logged without a candidate |
+| ~~Shadow mode~~ DONE (04 round 8) | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | Built without a new command: `judge(..., shadow=...)` logs the row and caches the candidate's answer; `--traffic` makes `diff` the shadow report and `review --against` queue only the rows where they differ. Since round 11: the candidate runs after the live answer returns (no added latency), and `judge(..., log=True)` keeps rows so a candidate written later can be replayed with `--traffic` |
 | `hunch suggest`, gated by `diff` | SERV's pitch is clearer instructions make Jev better; our own biggest gain was option descriptions (82% → 88%). Rewrites are only worth keeping if measured | `suggest` drafts question/option rewrites (from example rows and confusions); each is kept only if `diff` on gold shows a significant gain; the report says which were rejected |
 | Runtime adapters | Decision nodes now live inside runtimes (Pydantic AI output types, SERV graphs); hunch should test the same definition that runs | Import a Pydantic AI output type as a spec (with Phase 4's Pydantic API); import SERV decision nodes if they expose definitions; export a hunch spec back where possible |
 | Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised. It worked with no new code (copy the spec, drop the column, `diff`), but `diff` reports label flips and accuracy, not *how far and which way* probabilities moved, or the re-ask noise floor; those came from a throwaway script. Add them to `diff` when a second ablation needs them |
@@ -83,11 +83,11 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 
 | Item | Question it answers | Done when |
 |---|---|---|
-| Second engine adapter | Is the spec really engine-neutral? | Same spec runs on an LLM with logprobs (or an open System One clone); swapping is one string. |
-| Cross-engine diff | Which engine should this judgment use? | `diff --against engine:X` shows flips, accuracy, calibration, cost per engine. |
+| ~~Second engine adapter~~ DONE (04 round 10) | Is the spec really engine-neutral? | `deepseek:<id>` / `openrouter:<id>[@provider]` through answer-token logprobs; `--model` swaps the engine for any command. |
+| ~~Cross-engine diff~~ DONE (04 round 10) | Which engine should this judgment use? | `diff SPEC --against SPEC --model X`: flips, fixed/broken on gold, sign test; `test --model X` for calibration and cost. |
 | Scale test at 100k rows | Where does it break: hashing, store size, rate limits? | Measured throughput. Known constraint: 1,200 requests/min means 1M rows ≈ 14 h on one key. Decide batching / multi-key / cursor from data. |
 | Cursor + hash incremental | Can we avoid re-reading an unchanged big table? | `incremental: {cursor: updated_at}` skips old rows; hash still decides whether to ask. |
-| Trace source via dlt (moved up for the AI-engineer persona) | Can hunch read agent traces directly instead of a hand-built CSV? | Any dlt resource is a hunch source; demonstrated with an OpenTelemetry GenAI / Langfuse-style export. Per-field trimming is declared in the spec (keep the head of an issue, the tail of a conversation), not hand-coded like `prepare.py`. |
+| Trace source via dlt (moved up for the AI-engineer persona) | Can hunch read agent traces directly instead of a hand-built CSV? | Any dlt resource is a hunch source; demonstrated with an OpenTelemetry GenAI / Langfuse-style export. Per-field trimming is declared in the spec (keep the head of an issue, the tail of a conversation), not hand-coded like `prepare.py`. **Round 11:** `source: traces(<glob>)` reads Claude Code, Cursor, OpenCode and OpenTelemetry GenAI files (`traces.py`), `source: py(file:fn)` takes any function returning dicts (a dlt resource included), `clip:` is in the spec; the Claude Code example dropped `prepare.py` with identical keys. |
 
 ## Phase 4: package v0.1 (product, Apache 2.0)
 

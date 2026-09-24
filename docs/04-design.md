@@ -295,6 +295,19 @@ DeepSeek's 13 BANKING77 disagreements that no one had reviewed (Jev agreed with 
 - **Logprobs are fragile across providers.** OpenRouter lists logprobs for many providers that don't return them (Novita) or reason despite "reasoning off" (Wafer on GLM, which then ran out of room); Straitly and Z.ai return none. At temperature 0 DeepSeek's API masks every other token (-9999), so the engine reads at temperature 1: only the probabilities are used, never the sampled text. Pin a provider with `openrouter:<id>@<provider>`; the provider is part of the model string, so of the key. GLM-5.3-flash works pinned to Parasail but was not compared: the OpenRouter account ran out of credit (only you can top it up).
 - **Tables per engine.** `run --model X` writes `<judgment>__<engine>` tables; the spec's own tables stay as they were (the first LLM run overwrote them).
 
+## Findings, round 11: sources, redaction, and the spec features from Pydantic AI (2026-09-24)
+
+- **Sources.** `source:` is a CSV, `traces(<glob>)` or `py(<file.py>:<fn>)`. `traces.py` (stdlib) reads Claude Code, Cursor, OpenCode and OpenTelemetry GenAI (`gen_ai.input/output.messages`, the latest span of a trace holds the conversation) into one event stream, viewed as `turns` or `runs`; tool names are normalised across harnesses (edit / run). Checked on Trace Commons (all four harness formats present) and IBM's Codex OTel traces (CC BY-NC, local only). A dlt resource is a function returning dicts, so `py()` is the dlt integration without a dependency.
+- **The hand-written prepare script is gone.** `examples/claude_code` reads the sessions directly with `redact: [secrets, emails]` and `clip:` in the spec; all 618 cache keys are identical to the prepared CSV's, so answers and panel reviews carried over.
+- **Redaction and clipping** apply to state before it is hashed or sent, and to rows kept for shadow mode or replay. Rules are idempotent, so a replayed row gets the same keys. `clip: {col: N}` keeps the head, `-N` the tail (a conversation's claim is at its end).
+- **Size warning.** `compile`/`run` flag rows past 80% of the 32k-token state limit, naming the largest column and suggesting `clip:`.
+- **None of these.** `none: "<when>"` adds `none_of_these` to a choice question (sent, keyed); `test` reports the declined rate.
+- **Multi-label.** `type: multi` expands at load into one yes/no per option (`<qid>__<option>`): every per-option test, diff and review works unchanged; rows get the combined `<qid>` set and `test` adds exact-set accuracy. Gold is `a|b`, `-` for none.
+- **Escalation.** `escalate: {model: X}` re-asks only answers below `act` on engine X and keeps the escalated answer if it clears `act` itself; `test` scores the combined system and reports how many were escalated.
+- **Shadow mode, finished.** The candidate runs after the live answer returns (a task in the app's event loop; a non-daemon thread for sync `judge()`), so live latency is the live spec's alone (~600 ms measured, was the slower of the two), and the candidate hits the cache for questions the live spec just asked (before, both asked the same question at once and paid twice). `judge(..., log=True)` keeps rows so a candidate written later can be replayed with `--traffic`. A shared SQLite connection used from two threads raised `InterfaceError`: connections are now per thread (WAL was built for that).
+- **Confidence vocabulary.** `judge()` returns `p` (probability of the label) and `margin` (Pydantic AI's confidence: |p − 0.5| × 2, or top minus runner-up).
+- Regression: `test` output on BANKING77 (flat, tree, DeepSeek), SWE, agent_eval and tickets is byte-identical to before these changes.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

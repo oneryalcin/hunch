@@ -38,6 +38,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -48,9 +49,11 @@ import yaml
 
 API = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
-HUNCH_ONLY_FIELDS = {"act", "gold"}  # routing/test config: never sent, never part of the key
-QUESTION_KEYS = {"type", "instructions", "criteria"} | HUNCH_ONLY_FIELDS
-SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "weights", "chain"}
+HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
+QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
+NONE = "none_of_these"  # the option `none:` adds to a choice question
+SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews",
+             "weights", "chain", "view", "clip", "redact"}
 TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability"}
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = 16
@@ -82,7 +85,28 @@ def load_spec(path: Path, text: str | None = None) -> dict:
     if "model" in spec and (spec["model"].endswith("latest") or ":~" in spec["model"]):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
     spec["_dir"] = path.parent
+    expand_multi(spec)
     return spec
+
+
+def expand_multi(spec: dict) -> None:
+    """type: multi (several options can apply) → one yes/no question per option, `<qid>__<option>`, like Pydantic
+    AI's fan-out of list[Literal]. Each is tested, diffed and reviewed on its own; rows also get `<qid>`, the
+    options judged to apply joined by "|", and `test` adds exact-set accuracy. Gold is a "|"-separated set;
+    "-" means none apply (an empty cell means no gold)."""
+    qs, parents = {}, {}
+    for qid, q in (spec.get("questions") or {}).items():
+        if q.get("type") != "multi":
+            qs[qid] = q
+            continue
+        crit = q.get("criteria") or {}
+        parents[qid] = list(crit)
+        for label, desc in crit.items():
+            sub = {"type": "noul", "_multi": [qid, label],
+                   "instructions": f"{q['instructions']}\nDoes this apply: {label}" + (f" ({desc})" if desc else "") + "?"}
+            qs[f"{qid}__{label}"] = sub | {k: q[k] for k in ("act", "gold", "escalate") if k in q}
+    if parents:
+        spec["questions"], spec["_multi"] = qs, parents
 
 
 def load_spec_ref(ref: str, current: Path) -> dict:
@@ -225,24 +249,114 @@ def compile_where(expr: str):
 
 
 def answer_columns(spec: dict) -> list[str]:
-    """Columns a judgment adds to each row: label, confidence, p(yes) for yes/no, route when it has act."""
-    cols = []
+    """Columns a judgment adds to each row: label, confidence, p(yes) for yes/no, route when it has act, the
+    engine that answered when it can escalate, and a multi question's combined set."""
+    cols = list(spec.get("_multi", {}))
     for qid, q in spec.get("questions", {}).items():
         cols += [qid, f"{qid}_p"] + ([f"{qid}_pyes"] if q["type"] == "noul" else []) + ([f"{qid}_route"] if "act" in q else [])
+        cols += [f"{qid}_by"] if "escalate" in q else []
     return cols
 
 
 def api_question(q: dict) -> dict:
-    return {k: v for k, v in q.items() if k not in HUNCH_ONLY_FIELDS}
+    aq = {k: v for k, v in q.items() if k not in HUNCH_ONLY_FIELDS and k != "none"}
+    if q.get("none"):  # declining is an answer, not low confidence: an explicit option, sent and keyed
+        aq["criteria"] = {**aq["criteria"], NONE: q["none"]}
+    return aq
+
+
+SOURCE_CALL = re.compile(r"^(traces|py)\((.+)\)$")
+
+
+def source_kind(spec: dict) -> tuple[str, str]:
+    """source: a CSV path | traces(<glob>) (agent sessions, see traces.py; `view: turns|runs`) |
+    py(<file.py>:<function>) (any function returning dicts: a dlt resource, a query, a generator)."""
+    m = SOURCE_CALL.match(str(spec["source"]).strip())
+    return (m[1], m[2].strip()) if m else ("csv", str(spec["source"]))
 
 
 def source_path(spec: dict) -> Path:
     return spec["_dir"] / spec["source"]
 
 
+def absolute_source(spec: dict) -> str | Path:
+    """The same source, independent of the spec's folder (so another spec can read exactly these rows)."""
+    kind, arg = source_kind(spec)
+    if kind == "csv":
+        return source_path(spec).resolve()
+    return f"{kind}({(spec['_dir'] / arg).resolve() if not Path(arg).is_absolute() else arg})"
+
+
+def stringify(r: dict) -> dict:  # rows from code look like CSV rows: text cells, empty for missing
+    return {k: "" if v is None else v if isinstance(v, str) else json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+            for k, v in r.items()}
+
+
 def rows(spec: dict) -> list[dict]:
-    with open(source_path(spec), newline="") as f:
-        return list(csv.DictReader(f))
+    kind, arg = source_kind(spec)
+    if kind == "csv":
+        with open(source_path(spec), newline="") as f:
+            return list(csv.DictReader(f))
+    if kind == "traces":
+        import traces
+        return [stringify(r) for r in traces.rows(arg, spec["_dir"], spec.get("view", "turns"))]
+    import importlib.util
+    file, _, fn = arg.rpartition(":")
+    mod_spec = importlib.util.spec_from_file_location(f"hunch_source_{Path(file).stem}", spec["_dir"] / file)
+    mod = importlib.util.module_from_spec(mod_spec)
+    mod_spec.loader.exec_module(mod)
+    return [stringify(dict(r)) for r in getattr(mod, fn)()]
+
+
+def source_header(spec: dict) -> list[str]:
+    kind, _ = source_kind(spec)
+    if kind == "csv":
+        with open(source_path(spec), newline="") as f:
+            return next(csv.reader(f))
+    if kind == "traces":
+        import traces
+        return traces.VIEWS[spec.get("view", "turns")][1]
+    return list(dict.fromkeys(k for r in rows(spec)[:100] for k in r))
+
+
+# ---------- redaction and clipping (applied to state before it is hashed or sent) ----------
+
+REDACTIONS = {
+    "secrets": [
+        (r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", "[PRIVATE_KEY]"),
+        (r"\b(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|xox[abpr]-[\w-]{10,}|AKIA[0-9A-Z]{16}"
+         r"|AIza[\w-]{30,})", "[SECRET]"),
+        (r"(?i)\b(bearer)\s+[\w.~+/-]{16,}=*", r"\1 [SECRET]"),
+        (r"(?i)\b([\w-]*(?:api[_-]?key|token|secret|password|passwd)[\w-]*)(\s*[=:]\s*)['\"]?[^\s'\"]{8,}", r"\1\2[SECRET]"),
+        (r"\b[A-Fa-f0-9]{32,}\b|\b[A-Za-z0-9+/_-]{48,}={0,2}", "[BLOB]"),
+    ],
+    "emails": [(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b", "[EMAIL]")],
+    "home": [(r"(/Users|/home)/[^/\s]+", "~")],
+}
+
+
+def redaction_rules(spec: dict) -> list[tuple[re.Pattern, str]]:
+    """redact: [secrets, emails, home, '<regex>', ...]: named rule sets, or regexes replaced by [REDACTED].
+    Idempotent (redacting redacted text changes nothing), so logged traffic replays to the same keys."""
+    out = []
+    for r in spec.get("redact") or []:
+        out += [(re.compile(p, re.S), rep) for p, rep in REDACTIONS[r]] if r in REDACTIONS else [(re.compile(r), "[REDACTED]")]
+    return out
+
+
+def redact(v, rules: list):
+    if not isinstance(v, str):
+        return v
+    for pat, rep in rules:
+        v = pat.sub(rep, v)
+    return v
+
+
+def clip(v, n: int):
+    """clip: {column: N}: keep the first N characters, or the last -N (the end of a conversation holds its claim)."""
+    if not isinstance(v, str) or len(v) <= abs(n):
+        return v
+    return v[:n] + "…" if n > 0 else "…" + v[n:]
 
 
 def canon(v):
@@ -255,7 +369,9 @@ def state_of(spec: dict, row: dict) -> dict:
     missing = [c for c in spec["state"] if c not in row]
     if missing:
         raise KeyError(f"{spec['judgment']}: state needs {missing}")
-    return {col: canon(row[col]) for col in spec["state"]}
+    rules, clips = redaction_rules(spec), spec.get("clip") or {}
+    return {col: clip(redact(canon(row[col]), rules), clips[col]) if col in clips else redact(canon(row[col]), rules)
+            for col in spec["state"]}
 
 
 def digest(obj) -> str:
@@ -290,12 +406,23 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
     """(errors, warnings) for one judgment, given the columns that reach it. Rules come from API limits and from
     what the prototype measured."""
     errors, warnings = [], []
-    for k in set(spec) - SPEC_KEYS - {"_dir"}:
+    for k in {k for k in spec if not k.startswith("_")} - SPEC_KEYS:
         warnings.append(f"unknown spec key {k!r} (typo?)")
     if spec["judgment"] in RESERVED or spec["judgment"].startswith(("_", "sqlite_")):
         errors.append(f"judgment name {spec['judgment']!r} is reserved (the store uses it)")
     if spec.get("chain") and "where" not in spec:
         errors.append("chain: true needs a where-clause over an upstream judgment's answers (it is what gets chained)")
+    for col, n in (spec.get("clip") or {}).items():
+        if col not in spec.get("state", []):
+            errors.append(f"clip: {col!r} is not a state column")
+        if not isinstance(n, int) or n == 0:
+            errors.append(f"clip: {col}: {n!r} must be a nonzero integer (N keeps the head, -N the tail)")
+    for r in spec.get("redact") or []:
+        if r not in REDACTIONS:
+            try:
+                re.compile(r)
+            except re.error as e:
+                errors.append(f"redact: {r!r} is neither {sorted(REDACTIONS)} nor a valid regex ({e})")
     if header is not None:
         for col in answer_columns(spec):
             if col in header:
@@ -323,6 +450,16 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                     errors.append(f"{qid}: act thresholds must be in (0, 1], got {act}")
             elif not isinstance(act, (int, float)) or not 0 < act <= 1:
                 errors.append(f"{qid}: act must be in (0, 1], got {act}")
+        if "none" in q and (q["type"] != "choice" or NONE in (q.get("criteria") or {})):
+            errors.append(f"{qid}: none: adds a {NONE!r} option to a choice question (and only once)")
+        if "escalate" in q:
+            esc = q["escalate"]
+            if not isinstance(esc, dict) or "model" not in esc:
+                errors.append(f"{qid}: escalate needs {{model: <engine>}}")
+            elif "act" not in q:
+                errors.append(f"{qid}: escalate re-asks answers below act, so it needs act")
+            elif esc["model"] == spec.get("model"):
+                errors.append(f"{qid}: escalate.model is the spec's own model")
         if header is not None and q.get("gold") and q["gold"] not in header:
             # normal for production rows (no gold yet); a warning still catches a typo in the column name
             warnings.append(f"{qid}: gold column {q['gold']!r} does not reach this judgment; these rows have no gold")
@@ -336,9 +473,16 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                     f"{qid}: {len(crit) - len(bare)} of {len(crit)} options described, {len(bare)} bare "
                     f"(e.g. {', '.join(bare[:4])}). Describe all or none: described options pull answers "
                     f"away from bare neighbours (BANKING77: partial 22 fixed/14 broken, n.s.; full 28/5, p<0.001)")
+        if q["type"] == "multi":
+            errors.append(f"{qid}: multi questions are expanded when the spec is loaded (internal error)")
         if q["type"] == "score" and not 2 <= len(q.get("criteria") or []) <= 10:
             errors.append(f"{qid}: score needs 2 to 10 levels")
     for qid, conf in (spec.get("tests") or {}).items():
+        if qid in spec.get("_multi", {}):
+            if set(conf) - {"min_accuracy"}:
+                warnings.append(f"tests.{qid}: a multi question takes min_accuracy (exact set); per-option tests go "
+                                f"under {qid}__<option>")
+            continue
         if qid not in spec["questions"]:
             errors.append(f"tests: no question {qid!r}")
             continue
@@ -370,10 +514,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             header = columns[ups[0]]
         else:
             try:
-                with open(source_path(spec), newline="") as f:
-                    header = next(csv.reader(f))
-            except FileNotFoundError:
-                errors += tag([f"source not found: {source_path(spec)}"])
+                header = source_header(spec)
+            except FileNotFoundError as e:
+                errors += tag([f"source not found: {e.filename or e}"])
                 header = None
         e, w = lint_node(spec, header)
         errors, warnings = errors + tag(e), warnings + tag(w)
@@ -395,7 +538,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
 
 # ---------- store ----------
 
-_conns: dict[Path, sqlite3.Connection] = {}
+_conns: dict[tuple[Path, int], sqlite3.Connection] = {}
 
 
 def store_path(start: Path) -> Path:
@@ -411,13 +554,13 @@ def store_path(start: Path) -> Path:
 
 def open_store(spec: dict) -> sqlite3.Connection:
     """SQLite in WAL mode: many processes (batch runs, apps calling judge()) can share it.
-    One connection per process and store; writes are short explicit transactions.
+    One connection per thread and store; writes are short explicit transactions.
     One store per workspace: $HUNCH_STORE, else the nearest `.hunch/store.sqlite` in this folder or above,
     else a new one here. Answers are content-addressed facts; a store per folder made comparisons across
     projects pay twice."""
     path = store_path(spec["_dir"])
-    if path in _conns:
-        return _conns[path]
+    if (path, threading.get_ident()) in _conns:  # one connection per thread: WAL lets them share the file
+        return _conns[(path, threading.get_ident())]
     if not path.exists():  # silently starting empty is how a spec outside the workspace re-pays for cached answers
         print(f"new answer store: {path} (no store in this folder or above; HUNCH_STORE=... to share one)",
               file=sys.stderr)
@@ -434,7 +577,7 @@ def open_store(spec: dict) -> sqlite3.Connection:
     db.execute("""create table if not exists answers (
         key text primary key, model text, answer text, input_tokens real,
         created_at text default current_timestamp)""")
-    _conns[path] = db
+    _conns[(path, threading.get_ident())] = db
     return db
 
 
@@ -644,6 +787,8 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
              "requests": sum(len(g) for g in group) if is_llm(model) else len(group)}
 
     if group:
+        for w in oversized([it for g in group for it in g])[:5]:
+            print(f"  size warning: {w}", file=sys.stderr)
         est = estimate_cost(model, group)
         if MAX_COST is not None and est > MAX_COST:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
@@ -675,6 +820,26 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
 
 def merge_stats(*stats: dict) -> dict:
     return {k: sum(s[k] for s in stats) for k in ("cached", "asked", "requests", "tokens", "cost")}
+
+
+STATE_LIMIT_TOKENS = 32_000  # Jev: state + the longest question must fit in 32k tokens (64k per request)
+WARN_AT = 0.8
+
+
+def oversized(items: list[dict]) -> list[str]:
+    """Rows near the engine's input limit, with their largest column: past it the request fails, and clipping
+    (spec `clip:`) is the fix."""
+    out, seen = [], set()
+    for it in items:
+        if it["id"] in seen:
+            continue
+        seen.add(it["id"])
+        tokens = (len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4
+        if tokens > WARN_AT * STATE_LIMIT_TOKENS:
+            big = max(it["state"], key=lambda c: len(str(it["state"][c])))
+            out.append(f"row {it['id']}: ~{tokens:,.0f} tokens (limit {STATE_LIMIT_TOKENS:,}); largest column {big!r} "
+                       f"~{len(str(it['state'][big])) / 4:,.0f} → clip: {{{big}: N}}")
+    return out
 
 
 def estimate_tokens(groups: list[list[dict]]) -> float:
@@ -829,6 +994,8 @@ def normalize_gold(q: dict, v: str) -> frozenset | None:
     v = (v or "").strip()
     if not v:
         return None
+    if "_multi" in q:  # the parent's gold is the set of options that apply; "-" = none of them
+        return frozenset({"yes" if q["_multi"][1] in {s.strip() for s in v.split("|")} else "no"})
     return frozenset({("yes" if is_yes(v) else "no") if q["type"] == "noul" else v})
 
 
@@ -934,6 +1101,7 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
         else:
             hits = set(cached(db, [it["key"] for it in items]))
             answers, stats = await fill(spec, db, items)
+        answers, by, stats = await escalate(spec, db, items, answers, stats, dry)
         out_rows = []
         for i, r in enumerate(keep):
             out = dict(r)
@@ -946,10 +1114,41 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
                     out[f"{qid}_pyes"] = round(a["noul"], 3) if a else None
                 if "act" in it["q"]:
                     out[f"{qid}_route"] = route(it["q"], a, it["path_p"]) if a else None
+                if "escalate" in it["q"]:
+                    out[f"{qid}_by"] = by.get(it["key"], spec["model"]) if a else None
+            for parent, labels in spec.get("_multi", {}).items():
+                out[parent] = "|".join(lab for lab in labels if out.get(f"{parent}__{lab}") == "yes")
             out_rows.append(out)
         results[name] = {"spec": spec, "rows": out_rows, "items": items, "answers": answers, "stats": stats,
-                         "input": len(inp), "unknown": unknown, "hits": hits}
+                         "input": len(inp), "unknown": unknown, "hits": hits, "escalated": by}
     return results
+
+
+async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict, dry: bool) -> tuple[dict, dict, dict]:
+    """escalate: {model: X} on a question re-asks, on engine X, only the answers that fall below `act`; the
+    escalated answer replaces the original when it clears `act` itself. Both stay in the store; the returned
+    answers are the combined system's, `by` says which key was answered by which engine."""
+    todo: dict[str, list[dict]] = {}
+    for it in items:
+        a = answers.get(it["key"])
+        if "escalate" in it["q"] and a and route(it["q"], a, it.get("path_p", 1.0)) == "review":
+            todo.setdefault(it["q"]["escalate"]["model"], []).append(it)
+    if not todo:
+        return answers, {}, stats
+    final, by = dict(answers), {}
+    for model, its in todo.items():
+        espec = {**spec, "model": model}
+        eitems = [item(espec, it["row"], it["qid"]) for it in its]
+        if dry:
+            got, estats = cached(db, [e["key"] for e in eitems]), {**ZERO}
+        else:
+            got, estats = await fill(espec, db, eitems)
+        stats = merge_stats(stats, estats)
+        for it, e in zip(its, eitems):
+            ea = got.get(e["key"])
+            if ea and route(it["q"], ea, it.get("path_p", 1.0)) == "act":
+                final[it["key"]], by[it["key"]] = ea, model
+    return final, by, stats
 
 
 def weigh(rs: list[dict], wt: dict) -> list[dict]:
@@ -1012,6 +1211,11 @@ def cmd_compile(project: dict, args) -> None:
             print(f"# {n}: union of {', '.join(spec['union'])} ({len(res['rows'])} rows)")
             continue
         todo = [it for it in res["items"] if it["key"] not in res["hits"]]
+        big = oversized(res["items"])
+        for w in big[:5]:
+            print(f"# {n}: size warning: {w}")
+        if len(big) > 5:
+            print(f"# {n}: … {len(big) - 5} more rows near the limit")
         groups: dict[str, list[dict]] = {}
         for it in todo:
             groups.setdefault(it["id"], []).append(it)
@@ -1290,9 +1494,38 @@ def cmd_test(project: dict, args) -> None:
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
             test_question(spec, qid, its, res["answers"], check, all_stats)
+            if its and its[0]["q"].get("none"):
+                k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
+                print(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")
+            esc = [it for it in its if it["key"] in res.get("escalated", {})]
+            if its and "escalate" in its[0]["q"]:
+                gold = [it for it in esc if it["gold"]]
+                acc = f"; right on {sum(hit(it, res['answers'][it['key']]) for it in gold)}/{len(gold)} with gold" if gold else ""
+                print(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows now act on its "
+                      f"answer{acc} (the rest stay in review)")
+        for parent, labels in spec.get("_multi", {}).items():
+            test_multi(spec, parent, labels, res, check)
     print()
     print_stats(merge_stats(*all_stats))
     sys.exit(1 if check.failed else 0)
+
+
+def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Checks") -> None:
+    """A multi question as a whole: is the set of options judged to apply exactly the gold set?"""
+    by_row: dict[str, dict[str, dict]] = {}
+    for it in res["items"]:
+        if it["q"].get("_multi", [None])[0] == parent:
+            by_row.setdefault(it["id"], {})[it["q"]["_multi"][1]] = it
+    scored = [(its, frozenset(l for l, it in its.items() if decide(res["answers"][it["key"]])[0] == "yes"),
+               frozenset(l for l, it in its.items() if it["gold"] and "yes" in it["gold"]))
+              for its in by_row.values() if all(it["gold"] for it in its.values())]
+    print(f"\n{parent} (multi: {len(labels)} options, {len(by_row)} rows)")
+    if not scored:
+        return
+    exact = sum(got == gold for _, got, gold in scored) / len(scored)
+    jac = sum(len(got & gold) / len(got | gold) if got | gold else 1.0 for _, got, gold in scored) / len(scored)
+    want = ((spec.get("tests") or {}).get(parent) or {}).get("min_accuracy", 0)
+    check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f}) (min {want:.0%})")
 
 
 def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict, same_spec: bool) -> None:
@@ -1344,7 +1577,7 @@ def load_against(project: dict, args) -> dict:
     for n in roots(old):
         twin = twin_of(n, roots(project))
         if twin:
-            old["nodes"][n]["source"] = source_path(project["nodes"][twin]).resolve()
+            old["nodes"][n]["source"] = absolute_source(project["nodes"][twin])
     return old
 
 
@@ -1534,7 +1767,8 @@ def log_traffic(project: dict, names: list[str], row: dict) -> None:
     db.execute("""create table if not exists traffic (judgment text, rhash text, row text, n integer,
         first_at text default current_timestamp, last_at text default current_timestamp,
         primary key (judgment, rhash))""")
-    body = json.dumps({k: canon(v) for k, v in row.items()}, ensure_ascii=False)
+    rules = redaction_rules(project["nodes"][roots(project)[0]])  # the live spec's redaction covers what is kept
+    body = json.dumps({k: redact(canon(v), rules) for k, v in row.items()}, ensure_ascii=False)
     write(db, """insert into traffic (judgment, rhash, row, n) values (?, ?, ?, 1) on conflict do update
                  set n = n + 1, last_at = current_timestamp""", [(n, digest(body)[:16], body) for n in names])
 
@@ -1560,31 +1794,42 @@ def traffic_source(spec: dict) -> Path:
     return path
 
 
-async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, **fields) -> dict | None:
+_background: set = set()  # shadow candidates still running inside an app's event loop
+
+
+def _project(path: str | Path) -> dict:
+    q = Path(path).resolve()
+    return _projects.get(q) or _projects.setdefault(q, load_project(q))
+
+
+async def _shadow(path: str | Path, fields: dict) -> None:
+    try:
+        await aexecute(_project(path), rows_in=[fields])
+    except Exception as e:  # a failing candidate never fails the live answer
+        print(f"shadow {path}: {e!r}", file=sys.stderr)
+
+
+async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, log: bool = False,
+                 **fields) -> dict | None:
     """Judge one row inside an app: the whole project runs on it, same keys as batch (a row the batch already
     judged is a cache hit; a row judged online is a hit for the next batch). Returns {judgment: {question:
     answer}}; a judgment the row never reached (its where-clause said no) is None. For a one-judgment project,
     or with `node`, returns just that judgment's answers.
 
-    shadow: a candidate project answered alongside (same row, cached, never returned) and the row logged, so
-    `hunch diff CANDIDATE --against LIVE --traffic` compares them on real traffic for free. A failing
-    candidate never fails the live answer. Latency is the slower of the two."""
-    def get(q) -> dict:
-        q = Path(q).resolve()
-        return _projects.get(q) or _projects.setdefault(q, load_project(q))
-
-    project = get(path)
+    shadow: a candidate project that answers the same row after the live answer is returned (a background task
+    in this event loop; never returned, never fails the live answer). Its answers are cached, so
+    `hunch diff CANDIDATE --against LIVE --traffic` compares them on real traffic for free.
+    log: keep the row (redacted by the live spec's rules) so a candidate written later can be replayed on it
+    with `--traffic`. Shadowing implies logging."""
+    project = _project(path)
+    results = await aexecute(project, rows_in=[fields])
+    if shadow or log:
+        names = roots(project) + (roots(_project(shadow)) if shadow else [])
+        log_traffic(project, list(dict.fromkeys(names)), fields)
     if shadow:
-        cand = get(shadow)
-        results, cres = await asyncio.gather(aexecute(project, rows_in=[fields]),
-                                             aexecute(cand, rows_in=[fields]), return_exceptions=True)
-        if isinstance(results, BaseException):
-            raise results
-        if isinstance(cres, BaseException):
-            print(f"shadow {shadow}: {cres!r}", file=sys.stderr)
-        log_traffic(project, list(dict.fromkeys(roots(project) + roots(cand))), fields)
-    else:
-        results = await aexecute(project, rows_in=[fields])
+        task = asyncio.get_running_loop().create_task(_shadow(shadow, fields))
+        _background.add(task)
+        task.add_done_callback(_background.discard)
     out: dict[str, dict | None] = {}
     for n in project["order"]:
         res = results[n]
@@ -1596,16 +1841,27 @@ async def ajudge(path: str | Path, node: str | None = None, shadow: str | Path |
         out[n] = {}
         for it in res["items"]:
             a = res["answers"][it["key"]]
-            label, conf, _ = decide(a)
-            out[n][it["qid"]] = {"label": label, "p": conf_of(it, a), "route": route(it["q"], a, it["path_p"]),
-                                 "cached": it["key"] in res["hits"]}
+            label, conf, margin = decide(a)
+            # p: probability of the label (hunch's vocabulary); margin: distance from the decision boundary,
+            # |p - 0.5| x 2 for yes/no, top minus runner-up for choices (Pydantic AI's `confidence`)
+            out[n][it["qid"]] = {"label": label, "p": conf_of(it, a), "margin": round(margin, 4),
+                                 "route": route(it["q"], a, it["path_p"]), "cached": it["key"] in res["hits"]}
     if node:
         return out[node]
     return next(iter(out.values())) if len(out) == 1 else out
 
 
-def judge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, **fields) -> dict | None:
-    return asyncio.run(ajudge(path, node, shadow, **fields))
+def judge(path: str | Path, node: str | None = None, shadow: str | Path | None = None, log: bool = False,
+          **fields) -> dict | None:
+    """Sync ajudge. A shadow candidate runs in a thread after the live answer returns; the thread is not a
+    daemon, so a script waits for it at exit and the candidate's answers are recorded."""
+    out = asyncio.run(ajudge(path, node, None, log or bool(shadow), **fields))
+    if shadow:  # the row was logged under the live names; add the candidate's own
+        extra = [n for n in roots(_project(shadow)) if n not in roots(_project(path))]
+        if extra:
+            log_traffic(_project(path), extra, fields)
+        threading.Thread(target=lambda: asyncio.run(_shadow(shadow, fields)), name="hunch-shadow").start()
+    return out
 
 
 def main() -> None:
