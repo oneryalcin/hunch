@@ -164,6 +164,20 @@ Details that confirm or change hunch's design:
 - **Limits:** 64k tokens per request, 32k for state plus the longest question; past it the request fails (`max_tokens_exceeded`). At most 255 options.
 - **LLM fallback is another escalation tier**, and "watch how often the fallback fires" is the dial by another name.
 
+### OpenServ: SERV Reasoning and Graph Sharding, [openserv.ai](https://openserv.ai)
+
+Read 2026-09-24: their site and docs, an OpenServ post ("Jev is seriously impressive. SERV makes it better", with a benchmark chart), a post by their CTO on Graph Sharding, and stills from a demo video.
+
+**What it is:** SERV Reasoning is a "reasoning layer" behind an OpenAI/Anthropic-compatible endpoint (`inference-api.openserv.ai/v1`): unbounded model calls become "bounded reasoning graphs" run by small models, with audit trails; aimed at cost, auditability and regulated industries. **Graph Sharding (SERV v3, upcoming)** turns a system prompt into a graph of AGENT nodes (an LLM writes text), DECISION nodes (Jev picks a branch, e.g. close / continue_investigating / escalate) and script nodes (no model). The UI shows a node heatmap, cost per run, and per decision node the tabs **Details, History, What if, Shadow**. Announced next: "Shadow Agents" (verification agents review decisions) and "Benchmark Tooling" (measure on your own workloads).
+
+**Benchmark claim:** "JEV-1.0" ≈ 84 alone, ≈ 92.5 with SERV at ~0.1¢/call, "beating Claude Fable 5 at 30× lower cost". Vendor-run, undisclosed task, on an older Jev than the 1.13 we use: treat as marketing until reproduced. The mechanism they describe ("the clearer those instructions are, the better the model performs") is our BANKING77 finding (option descriptions: 82% → 88%).
+
+**Relevance: a runtime, not a measurement layer. It validates the thesis and gives hunch one new feature.**
+- **Thesis validated:** Pydantic AI and OpenServ independently converge on "decompose the task; let Jev make the decisions between LLM steps". Decision nodes are becoming a standard component.
+- **The risk hunch measures is visible in their product:** decision nodes show an output with no confidence, no probabilities, no accuracy against gold. hunch's tree experiment is the cautionary tale: misroutes cascade silently (33 of 385 rows), accuracy fell 95.8% → 87.5%, and confidence must be chained to be honest. Their decision inputs are LLM-written summaries (`incident_assessment`), i.e. persuasive text; the demo is literally "Incident Room with Misleading Clues".
+- **Their "What if" is hunch's `diff`; "History" is lineage; "Shadow" is missing from hunch** and fits it: run a candidate spec beside the live one on real traffic, act on the live one, record disagreements.
+- **Competition on measurement will be platform-bound:** SERV's benchmark tooling and shadow agents serve SERV customers. hunch's position is the open, runtime-agnostic version (Pydantic AI, SERV, plain code) built on gold, statistics, review and CI.
+
 ### dlt: data load tool, [dlt-hub/dlt](https://github.com/dlt-hub/dlt)
 
 Checked 2026-09-24: ~5.9k stars, Apache 2.0, v1.30.0 (2026-08-11), active since 2022. dlthub.com docs read: README, data-quality lifecycle, schema contracts, state, destination tables & lineage, AI Harness.

@@ -16,9 +16,9 @@ These decide between options at every phase. They come from why dbt and dlt won:
 
 ## Where we are
 
-Proven in the prototype (see `prototype/README.md`): content-addressed store shared by batch and online, lint, calibration / AUROC / dial / order tests, backtest diff with a significance test, review queue with gold correction. Validated on intent classification (BANKING77) and agent-run evals (SWE-agent). Total spend so far: $0.37.
+Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree) and agent-run evals (SWE-agent). Every Phase 2 claim was checked by an independent adversarial review. Total API spend so far: about $0.47.
 
-**Not proven at all:** the dependency graph between judgments (`ref()`), the core of the dbt analogy. Also untested: a second engine, scale beyond 1k rows, and whether anyone besides us wants this.
+**Not proven yet:** a second engine, scale beyond ~1k rows, reading real traces directly, and whether anyone besides us wants this (no external user yet).
 
 ## Phase 0: decide who it's for (no code)
 
@@ -68,6 +68,16 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 | Redaction for traces | State leaves the machine; traces carry secrets and customer data | Per-column redaction rules in the spec (patterns + drop lists), applied before hashing and sending |
 | LLM escalation tier | Pydantic's `FallbackModel` on low confidence | `route` can escalate to an LLM as well as a person; the dial reports fallback rate and cost |
 | Confidence vocabulary | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | Documented side by side; `judge()` can return both |
+
+## Next up, from OpenServ's SERV / Graph Sharding (read 2026-09-24, see 03 related work)
+
+| Item | Why | Done when |
+|---|---|---|
+| Shadow mode | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | `judge(..., shadow="candidate.yml")` answers with the live spec and records the candidate's answer; `hunch shadow report` shows disagreement rate, which rows, and (with gold or reviews) which side was right. Same cache, so shadowing a spec already backtested costs nothing extra |
+| `hunch suggest`, gated by `diff` | SERV's pitch is clearer instructions make Jev better; our own biggest gain was option descriptions (82% → 88%). Rewrites are only worth keeping if measured | `suggest` drafts question/option rewrites (from example rows and confusions); each is kept only if `diff` on gold shows a significant gain; the report says which were rejected |
+| Runtime adapters | Decision nodes now live inside runtimes (Pydantic AI output types, SERV graphs); hunch should test the same definition that runs | Import a Pydantic AI output type as a spec (with Phase 4's Pydantic API); import SERV decision nodes if they expose definitions; export a hunch spec back where possible |
+| Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised: a `test` option that re-asks with a named column removed and reports how much answers move |
+| Watch list | Measurement features may arrive inside runtimes | Track OpenServ Graph Sharding / Shadow Agents / Benchmark Tooling and Pydantic's evals library; re-check each quarter whether they add gold-based measurement |
 
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
