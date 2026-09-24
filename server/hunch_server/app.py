@@ -58,9 +58,19 @@ def project_path(rel: str | None) -> Path:
 
 def load(rel: str) -> dict:
     try:
-        return core.load_project(project_path(rel))
+        project = core.load_project(project_path(rel))
     except SystemExit as e:  # the engine reports spec errors by exiting; a server must not
         raise Refused(422, str(e))
+    if not project["order"]:
+        raise Refused(422, f"{rel!r} is not a spec or a folder of specs")
+    return project
+
+
+def audit_of(value) -> int:
+    try:
+        return int(value or 30)
+    except ValueError:
+        raise Refused(400, f"audit must be a whole number, got {value!r}")
 
 
 def guarded(fn):
@@ -230,7 +240,8 @@ async def review_page(request: Request):
     project = load(rel)
     node = node_of(project, request.query_params.get("node"))
     spec = project["nodes"][node]
-    queue, answers = await queue_for(project, node, int(request.query_params.get("audit", 30)), with_answers=True)
+    audit = audit_of(request.query_params.get("audit"))
+    queue, answers = await queue_for(project, node, audit, with_answers=True)
     kinds = Counter(k for k, _ in queue)
     token, reviewer = request.query_params.get("token", ""), request.query_params.get("reviewer", "")
     cards = []
@@ -246,7 +257,7 @@ async def review_page(request: Request):
         choices += [("labeled", lab, f"it is {lab}") for lab, _ in top if lab not in {c[1] for c in choices}]
         choices += [("ambiguous", "", "ambiguous")]
         hidden = {"path": rel, "node": node, "qid": it["qid"], "row_id": it["id"], "state_hash": it["shash"],
-                  "kind": kind, "token": token, "reviewer": reviewer}
+                  "kind": kind, "token": token, "reviewer": reviewer, "audit": audit}
         buttons = "".join(
             f"<form method='post' action='/review' style='display:inline'>"
             + "".join(f"<input type='hidden' name='{k}' value='{html.escape(str(v))}'>" for k, v in hidden.items())
@@ -273,7 +284,7 @@ async def review_post(request: Request):
         raise Refused(400, f"unknown verdict {form.get('verdict')!r}")
     # only rows the queue offers, with the kind it offers them as: `audit` must stay a random sample for the
     # estimator, so a verdict can't be filed as one for a row picked by hand
-    queue = await queue_for(project, node)
+    queue = await queue_for(project, node, audit_of(form.get("audit")))  # the same queue the page offered
     offered = {(it["qid"], it["id"], it["shash"]): kind for kind, it in queue}
     if offered.get((form.get("qid"), form.get("row_id"), form.get("state_hash"))) != form.get("kind"):
         raise Refused(409, "that row is not in the review queue as that kind (already reviewed, or changed)")

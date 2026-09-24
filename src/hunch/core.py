@@ -59,7 +59,7 @@ RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx
 NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside this margin are flagged
 DIAL = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
 SHOW = 12  # rows listed per section; summaries always cover everything
-MAX_COST: float | None = None  # --max-cost: refuse to ask if a single fill would cost more (USD, estimated)
+MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None  # --max-cost: refuse to ask if a single fill would cost more (USD, estimated)
 RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
@@ -1206,11 +1206,9 @@ def hold_answers(spec: dict, db, items: list[dict]) -> None:
 
 
 def previous_keys(db, judgment: str) -> dict[tuple[str, str], tuple[str, str]]:
-    try:
-        return {(r, q): (k, s) for r, q, k, s in db.execute(  # run ids start with their time: the last one wins
-            "select row_id, qid, key, shash from _hunch_row_answers where judgment = ? order by run_id", (judgment,))}
-    except sqlite3.OperationalError:
-        return {}
+    row_answers_table(db)
+    return {(r, q): (k, s) for r, q, k, s in db.execute(  # run ids start with their time: the last one wins
+        "select row_id, qid, key, shash from _hunch_row_answers where judgment = ? order by run_id", (judgment,))}
 
 
 def weigh(rs: list[dict], wt: dict) -> list[dict]:
@@ -1343,12 +1341,19 @@ def record_run(db, run: dict) -> None:
               ":status, :started_at, :finished_at)", [run])
 
 
-def record_row_answers(db, judgment: str, items: list[dict], run_id: str) -> None:
-    # one entry per row, question and run: the history drift checks compare; on_change reads each row's latest
+def row_answers_table(db) -> None:
+    """One entry per row, question and run: the history drift checks compare; on_change reads each row's latest.
+    Stores from before `shash` existed get the column (their old rows can't be matched, so they are re-asked)."""
     db.execute("""create table if not exists _hunch_row_answers (judgment text, row_id text, qid text, key text,
         shash text, run_id text, primary key (judgment, row_id, qid, run_id))""")
-    write(db, "insert or replace into _hunch_row_answers values (?, ?, ?, ?, ?, ?)",
-          [(judgment, it["id"], it["qid"], it["key"], it["shash"], run_id) for it in items])
+    if "shash" not in {r[1] for r in db.execute("pragma table_info(_hunch_row_answers)")}:
+        db.execute("alter table _hunch_row_answers add column shash text")
+
+
+def record_row_answers(db, judgment: str, items: list[dict], run_id: str) -> None:
+    row_answers_table(db)
+    write(db, "insert or replace into _hunch_row_answers (judgment, row_id, qid, key, shash, run_id) "
+              "values (?, ?, ?, ?, ?, ?)", [(judgment, it["id"], it["qid"], it["key"], it["shash"], run_id) for it in items])
 
 
 def git_sha(path: Path) -> str:
@@ -1383,27 +1388,34 @@ def cmd_run(project: dict, args) -> None:
                  f"`hunch diff` shows what the change does; `hunch run --allow-change` accepts it")
     started = time.strftime("%Y-%m-%dT%H:%M:%S")
     run_id = f"{started}-{digest([started, os.getpid(), time.time_ns()])[:6]}"
-    try:
-        results = execute(project, hold=True)
-    except BaseException as e:  # a failed run is recorded too; tables keep the last complete run
-        for n in project["order"]:
+    def failed(names: list[str], e: BaseException) -> None:  # recorded too; their tables keep the last complete run
+        for n in names:
             spec = project["nodes"][n]
-            record_run(open_store(spec), {"run_id": run_id, "judgment": n, "spec_hash": spec_hash(spec),
+            record_run(open_store(spec), {"run_id": run_id, "judgment": table_name(spec), "spec_hash": spec_hash(spec),
                                           "git_sha": git_sha(spec["_dir"]), "model": spec.get("model", ""), "rows": 0,
                                           "asked": 0, "cost": 0.0, "status": f"failed: {e!r}"[:200],
                                           "started_at": started, "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+
+    try:
+        results = execute(project, hold=True)
+    except BaseException as e:
+        failed(project["order"], e)
         raise
-    for n in project["order"]:
+    for i_node, n in enumerate(project["order"]):
         res, spec = results[n], project["nodes"][n]
         db = open_store(spec)
         nq = max(1, len(question_of(spec))) if "union" not in spec else 1
         keys = None
-        if "union" not in spec:
-            keys = {}
-            for i, it in enumerate(res["items"]):
-                keys.setdefault(i // nq, {})[f"{it['qid']}_key"] = it["key"]
-            record_row_answers(db, table_name(spec), [it for it in res["items"] if it["key"] in res["answers"]], run_id)
-        materialize(spec, db, res["rows"], run_id, keys)
+        try:  # lineage first, the table last: a failure here leaves the previous table in place
+            if "union" not in spec:
+                keys = {}
+                for i, it in enumerate(res["items"]):
+                    keys.setdefault(i // nq, {})[f"{it['qid']}_key"] = it["key"]
+                record_row_answers(db, table_name(spec), [it for it in res["items"] if it["key"] in res["answers"]], run_id)
+            materialize(spec, db, res["rows"], run_id, keys)
+        except BaseException as e:
+            failed(project["order"][i_node:], e)
+            raise
         record_run(db, {"run_id": run_id, "judgment": table_name(spec), "spec_hash": spec_hash(spec), "git_sha": git_sha(spec["_dir"]),
                         "model": spec.get("model", ""), "rows": len(res["rows"]), "asked": res["stats"]["asked"],
                         "cost": round(res["stats"]["cost"], 6), "status": "complete", "started_at": started,
@@ -1428,9 +1440,9 @@ def table_name(spec: dict) -> str:
 
 
 def spec_hash(spec: dict) -> str:
-    """What the judgment asks and of what: switching on_change itself is not a change to freeze against."""
-    return digest({k: v for k, v in spec.items()
-                   if not k.startswith("_") and k != "on_change" and not isinstance(v, Path)})[:12]
+    """What the judgment asks: not its policy (on_change) or where this run's rows come from (source, which
+    --source and --traffic replace), so freeze guards the questions, not the data."""
+    return digest({k: v for k, v in spec.items() if not k.startswith("_") and k not in ("on_change", "source")})[:12]
 
 
 def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> float | None:
@@ -2210,7 +2222,7 @@ def main() -> None:
     p.add_argument("--max-cost", type=float, help="refuse to ask if one judgment's missing answers would cost more (USD, estimated)")
     args = p.parse_args()
     global MAX_COST
-    MAX_COST = args.max_cost
+    MAX_COST = args.max_cost if args.max_cost is not None else MAX_COST  # else $HUNCH_MAX_COST, if set
     project = load_project(args.path)
     if args.model:  # another engine on the same specs: its tables get a suffix, the spec's own stay untouched
         for spec in project["nodes"].values():
