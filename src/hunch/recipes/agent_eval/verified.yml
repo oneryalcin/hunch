@@ -1,0 +1,13 @@
+# Step 2b, only for runs that claim success: did the agent check before claiming? No gold yet: review it.
+judgment: verified
+model: jev-1.13.0
+source: ref(claims)
+where: claim == 'claimed_fixed'
+state: [final_messages]
+questions:
+  verified_before_claim:
+    type: noul
+    instructions: >-
+      Before claiming the fix works, did the agent run the project's tests or a reproduction script
+      in these `final_messages` and see it succeed?
+    act: {yes: 0.90, no: 0.90}

@@ -1,9 +1,17 @@
 """Blind packets for the Claude Code turn judgments: 60 random turns (fixed by hash), no model answers shown."""
-import csv, hashlib, json
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["httpx", "pyyaml"]
+# ///
+import hashlib, json, sys
 from pathlib import Path
 
 R = Path(__file__).parent
-rows = list(csv.DictReader(open(R / "../../examples/claude_code/turns.csv", newline="")))
+sys.path.insert(0, str(R.parents[2] / "src"))
+import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
+
+spec = hunch.load_spec(R.parent.parent / "examples/claude_code/outcome.yml")
+rows = [{**r, **hunch.state_of(spec, r)} for r in hunch.rows(spec)]  # what the judgment sees: redacted, clipped
 sample = sorted(rows, key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest())[:60]
 items = [{"n": i, "request": r["request"], "final_reply": r["final_reply"], "next_message": r["next_message"]}
          for i, r in enumerate(sample, 1)]

@@ -1,0 +1,16 @@
+# The scale test: 100,000 product reviews, one yes/no each (see prepare.py for the data, 04 round 12 for results).
+judgment: reviews
+model: jev-1.13.0
+source: .cache/reviews_100k.csv
+key: id
+state: [title, content]
+questions:
+  is_positive:
+    type: noul
+    instructions: Is this product review positive overall?
+    act: 0.9
+    gold: positive
+tests:
+  is_positive:
+    min_accuracy: 0.9
+    min_auroc: 0.95

@@ -1,0 +1,18 @@
+# Step 2, only for runs that claim success: is the fix actually right? Gold = the project's hidden tests.
+# Auto-reject is the useful side: a confident "no" is far more reliable than a confident "yes".
+judgment: fix_correct
+model: jev-1.13.0
+source: ref(claims)
+where: claim == 'claimed_fixed'
+state: [issue, final_messages, patch]
+questions:
+  passes_tests:
+    type: noul
+    instructions: >-
+      Would this patch make the project's own tests for this issue pass, fully resolving
+      the `issue` as described? Judge the `patch` itself, not what the agent says about it.
+    act: {yes: 0.90, no: 0.80}
+    gold: resolved
+tests:
+  passes_tests:
+    min_auroc: 0.70

@@ -275,6 +275,87 @@ Fisher p = 0.045 per turn, but turns cluster in 23 sessions: a session bootstrap
 
 **Reading the format:** Claude Code 2.1 has no `origin` field, so a human message is a user message that is not a tool result, meta, a sidechain, a compaction summary, or wholly harness-injected tags (IDE selection, `!` shell I/O, reminders); `promptSource: sdk` turned out to be people in the VS Code extension. An interruption is a reaction, not a request.
 
+## Findings, round 10: a second engine (2026-09-24)
+
+**Is hunch more than a Jev wrapper?** The same specs, unchanged, on an LLM: `model: deepseek:deepseek-flash` (DeepSeek V4.1 Flash) or `--model` on any command. The engine asks one request per question with the options numbered, and reads the probabilities of the first answer token (top-20 logprobs, renormalised over the options), so answers have Jev's shapes and every test, dial, diff and review works as before. The model string and an adapter version (`logprobs-v1`) are part of the cache key.
+
+| | Jev (jev-1.13.0) | DeepSeek V4.1 Flash |
+|---|---|---|
+| BANKING77 holdout, estimated accuracy | **95.8%** (88.7–97.9%) | 92.3% (85.8–93.5%) |
+| paired, reviewed gold | | fixed 4, broke 22, **p = 0.001** |
+| calibration error / auto-acted at 0.9 | 0.043 / 100% on 81% of rows | 0.032 / 97.7% on 91% |
+| SWE-agent patch passes tests (AUROC) | 0.831 | **0.866** (fixed 22, broke 17, p = 0.52) |
+| Claude Code `outcome` / `claims_done` (panel audits) | 90.0% / 88.3% | 88.3% / 88.3% (n.s.) |
+| cost of these four judgments | $0.068 | $0.20 at list price; **$0.10 actually billed** (DeepSeek's prompt cache: the question comes first, so rows share a cached prefix) |
+| online latency, new text | ~600 ms | ~750 ms |
+
+DeepSeek's 13 BANKING77 disagreements that no one had reviewed (Jev agreed with the key there) went to the same blind panel: answer key right on 12, DeepSeek on 1 (`review_panel/deepseek/`, appended by `disputes.py deepseek`).
+
+- **Engine-neutral in practice.** No spec changed; the verdict per task came from hunch's own tests: Jev is significantly better on the 77-way intent task, the LLM is level or better (not significantly) on yes/no judgments over long text, at ~1.5× the cost as billed (~3× at list price). That is the kind of decision hunch exists for.
+- **Logprobs are fragile across providers.** OpenRouter lists logprobs for many providers that don't return them (Novita) or reason despite "reasoning off" (Wafer on GLM, which then ran out of room); Straitly and Z.ai return none. At temperature 0 DeepSeek's API masks every other token (-9999), so the engine reads at temperature 1: only the probabilities are used, never the sampled text. Pin a provider with `openrouter:<id>@<provider>`; the provider is part of the model string, so of the key. GLM-5.3-flash works pinned to Parasail but was not compared: the OpenRouter account ran out of credit (only you can top it up).
+- **Tables per engine.** `run --model X` writes `<judgment>__<engine>` tables; the spec's own tables stay as they were (the first LLM run overwrote them).
+
+## Findings, round 11: sources, redaction, and the spec features from Pydantic AI (2026-09-24)
+
+- **Sources.** `source:` is a CSV, `traces(<glob>)` or `py(<file.py>:<fn>)`. `traces.py` (stdlib) reads Claude Code, Cursor, OpenCode and OpenTelemetry GenAI (`gen_ai.input/output.messages`, the latest span of a trace holds the conversation) into one event stream, viewed as `turns` or `runs`; tool names are normalised across harnesses (edit / run). Checked on Trace Commons (all four harness formats present) and IBM's Codex OTel traces (CC BY-NC, local only). A dlt resource is a function returning dicts, so `py()` is the dlt integration without a dependency.
+- **The hand-written prepare script is gone.** `examples/claude_code` reads the sessions directly with `redact: [secrets, emails]` and `clip:` in the spec; all 618 cache keys are identical to the prepared CSV's, so answers and panel reviews carried over.
+- **Redaction and clipping** apply to state before it is hashed or sent, and to rows kept for shadow mode or replay. Rules are idempotent, so a replayed row gets the same keys. `clip: {col: N}` keeps the head, `-N` the tail (a conversation's claim is at its end).
+- **Size warning.** `compile`/`run` flag rows past 80% of the 32k-token state limit, naming the largest column and suggesting `clip:`.
+- **None of these.** `none: "<when>"` adds `none_of_these` to a choice question (sent, keyed); `test` reports the declined rate.
+- **Multi-label.** `type: multi` expands at load into one yes/no per option (`<qid>__<option>`): every per-option test, diff and review works unchanged; rows get the combined `<qid>` set and `test` adds exact-set accuracy. Gold is `a|b`, `-` for none.
+- **Escalation.** `escalate: {model: X}` re-asks only answers below `act` on engine X and keeps the escalated answer if it clears `act` itself; `test` scores the combined system and reports how many were escalated.
+- **Shadow mode, finished.** The candidate runs after the live answer returns (a task in the app's event loop; a non-daemon thread for sync `judge()`), so live latency is the live spec's alone (~600 ms measured, was the slower of the two), and the candidate hits the cache for questions the live spec just asked (before, both asked the same question at once and paid twice). `judge(..., log=True)` keeps rows so a candidate written later can be replayed with `--traffic`. A shared SQLite connection used from two threads raised `InterfaceError`: connections are now per thread (WAL was built for that).
+- **Confidence vocabulary.** `judge()` returns `p` (probability of the label) and `margin` (Pydantic AI's confidence: |p − 0.5| × 2, or top minus runner-up).
+- Regression: the full `test` output on BANKING77 (flat, tree, DeepSeek), SWE, agent_eval and tickets had the same md5 under the old and the new code, on the same store (the comparison was run, not recorded; features used only by the new examples print new lines).
+
+## Findings, round 12: suggest, the package, lineage, and the loose ends (2026-09-24)
+
+- **`hunch suggest` works, and its first result shows why it must be gated twice.** Gold rows split by hash: an LLM writer (DeepSeek V4.1 Flash) sees the spec's mistakes on one half; each rewrite is judged on the other half against the current answers. On a bare-label BANKING77 spec (dev, 770 rows): current 79.2% on the judging half; rewrite #0 84.3% (fixed 36, broke 16, p = 0.008, kept), #1 +1.5% and #2 +2.6% (n.s., rejected); $0.22 in all. **On the untouched holdout the kept rewrite was 82.3% → 84.7% (fixed 27, broke 18, p = 0.23): smaller and not significant.** The best of three looks better than it is (winner's curse), so `suggest` now applies Bonferroni over the rewrites tried and tells you to confirm on a holdout before adopting. For scale: the hand-written v3 descriptions reach 88.3% on the holdout. A 77-option rewrite needs ~7k reasoning tokens from the writer; the first attempt, capped at 16k output, came back truncated (now 32k, and a truncated reply is reported as such).
+- **The package.** `src/hunch/`: `core.py` is the engine (moved from `prototype/hunch.py`, which is now a shim so every documented command still works), `traces.py`, `models.py` (Pydantic classes and bare Pydantic AI output types as specs, with Pydantic AI's type mapping; `to_model` returns typed instances), `__init__.py` (`load`, `run`, `results`, `judge`, `judge_model`; a list of spec dicts is a project, so graphs can be generated instead of copied), `cli.py` (`hunch init agent-eval`). Checked in a fresh environment: a Pydantic class became a spec, linted, ran on 40 tickets, and `judge_model` returned `Triage(department='billing', urgent=False, urgency=<Urgency.MEDIUM: 1>)`; `Literal[...]` and `bool` output types return the value itself.
+- **Lineage.** Every materialized row has `_hunch_run_id` and `<qid>_key` (the answer's content address); `_hunch_runs` records spec hash, git sha, model, rows, answers asked, cost and status (failed runs too); `_hunch_row_answers` keeps each row's answer per run. Tables are replaced in one transaction, so readers see a complete run.
+- **Spec-change policy.** `on_change: new_rows_only` keeps rows' previous answers after a spec edit and asks only new rows (checked: question reworded + 30 new rows → 10 kept, 30 asked); `freeze` refuses to run a changed spec without `--allow-change`. The identity is the table name, so a `--model` run never lends its answers to the spec's own engine. *Corrected in round 14:* the first version matched rows by id alone and applied the policy in every command, and `freeze` asked nothing instead of refusing.
+- **Loose ends.** `diff` prints how far and which way probabilities moved (mean |Δ|, mean Δ p) and names flips "fixed / broken / wrong both times / without gold" (it said "other"); diffing unrelated projects exits with the reason (was a KeyError); `--traffic` collapses the per-question "no gold column" warnings; `compile` on a conditional graph estimates expected rows and cost from the pass rate of rows already answered (half-cached BANKING77 tree: ~$0.0023 expected vs $0.011 upper bound) and a dry run no longer trips the union-overlap check; the accuracy estimate takes sampling weights (weighted shares, Kish effective n; unit weights reproduce every previous estimate exactly); the tree's routing step has gold (`gold_group`, from the answer key's intent): 88.8% on the holdout.
+- **Lint caught two of my own mistakes on the way** (a clip on a column not in the state; a question named like its gold column), which is the point of it.
+
+## Findings, round 13: the server (2026-09-24)
+
+`server/` (Elastic License 2.0; the engine stays Apache 2.0): a Starlette app over the same specs and store as the CLI. `POST /v1/judge` (with shadow and log), `/v1/runs`, `/v1/drift` (label mix per run, total variation distance from the previous run, > 0.10 flagged), and HTML pages: projects, runs with drift, and the review queue with one-click verdicts written to the judgment's `reviews.csv`. Tested locally: 401 without or with a wrong token (constant-time compare; the review forms carry it), `..` and absolute paths refused, unknown specs and rows missing a column return 422/404 JSON instead of crashing, a verdict posted from the page lands in the CSV in the CLI's format and leaves the queue, and a shadow candidate called through the API answers in the server's event loop (the `--traffic` diff afterwards asked nothing). Found on the way: the projects page showed another project's last run (one store serves many projects; runs are now filtered by the project's judgments), and form posts were refused because the token check only read headers.
+
+## Findings, round 14: an adversarial review of rounds 10–13, and the scale test (2026-09-24)
+
+**Review.** An independent reviewer (Fable, no shared context, `--max-cost 0`, API keys unset) read and ran the four commits. It reproduced every headline number from the store (both engines' BANKING77 estimates and calibration, the cross-engine diffs, the Claude Code panel estimates with all 618 keys cached from `traces(...)`, suggest's judging-half and holdout results, compile's expected-cost arithmetic) and checked the server's auth, path confinement and escaping. It found 12 real problems; all are fixed and each fix was checked by reproducing the failure first:
+
+| | was | now |
+|---|---|---|
+| duplicate row ids | a second row with the same id got the first row's answer, cached for good (requests were grouped by id) | one request per distinct state; a warning names repeating key values |
+| `on_change: new_rows_only` | matched old answers by row id alone, so edited or unrelated rows reused them; applied in every command, so `diff` said "unchanged" and `compile` "0 to ask" after a spec edit | matches id *and* state; applied only by `run` and `compile`; `diff` shows the real reask |
+| `on_change: freeze` | asked nothing and left new rows empty (then `test` and `judge` crashed); the docs said it refuses | refuses a changed spec unless `--allow-change`; switching the policy itself is not a change |
+| redaction | missed JSON-quoted secrets (`"password": "…"`), the common form in traces | caught, quote kept, idempotent (the Claude Code example's 618 keys unchanged) |
+| suggest and the CLI | sent and printed the *raw* row, so text the spec redacts reached the writer LLM and the terminal | show and send the state (redacted, clipped) |
+| escalation lineage | `<qid>_key` and drift pointed at the original engine's answer | at the escalated answer |
+| `judge()` | a column named `path`, `node`, `shadow` or `log` crashed it (and the server) | the row is a dict: `judge(spec, row)` |
+| shadow | a candidate that failed to load raised in the live path | logged, never raised |
+| OTel span-per-line files | every span re-yielded its turns (duplicate rows) | spans grouped by trace first |
+| `traffic` | could be a judgment name, whose table would replace the logged traffic | reserved |
+| `Literal[1, 2]` | `to_model` returned strings, which Pydantic rejected | the declared values |
+| suggest's saved rewrites | a relative source, so the suggested `diff` failed | an absolute source |
+
+Server, from the same review: a verdict must match a row and kind the queue actually offers (a forged `kind=audit` would have entered the estimator as a random audit; now 409), `/v1/judge` spends at most `HUNCH_SERVER_MAX_COST` per judgment (default $0.01), and malformed bodies get 4xx instead of 500. Also found: `hunch init` then `lint` printed two false errors cascading from the missing source (unknown columns now stay unknown downstream), and running Python from `prototype/` imported the CLI shim instead of the package (the shim now becomes the package when imported). Metrics on every example are unchanged by the fixes (same md5 of the PASS/FAIL/estimate lines, old vs new code). The reviewer then verified all 12 fixes against its own repros, and found five problems the fixes introduced, all fixed: a store written by the previous commit crashed `run` (the lineage table now migrates, and a failure after answers are fetched is recorded as a failed run, leaving the previous table in place); `freeze` refused `run --source` on an unchanged spec (the spec hash now covers what is asked, not where the rows come from); the library had no cost cap (`HUNCH_MAX_COST`); two server inputs still returned 500; the review page's `audit=N` wasn't carried into the verdict check.
+
+**Scale: 100,000 Amazon reviews** (`examples/scale`, Apache 2.0 data; "is this review positive?", gold = stars):
+
+| | |
+|---|---|
+| throughput | 96,000 requests in 27.8 min: **57.5 per second** at 32 in flight; a 2,000-row probe did 63/s at 16 and 84/s at 48. No 429s at any point: the documented 1,200/min was not enforced for this key |
+| failures | 32 transport retries (0.03%), all recovered; nothing lost (answers are saved per request) |
+| cost | $1.55 (estimate $1.72) |
+| store | +80 MB for 96k answers (~840 bytes each) and the materialized table; peak memory 566 MB |
+| re-run with everything cached | `run` 4.1 s (hash 100k rows, one cache lookup, rewrite the table and lineage); `compile` 2.5 s |
+| `test` | was 156 s: AUROC compared every positive with every negative (2.5 billion pairs); now ranks (Mann–Whitney), 4.8 s, identical values |
+| accuracy | 97.0%, AUROC 0.993, calibration error 0.053; acting at 0.9 automates 76% of rows at ~0.5% error |
+
+**Decisions from the data.** Cursor-based incremental runs are not worth building yet: a fully cached 100k run takes 4 s, so hashing every row is cheap. Throughput is latency × concurrency, not a rate limit; `HUNCH_CONCURRENCY` sets it. A 1M-row run would take ~5 hours at 57/s and cost ~$16.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

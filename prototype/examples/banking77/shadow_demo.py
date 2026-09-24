@@ -13,8 +13,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 HUNCH = HERE.parent.parent / "hunch.py"
-sys.path.insert(0, str(HUNCH.parent))
-import hunch  # noqa: E402
+sys.path.insert(0, str(HUNCH.parent.parent / "src"))
+import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
 
 LIVE, CANDIDATE = HERE / "intent.yml", HERE.parent / "banking77_tree"
 hunch.MAX_COST = 0.0

@@ -14,7 +14,14 @@ uv run ../../hunch.py diff    intent.yml --against git:HEAD [--source ...]   # f
 uv run ../../hunch.py review  intent.yml [--list] [--limit N] [--audit N]   # disputed + audit + uncertain rows → <judgment>.reviews.csv
 uv run online_demo.py                                       # judge() from an app, same store as batch
 uv run shadow_demo.py                                       # judge(live, shadow=candidate) + diff/review --traffic
+# judge(spec, log=True, **row) keeps rows so a candidate written later can be replayed with --traffic
 ```
+
+Sources: `source:` is a CSV, `traces(<glob>)` (Claude Code, Cursor, OpenCode, OpenTelemetry GenAI sessions; `view: turns | runs`; see `traces.py`) or `py(<file.py>:<function>)` (any function returning dicts, e.g. a dlt resource). `redact: [secrets, emails, home, <regex>]` and `clip: {column: N | -N}` apply before anything is hashed or sent. Question extras: `none: "<when>"` (a none-of-these option), `type: multi` (several options can apply; one yes/no each), `escalate: {model: <engine>}` (re-ask answers below `act` on another engine). `examples/features/` shows each.
+
+Your own Claude Code sessions: `source: traces(~/.claude/projects/*dev-personal*/*.jsonl)` with `redact: [secrets, emails, home]`.
+
+Engines: `model: jev-1.13.0` (TypeSafe), or an LLM through its answer-token logprobs: `deepseek:<id>` (DeepSeek API, `DEEPSEEK_API_KEY`) or `openrouter:<id>[@provider]` (`OPENROUTER_API_KEY`). `--model X` on any command runs the same specs on another engine (tables get a `__<engine>` suffix); `hunch diff SPEC --against SPEC --model X` compares engines row by row.
 
 Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `act` is a number, or `{yes: .., no: ..}` on yes/no questions. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `base_rate` (noul: score as if this share of rows were yes), `order_stability: {sample, permutations, max_flip_rate}` (choice).
 
@@ -40,7 +47,7 @@ A folder of specs is a project. A judgment can read another's output with `sourc
 - `examples/tickets/`: 40 hand-written support tickets. Smoke test only.
 - `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
 - `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it? `patch_only.yml` is the same question without the agent's messages (an ablation).
-- `examples/claude_code/`: 309 turns of real developer ↔ Claude Code sessions (Trace Commons, CC BY 4.0), built by `prepare.py` (also reads your own `~/.claude/projects`; redacts before writing; `turns.csv` is gitignored). `outcome.yml`: how did the turn go, from the developer's next message? `claims.yml`: does the agent say it's done?
+- `examples/claude_code/`: 309 turns of real developer ↔ Claude Code sessions (Trace Commons, CC BY 4.0), read directly with `source: traces(...)` (download command in NOTICE.md; the sessions stay in the gitignored `.cache/`). `outcome.yml`: how did the turn go, from the developer's next message? `claims.yml`: does the agent say it's done?
 
 ## Results (jev-1.13.0, 2026-09-24)
 
@@ -115,10 +122,16 @@ hunch review CANDIDATE --against LIVE --traffic   # review only those rows (kind
 - Claimed done after editing: the developer reports a problem in 33% of turns where the agent ran nothing after its last edit vs 16% where it ran a command (142 vs 31 turns; session bootstrap CI −1 to +30 points: suggestive).
 - Cost $0.020. Details: docs/04-design.md round 9.
 
+### second engine, suggest, scale (docs/04-design.md rounds 10, 12, 14)
+
+- Same specs on DeepSeek V4.1 Flash (answer-token logprobs): BANKING77 92.3% vs Jev 95.8% (paired p = 0.001, Jev better); SWE patch AUROC 0.866 vs 0.831 and Claude Code outcome/claims level (n.s.); ~1.5× Jev's cost as billed.
+- `hunch suggest` on a bare-label BANKING77 spec: a rewrite gained +5.1% on the held-out half (p = 0.008) but +2.4% (n.s.) on the untouched holdout; now Bonferroni-corrected, and confirming on a holdout is part of the workflow.
+- 100,000 Amazon reviews: 57.5 requests/s, no rate limiting, 0.03% retried, $1.55; accuracy 97.0%, AUROC 0.993; a cached re-run takes 4 s.
+
 ### Phase 2 (the graph)
 
 - BANKING77 tree vs flat (holdout): flat 95.8% vs tree 87.5% estimated accuracy (all 69 tree disagreements reviewed blind); tree fixed 3, broke 35 (p < 0.001); tree 48% cheaper; 33 rows routed to a group without their answer. Chained confidence (`chain: true`) separates right from wrong answers with AUROC 0.897 vs 0.796 own-only.
 - agent_eval on 200 SWE-agent runs: 149 claim a fix; auto-reject at 0.80 handles 23.3% of claimed runs at 3.4% error (0.90: 9.3% at 0%); verified-before-claim runs pass 28.9% vs 17.8% (suggestive, p = 0.079).
 - Adversarial review of Phase 2 (Fable): 14 findings, all verified; fixes and corrections in `docs/04-design.md` round 6.
 
-Total API spend for everything: **about $0.51**, of which ~$0.08 was accidental re-asking in Phase 2 (per-folder stores, a spec outside the workspace; see docs/04-design.md rounds 6–7).
+Total API spend for everything: **about $2.76** (the 100k-row scale test was $1.55 of it), of which ~$0.08 was accidental re-asking in Phase 2 (per-folder stores, a spec outside the workspace; see docs/04-design.md rounds 6–7).

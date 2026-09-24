@@ -16,9 +16,9 @@ These decide between options at every phase. They come from why dbt and dlt won:
 
 ## Where we are
 
-Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree), agent-run evals (SWE-agent) and real developer ↔ agent conversations (Claude Code). Every Phase 2 claim was checked by an independent adversarial review; shadow mode compares a candidate on live traffic. Total API spend so far: about $0.51.
+Proven (see `prototype/README.md`, docs/04-design.md rounds 1–14), updated 2026-09-24: content-addressed store shared by batch, online and server; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates (weighted, or from random audits when there is no answer key); backtest and cross-engine diff with a significance test; review queue (CLI and web); judgment graphs; two engines (Jev, LLMs via logprobs) with escalation between them; trace, Python and CSV sources with redaction; shadow mode and replay; `suggest` gated on held-out gold; lineage and spec-change policies; a package with Pydantic classes as specs; a server (ELv2). Validated on intent classification (BANKING77, flat and tree), agent-run evals (SWE-agent), real developer ↔ agent conversations (Claude Code) and 100k reviews at scale. Rounds 6 and 14 were independent adversarial reviews; every finding was fixed. Total API spend so far: about $2.76, $1.55 of it the 100k-row scale test.
 
-**Not proven yet:** a second engine, scale beyond ~1k rows, a general trace source (Claude Code sessions are read by a script, 04 round 9), and whether anyone besides us wants this (no external user yet).
+**Not proven yet:** whether anyone besides us wants this (no external user yet), a shared multi-worker store (Postgres), and a published package name (`hunch` is squatted on PyPI).
 
 ## Phase 0: decide who it's for (no code)
 
@@ -62,20 +62,20 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 | Item | Why | Done when |
 |---|---|---|
 | ~~Ablation: does the agent's own claim sway `fix_correct`?~~ DONE | "Adversarial text can move Jev"; the state includes the agent saying it fixed it | **No contagion** (04 round 7): the messages move answers 6× more than re-asking does, but a claim doesn't raise p(passes) and AUROC is unchanged (0.831 vs 0.828). Done as a spec copy + `diff` (`examples/swe_agent/patch_only.yml`), $0.008 |
-| "None of these" as a primitive | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `choice` gets an optional none-option; lint suggests it when state can be incomplete |
-| Multi-label questions | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option |
-| State-size lint | 32k tokens for state + longest question; past it the request fails | `lint`/`compile` warn at ~25k estimated tokens per row, name the largest column |
-| Redaction for traces | State leaves the machine; traces carry secrets and customer data | Per-column redaction rules in the spec (patterns + drop lists), applied before hashing and sending |
-| LLM escalation tier | Pydantic's `FallbackModel` on low confidence | `route` can escalate to an LLM as well as a person; the dial reports fallback rate and cost |
-| Confidence vocabulary | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | Documented side by side; `judge()` can return both |
+| ~~"None of these" as a primitive~~ DONE (04 round 11) | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `none: "<when>"` adds a `none_of_these` option (sent, keyed); `test` reports the declined rate |
+| ~~Multi-label questions~~ DONE (04 round 11) | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option; combined column and exact-set accuracy |
+| ~~State-size lint~~ DONE (04 round 11) | 32k tokens for state + longest question; past it the request fails | `compile`/`run` warn at 80% of the limit, name the largest column and suggest `clip:` |
+| ~~Redaction for traces~~ DONE (04 round 11) | State leaves the machine; traces carry secrets and customer data | `redact: [secrets, emails, home, <regex>]` before hashing and sending, and on rows logged for shadow/replay; `clip:` per column (head or tail) |
+| ~~LLM escalation tier~~ DONE (04 round 11) | Pydantic's `FallbackModel` on low confidence | `escalate: {model: X}` re-asks only answers below `act` on engine X; `test` scores the combined system and reports how many were escalated |
+| ~~Confidence vocabulary~~ DONE | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | `judge()` returns both: `p` and `margin` |
 
 ## Next up, from OpenServ's SERV / Graph Sharding (read 2026-09-24, see 03 related work)
 
 | Item | Why | Done when |
 |---|---|---|
-| ~~Shadow mode~~ DONE (04 round 8) | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | Built without a new command: `judge(..., shadow=...)` logs the row and caches the candidate's answer; `--traffic` makes `diff` the shadow report and `review --against` queue only the rows where they differ. Open: fire-and-forget (the candidate currently adds latency), replay of traffic logged without a candidate |
-| `hunch suggest`, gated by `diff` | SERV's pitch is clearer instructions make Jev better; our own biggest gain was option descriptions (82% → 88%). Rewrites are only worth keeping if measured | `suggest` drafts question/option rewrites (from example rows and confusions); each is kept only if `diff` on gold shows a significant gain; the report says which were rejected |
-| Runtime adapters | Decision nodes now live inside runtimes (Pydantic AI output types, SERV graphs); hunch should test the same definition that runs | Import a Pydantic AI output type as a spec (with Phase 4's Pydantic API); import SERV decision nodes if they expose definitions; export a hunch spec back where possible |
+| ~~Shadow mode~~ DONE (04 round 8) | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | Built without a new command: `judge(..., shadow=...)` logs the row and caches the candidate's answer; `--traffic` makes `diff` the shadow report and `review --against` queue only the rows where they differ. Since round 11: the candidate runs after the live answer returns (no added latency), and `judge(..., log=True)` keeps rows so a candidate written later can be replayed with `--traffic` |
+| ~~`hunch suggest`, gated by `diff`~~ DONE (04 round 12) | SERV's pitch is clearer instructions make Jev better; our own biggest gain was option descriptions (82% → 88%). Rewrites are only worth keeping if measured | `suggest` drafts question/option rewrites (from example rows and confusions); each is kept only if `diff` on gold shows a significant gain; the report says which were rejected. Built with a held-out half and Bonferroni; the first kept rewrite shrank from +5.1% to +2.4% (n.s.) on the holdout, so confirmation on a holdout stays a required step |
+| Runtime adapters (Pydantic AI DONE, 04 round 12) | Decision nodes now live inside runtimes (Pydantic AI output types, SERV graphs); hunch should test the same definition that runs | Import a Pydantic AI output type as a spec (`hunch.spec_from_model`, classes and bare types; `to_model` back); import SERV decision nodes if they expose definitions (open: they don't publish a format); export a hunch spec back where possible |
 | Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised. It worked with no new code (copy the spec, drop the column, `diff`), but `diff` reports label flips and accuracy, not *how far and which way* probabilities moved, or the re-ask noise floor; those came from a throwaway script. Add them to `diff` when a second ablation needs them |
 | Watch list | Measurement features may arrive inside runtimes | Track OpenServ Graph Sharding / Shadow Agents / Benchmark Tooling and Pydantic's evals library; re-check each quarter whether they add gold-based measurement |
 
@@ -83,25 +83,25 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 
 | Item | Question it answers | Done when |
 |---|---|---|
-| Second engine adapter | Is the spec really engine-neutral? | Same spec runs on an LLM with logprobs (or an open System One clone); swapping is one string. |
-| Cross-engine diff | Which engine should this judgment use? | `diff --against engine:X` shows flips, accuracy, calibration, cost per engine. |
-| Scale test at 100k rows | Where does it break: hashing, store size, rate limits? | Measured throughput. Known constraint: 1,200 requests/min means 1M rows ≈ 14 h on one key. Decide batching / multi-key / cursor from data. |
-| Cursor + hash incremental | Can we avoid re-reading an unchanged big table? | `incremental: {cursor: updated_at}` skips old rows; hash still decides whether to ask. |
-| Trace source via dlt (moved up for the AI-engineer persona) | Can hunch read agent traces directly instead of a hand-built CSV? | Any dlt resource is a hunch source; demonstrated with an OpenTelemetry GenAI / Langfuse-style export. Per-field trimming is declared in the spec (keep the head of an issue, the tail of a conversation), not hand-coded like `prepare.py`. |
+| ~~Second engine adapter~~ DONE (04 round 10) | Is the spec really engine-neutral? | `deepseek:<id>` / `openrouter:<id>[@provider]` through answer-token logprobs; `--model` swaps the engine for any command. |
+| ~~Cross-engine diff~~ DONE (04 round 10) | Which engine should this judgment use? | `diff SPEC --against SPEC --model X`: flips, fixed/broken on gold, sign test; `test --model X` for calibration and cost. |
+| ~~Scale test at 100k rows~~ DONE (04 round 14) | Where does it break: hashing, store size, rate limits? | 57.5 requests/s at 32 in flight, no 429s (the documented 1,200/min wasn't enforced), 0.03% transport retries, $1.55, +80 MB; a cached re-run takes 4 s; `test` fixed from 156 s to 5 s (AUROC was quadratic). |
+| ~~Cursor + hash incremental~~ NOT NEEDED YET (04 round 14) | Can we avoid re-reading an unchanged big table? | Measured: hashing 100k rows and looking them up takes ~3 s, so a cursor saves nothing until tens of millions of rows. Revisit with a real table that size. |
+| Trace source via dlt (moved up for the AI-engineer persona) | Can hunch read agent traces directly instead of a hand-built CSV? | Any dlt resource is a hunch source; demonstrated with an OpenTelemetry GenAI / Langfuse-style export. Per-field trimming is declared in the spec (keep the head of an issue, the tail of a conversation), not hand-coded like `prepare.py`. **Round 11:** `source: traces(<glob>)` reads Claude Code, Cursor, OpenCode and OpenTelemetry GenAI files (`traces.py`), `source: py(file:fn)` takes any function returning dicts (a dlt resource included), `clip:` is in the spec; the Claude Code example dropped `prepare.py` with identical keys. |
 
 ## Phase 4: package v0.1 (product, Apache 2.0)
 
 Known engineering; do it once phases 1–3 have settled the shapes.
 
-- **Library first**: `hunch.run()`, `hunch.judge()`, `hunch.results("x").df()`; CLI is a thin shell. **Pydantic classes as specs**: accept Pydantic AI's type mapping (bool / Literal / Enum / IntEnum rubric / list fan-out / Optional) so the output type that runs live in an agent is the one hunch tests and diffs; YAML remains the stored form. A Python API that generates graphs (the BANKING77 tree needed `build.py` for 12 near-identical specs).
+- ~~Library first, Pydantic classes as specs, Python-generated graphs~~ DONE (04 round 12; `results()` returns dicts, not a DataFrame). **Library first**: `hunch.run()`, `hunch.judge()`, `hunch.results("x").df()`; CLI is a thin shell. **Pydantic classes as specs**: accept Pydantic AI's type mapping (bool / Literal / Enum / IntEnum rubric / list fan-out / Optional) so the output type that runs live in an agent is the one hunch tests and diffs; YAML remains the stored form. A Python API that generates graphs (the BANKING77 tree needed `build.py` for 12 near-identical specs).
 - **Cost guard**: every command states what it will spend; `--max-cost` refuses above a cap (prototype has both); `compile` estimates for conditional graphs from past pass rates instead of a loose upper bound.
 - **Spec format**: JSON Schema, versioned; lint built on it.
-- **Lineage**: `_hunch_run_id` and `_hunch_key` on every materialized row; `_hunch_runs` table (spec hash, git sha, model, cost, status). Downstream reads complete runs only.
-- **Spec-change policy**: `on_change: reask | new_rows_only | freeze`; `diff` shows the cost before you pay it.
+- ~~Lineage~~ DONE (04 round 12; per-question `<qid>_key` columns). **Lineage**: `_hunch_run_id` and `_hunch_key` on every materialized row; `_hunch_runs` table (spec hash, git sha, model, cost, status). Downstream reads complete runs only.
+- ~~Spec-change policy~~ DONE (04 round 12). **Spec-change policy**: `on_change: reask | new_rows_only | freeze`; `diff` shows the cost before you pay it.
 - **Stores**: SQLite (local), Postgres (shared), selected by one string.
 - **dbt interop**: read `manifest.json` as sources; emit dbt `sources:` YAML for materialized judgments.
 - **Agent skill / MCP**: coding agents write specs and iterate with lint → test → diff.
-- **Recipes as packages**: `hunch init agent-eval`, `hunch add <recipe>`; a recipe hub later. Recipes are versioned, have their own tests and gold, and are overridable (change a threshold or a question without forking).
+- ~~Recipes as packages~~ first step DONE: `hunch init agent-eval` from the package (no `add`, no hub, no versioning yet). **Recipes as packages**: `hunch init agent-eval`, `hunch add <recipe>`; a recipe hub later. Recipes are versioned, have their own tests and gold, and are overridable (change a threshold or a question without forking).
 - **UX pass**: first-ten-minutes path timed with a new user; every error message says what to do next; a Python API (decorators, like dlt) that produces the same spec as the YAML.
 - **dlt interop**: dlt resources as sources; hunch results loadable by dlt to any destination.
 - **Run-level checks (built in, need run history)**: label-distribution drift vs the previous run, review-rate ceiling, confidence drift, cost budget per run. Generic checks on the output table (nulls, accepted values, ranges) are *not* built: documented as Great Expectations / Soda / dbt tests pointed at hunch's table.
@@ -119,14 +119,14 @@ GX is a reference for what makes quality checks *useful to people*, not a depend
 Parked: a GX custom expectation / dbt generic test backed by hunch (`expect_column_values_to_satisfy("company_name", "is a real company")`). Revisit only if users ask for it.
 - **Release**: PyPI name decided (`hunch` is a squatted placeholder), repo public, docs site.
 
-## Phase 5: server (ELv2)
+## Phase 5: server (ELv2): first version DONE locally (04 round 13; `server/`)
 
 Only after v0.1 has users.
 
-- Review UI (the queue, audit slice, "answer key is wrong"), multi-reviewer, agreement stats.
-- Online serving with a shared store and background writes.
+- Review UI (the queue, audit slice, "answer key is wrong"), multi-reviewer, agreement stats. *Done: the queue with one-click verdicts, reviewer name per verdict. Open: accounts, agreement stats.*
+- Online serving with a shared store and background writes. *Done: `/v1/judge` with shadow/log, candidate in the event loop. Open: several workers, Postgres.*
 - Live trace ingestion for evals on production traffic (the batch trace source lands in Phase 3).
-- Monitoring: label drift, calibration drift, cost per judgment over time.
+- Monitoring: label drift, calibration drift, cost per judgment over time. *Done: label mix per run with a drift flag, runs with cost. Open: calibration drift (needs gold over time).*
 
 ## Parked (revisit with evidence)
 

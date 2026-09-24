@@ -1,0 +1,275 @@
+{
+ "opus:1": {
+  "id": "261",
+  "gold": "fiat_currency_support",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "40464486281872ab"
+ },
+ "sonnet_a:1": {
+  "id": "261",
+  "gold": "fiat_currency_support",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "40464486281872ab"
+ },
+ "sonnet_b:1": {
+  "id": "261",
+  "gold": "fiat_currency_support",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "40464486281872ab"
+ },
+ "opus:2": {
+  "id": "556",
+  "gold": "pin_blocked",
+  "model": "change_pin",
+  "kind": "disagree",
+  "state_hash": "4f71b414c379cbff"
+ },
+ "sonnet_a:2": {
+  "id": "556",
+  "gold": "pin_blocked",
+  "model": "change_pin",
+  "kind": "disagree",
+  "state_hash": "4f71b414c379cbff"
+ },
+ "sonnet_b:2": {
+  "id": "556",
+  "gold": "pin_blocked",
+  "model": "change_pin",
+  "kind": "disagree",
+  "state_hash": "4f71b414c379cbff"
+ },
+ "opus:3": {
+  "id": "900",
+  "gold": "supported_cards_and_currencies",
+  "model": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "a735ab523aa21ded"
+ },
+ "sonnet_a:3": {
+  "id": "900",
+  "gold": "supported_cards_and_currencies",
+  "model": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "a735ab523aa21ded"
+ },
+ "sonnet_b:3": {
+  "id": "900",
+  "gold": "supported_cards_and_currencies",
+  "model": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "a735ab523aa21ded"
+ },
+ "opus:4": {
+  "id": "1237",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "23fd268a08057d81"
+ },
+ "sonnet_a:4": {
+  "id": "1237",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "23fd268a08057d81"
+ },
+ "sonnet_b:4": {
+  "id": "1237",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "23fd268a08057d81"
+ },
+ "opus:5": {
+  "id": "1238",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "c12251a1029e189d"
+ },
+ "sonnet_a:5": {
+  "id": "1238",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "c12251a1029e189d"
+ },
+ "sonnet_b:5": {
+  "id": "1238",
+  "gold": "unable_to_verify_identity",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "c12251a1029e189d"
+ },
+ "opus:6": {
+  "id": "1297",
+  "gold": "visa_or_mastercard",
+  "model": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "c2ba94cae6a0d997"
+ },
+ "sonnet_a:6": {
+  "id": "1297",
+  "gold": "visa_or_mastercard",
+  "model": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "c2ba94cae6a0d997"
+ },
+ "sonnet_b:6": {
+  "id": "1297",
+  "gold": "visa_or_mastercard",
+  "model": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "c2ba94cae6a0d997"
+ },
+ "opus:7": {
+  "id": "1634",
+  "gold": "pending_card_payment",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "161645c4a45801d3"
+ },
+ "sonnet_a:7": {
+  "id": "1634",
+  "gold": "pending_card_payment",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "161645c4a45801d3"
+ },
+ "sonnet_b:7": {
+  "id": "1634",
+  "gold": "pending_card_payment",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "161645c4a45801d3"
+ },
+ "opus:8": {
+  "id": "1682",
+  "gold": "request_refund",
+  "model": "Refund_not_showing_up",
+  "kind": "disagree",
+  "state_hash": "acc31c4cff22e947"
+ },
+ "sonnet_a:8": {
+  "id": "1682",
+  "gold": "request_refund",
+  "model": "Refund_not_showing_up",
+  "kind": "disagree",
+  "state_hash": "acc31c4cff22e947"
+ },
+ "sonnet_b:8": {
+  "id": "1682",
+  "gold": "request_refund",
+  "model": "Refund_not_showing_up",
+  "kind": "disagree",
+  "state_hash": "acc31c4cff22e947"
+ },
+ "opus:9": {
+  "id": "2067",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "b86976f310e9feab"
+ },
+ "sonnet_a:9": {
+  "id": "2067",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "b86976f310e9feab"
+ },
+ "sonnet_b:9": {
+  "id": "2067",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "b86976f310e9feab"
+ },
+ "opus:10": {
+  "id": "2078",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "6b66f8d1ac058b8b"
+ },
+ "sonnet_a:10": {
+  "id": "2078",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "6b66f8d1ac058b8b"
+ },
+ "sonnet_b:10": {
+  "id": "2078",
+  "gold": "transfer_timing",
+  "model": "transfer_not_received_by_recipient",
+  "kind": "disagree",
+  "state_hash": "6b66f8d1ac058b8b"
+ },
+ "opus:11": {
+  "id": "2363",
+  "gold": "verify_top_up",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "e8e404916d009345"
+ },
+ "sonnet_a:11": {
+  "id": "2363",
+  "gold": "verify_top_up",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "e8e404916d009345"
+ },
+ "sonnet_b:11": {
+  "id": "2363",
+  "gold": "verify_top_up",
+  "model": "why_verify_identity",
+  "kind": "disagree",
+  "state_hash": "e8e404916d009345"
+ },
+ "opus:12": {
+  "id": "2764",
+  "gold": "exchange_charge",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "03f347c5a262a5ad"
+ },
+ "sonnet_a:12": {
+  "id": "2764",
+  "gold": "exchange_charge",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "03f347c5a262a5ad"
+ },
+ "sonnet_b:12": {
+  "id": "2764",
+  "gold": "exchange_charge",
+  "model": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "03f347c5a262a5ad"
+ },
+ "opus:13": {
+  "id": "2863",
+  "gold": "activate_my_card",
+  "model": "get_physical_card",
+  "kind": "disagree",
+  "state_hash": "612737da1541c259"
+ },
+ "sonnet_a:13": {
+  "id": "2863",
+  "gold": "activate_my_card",
+  "model": "get_physical_card",
+  "kind": "disagree",
+  "state_hash": "612737da1541c259"
+ },
+ "sonnet_b:13": {
+  "id": "2863",
+  "gold": "activate_my_card",
+  "model": "get_physical_card",
+  "kind": "disagree",
+  "state_hash": "612737da1541c259"
+ }
+}

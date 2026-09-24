@@ -128,3 +128,16 @@ intent,2992,7e1644b033db0a39,key_right,apple_pay_or_google_pay,panel:opus+sonnet
 intent,3044,3889982de17d82cf,key_right,country_support,panel:opus+sonnet+sonnet,2026-09-24T14:44:22+00:00,disputed
 intent,3047,74de5b655897df56,key_right,country_support,panel:opus+sonnet+sonnet,2026-09-24T14:44:22+00:00,disputed
 intent,3048,d39222720e80ef4d,key_right,country_support,panel:opus+sonnet+sonnet,2026-09-24T14:44:22+00:00,disputed
+intent,261,40464486281872ab,key_right,fiat_currency_support,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,556,4f71b414c379cbff,key_right,pin_blocked,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,900,a735ab523aa21ded,key_right,supported_cards_and_currencies,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,1237,23fd268a08057d81,key_right,unable_to_verify_identity,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,1238,c12251a1029e189d,key_right,unable_to_verify_identity,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,1297,c2ba94cae6a0d997,key_right,visa_or_mastercard,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,1634,161645c4a45801d3,key_right,pending_card_payment,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,1682,acc31c4cff22e947,key_right,request_refund,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,2067,b86976f310e9feab,key_right,transfer_timing,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,2078,6b66f8d1ac058b8b,key_right,transfer_timing,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,2363,e8e404916d009345,key_right,verify_top_up,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,2764,03f347c5a262a5ad,model_right,exchange_rate,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
+intent,2863,612737da1541c259,key_right,activate_my_card,panel:opus+sonnet+sonnet,2026-09-24T17:09:06+00:00,disputed
