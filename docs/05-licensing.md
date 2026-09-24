@@ -26,5 +26,6 @@ The real moat is operating the service (review workflow, trace ingestion at scal
 
 ## TODO
 
-- Add `LICENSE` files per directory once code layout exists (e.g. `/core` Apache, `/server` ELv2).
+- [x] Root `LICENSE` (Apache 2.0) + `NOTICE` added 2026-09-24; covers all current code.
+- Add `server/LICENSE` (ELv2) together with the first server code.
 - CLA or DCO for contributions (needed if relicensing the Apache part is ever possible; DCO is friendlier).

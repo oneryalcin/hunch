@@ -37,11 +37,17 @@ Companies now classify tickets, transactions, companies, documents, leads, and L
 | 2026-09-24 | License split by layer: spec+compiler+CLI Apache 2.0; server ELv2 | Spec adoption needs permissive; protect what a cloud would host (05-licensing) |
 | 2026-09-24 | Engine pluggable, Jev first | Avoid single-vendor dependency |
 
-## Next step
+## Status
 
-Throwaway prototype: YAML judgment → CSV in DuckDB → content-addressed cache → change the question wording → show the diff of rows that flipped. If the diff feels magical, that's the product.
+Throwaway prototype in [`prototype/`](prototype/README.md): content-addressed cache, statistical tests, backtest diff with significance, online `judge()`, validated on BANKING77 (dev + holdout). Findings that shape the real build are in [docs/04-design.md](docs/04-design.md).
 
 ## Name availability (checked 2026-09-24)
 
 - PyPI `hunch`: squatted placeholder (0.0.0, "Coming soon..."). Need an alternative dist name (e.g. `hunch-ai`, `hunchdb`) or a PEP 541 claim; CLI command can still be `hunch`.
 - npm `hunch`: taken (Markdown search tool, 0.16.0).
+
+## License
+
+Everything in this repository is licensed under the [Apache License 2.0](LICENSE), except third-party data listed in [NOTICE](NOTICE).
+
+Planned split (see [docs/05-licensing.md](docs/05-licensing.md)): the spec, compiler, CLI, SDKs and engine adapters stay Apache 2.0. A future `server/` directory (review UI, online serving, trace ingestion) will be under the Elastic License 2.0 and will carry its own `LICENSE` file. No ELv2 code exists yet.

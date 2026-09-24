@@ -1,0 +1,8 @@
+hunch
+Copyright 2026 Mehmet Öner Yalçın
+
+This product includes third-party data:
+
+- prototype/examples/banking77/*.csv: samples of the BANKING77 dataset by PolyAI
+  (https://github.com/PolyAI-LDN/task-specific-datasets), licensed CC BY 4.0.
+  See prototype/examples/banking77/NOTICE.md.
