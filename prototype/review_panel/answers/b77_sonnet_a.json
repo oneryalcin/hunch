@@ -1,0 +1,1180 @@
+[
+ {
+  "n": 1,
+  "best": "visa_or_mastercard",
+  "acceptable": [
+   "visa_or_mastercard"
+  ],
+  "candidates": {
+   "visa_or_mastercard": true,
+   "order_physical_card": false
+  }
+ },
+ {
+  "n": 2,
+  "best": "lost_or_stolen_card",
+  "acceptable": [
+   "lost_or_stolen_card",
+   "card_arrival"
+  ],
+  "candidates": {
+   "lost_or_stolen_card": true,
+   "card_arrival": true
+  }
+ },
+ {
+  "n": 3,
+  "best": "transfer_timing",
+  "acceptable": [
+   "transfer_timing"
+  ],
+  "candidates": {
+   "top_up_by_bank_transfer_charge": false,
+   "transfer_timing": true
+  }
+ },
+ {
+  "n": 4,
+  "best": "card_linking",
+  "acceptable": [
+   "card_linking"
+  ],
+  "candidates": {
+   "getting_virtual_card": false,
+   "card_linking": true
+  }
+ },
+ {
+  "n": 5,
+  "best": "top_up_failed",
+  "acceptable": [
+   "top_up_failed"
+  ],
+  "candidates": {
+   "card_not_working": false,
+   "top_up_failed": true
+  }
+ },
+ {
+  "n": 6,
+  "best": "card_delivery_estimate",
+  "acceptable": [
+   "card_delivery_estimate"
+  ],
+  "candidates": {
+   "card_delivery_estimate": true,
+   "card_arrival": false
+  }
+ },
+ {
+  "n": 7,
+  "best": "wrong_exchange_rate_for_cash_withdrawal",
+  "acceptable": [
+   "wrong_exchange_rate_for_cash_withdrawal"
+  ],
+  "candidates": {
+   "wrong_exchange_rate_for_cash_withdrawal": true,
+   "verify_source_of_funds": false
+  }
+ },
+ {
+  "n": 8,
+  "best": "wrong_amount_of_cash_received",
+  "acceptable": [
+   "wrong_amount_of_cash_received"
+  ],
+  "candidates": {
+   "card_not_working": false,
+   "wrong_amount_of_cash_received": true
+  }
+ },
+ {
+  "n": 9,
+  "best": "verify_my_identity",
+  "acceptable": [
+   "verify_my_identity"
+  ],
+  "candidates": {
+   "verify_my_identity": true,
+   "contactless_not_working": false
+  }
+ },
+ {
+  "n": 10,
+  "best": "transfer_not_received_by_recipient",
+  "acceptable": [
+   "transfer_not_received_by_recipient"
+  ],
+  "candidates": {
+   "apple_pay_or_google_pay": false,
+   "transfer_not_received_by_recipient": true
+  }
+ },
+ {
+  "n": 11,
+  "best": "pending_transfer",
+  "acceptable": [
+   "pending_transfer",
+   "transfer_not_received_by_recipient"
+  ],
+  "candidates": {
+   "transfer_not_received_by_recipient": true,
+   "pending_transfer": true
+  }
+ },
+ {
+  "n": 12,
+  "best": "top_up_limits",
+  "acceptable": [
+   "top_up_limits"
+  ],
+  "candidates": {
+   "order_physical_card": false,
+   "top_up_limits": true
+  }
+ },
+ {
+  "n": 13,
+  "best": "cash_withdrawal_charge",
+  "acceptable": [
+   "cash_withdrawal_charge"
+  ],
+  "candidates": {
+   "cash_withdrawal_charge": true,
+   "wrong_exchange_rate_for_cash_withdrawal": false
+  }
+ },
+ {
+  "n": 14,
+  "best": "declined_card_payment",
+  "acceptable": [
+   "declined_card_payment"
+  ],
+  "candidates": {
+   "card_not_working": false,
+   "declined_card_payment": true
+  }
+ },
+ {
+  "n": 15,
+  "best": "extra_charge_on_statement",
+  "acceptable": [
+   "extra_charge_on_statement",
+   "card_payment_fee_charged"
+  ],
+  "candidates": {
+   "card_payment_fee_charged": true,
+   "extra_charge_on_statement": true
+  }
+ },
+ {
+  "n": 16,
+  "best": "top_up_failed",
+  "acceptable": [
+   "top_up_failed"
+  ],
+  "candidates": {
+   "top_up_failed": true,
+   "top_up_reverted": false
+  }
+ },
+ {
+  "n": 17,
+  "best": "pending_top_up",
+  "acceptable": [
+   "pending_top_up",
+   "top_up_failed"
+  ],
+  "candidates": {
+   "top_up_failed": true,
+   "pending_top_up": true
+  }
+ },
+ {
+  "n": 18,
+  "best": "direct_debit_payment_not_recognised",
+  "acceptable": [
+   "direct_debit_payment_not_recognised",
+   "card_payment_not_recognised"
+  ],
+  "candidates": {
+   "direct_debit_payment_not_recognised": true,
+   "card_payment_not_recognised": true
+  }
+ },
+ {
+  "n": 19,
+  "best": "receiving_money",
+  "acceptable": [
+   "receiving_money"
+  ],
+  "candidates": {
+   "top_up_by_bank_transfer_charge": false,
+   "receiving_money": true
+  }
+ },
+ {
+  "n": 20,
+  "best": "receiving_money",
+  "acceptable": [
+   "receiving_money"
+  ],
+  "candidates": {
+   "receiving_money": true,
+   "topping_up_by_card": false
+  }
+ },
+ {
+  "n": 21,
+  "best": "declined_card_payment",
+  "acceptable": [
+   "declined_card_payment",
+   "card_not_working"
+  ],
+  "candidates": {
+   "declined_card_payment": true,
+   "card_not_working": true
+  }
+ },
+ {
+  "n": 22,
+  "best": "supported_cards_and_currencies",
+  "acceptable": [
+   "supported_cards_and_currencies"
+  ],
+  "candidates": {
+   "supported_cards_and_currencies": true,
+   "top_up_by_card_charge": false
+  }
+ },
+ {
+  "n": 23,
+  "best": "change_pin",
+  "acceptable": [
+   "change_pin"
+  ],
+  "candidates": {
+   "get_physical_card": false,
+   "change_pin": true
+  }
+ },
+ {
+  "n": 24,
+  "best": "card_payment_not_recognised",
+  "acceptable": [
+   "card_payment_not_recognised",
+   "compromised_card"
+  ],
+  "candidates": {
+   "compromised_card": true,
+   "card_payment_not_recognised": true
+  }
+ },
+ {
+  "n": 25,
+  "best": "visa_or_mastercard",
+  "acceptable": [
+   "visa_or_mastercard"
+  ],
+  "candidates": {
+   "getting_spare_card": false,
+   "visa_or_mastercard": true
+  }
+ },
+ {
+  "n": 26,
+  "best": "failed_transfer",
+  "acceptable": [
+   "failed_transfer"
+  ],
+  "candidates": {
+   "failed_transfer": true,
+   "transfer_not_received_by_recipient": false
+  }
+ },
+ {
+  "n": 27,
+  "best": "card_swallowed",
+  "acceptable": [
+   "card_swallowed"
+  ],
+  "candidates": {
+   "apple_pay_or_google_pay": false,
+   "card_swallowed": true
+  }
+ },
+ {
+  "n": 28,
+  "best": "card_about_to_expire",
+  "acceptable": [
+   "card_about_to_expire"
+  ],
+  "candidates": {
+   "order_physical_card": false,
+   "card_about_to_expire": true
+  }
+ },
+ {
+  "n": 29,
+  "best": "card_not_working",
+  "acceptable": [
+   "card_not_working"
+  ],
+  "candidates": {
+   "card_not_working": true,
+   "order_physical_card": false
+  }
+ },
+ {
+  "n": 30,
+  "best": "verify_my_identity",
+  "acceptable": [
+   "verify_my_identity"
+  ],
+  "candidates": {
+   "why_verify_identity": false,
+   "verify_my_identity": true
+  }
+ },
+ {
+  "n": 31,
+  "best": "activate_my_card",
+  "acceptable": [
+   "activate_my_card"
+  ],
+  "candidates": {
+   "pending_transfer": false,
+   "activate_my_card": true
+  }
+ },
+ {
+  "n": 32,
+  "best": "verify_top_up",
+  "acceptable": [
+   "verify_top_up"
+  ],
+  "candidates": {
+   "why_verify_identity": false,
+   "verify_top_up": true
+  }
+ },
+ {
+  "n": 33,
+  "best": "cash_withdrawal_not_recognised",
+  "acceptable": [
+   "cash_withdrawal_not_recognised"
+  ],
+  "candidates": {
+   "verify_source_of_funds": false,
+   "cash_withdrawal_not_recognised": true
+  }
+ },
+ {
+  "n": 34,
+  "best": "get_physical_card",
+  "acceptable": [
+   "get_physical_card"
+  ],
+  "candidates": {
+   "change_pin": false,
+   "get_physical_card": true
+  }
+ },
+ {
+  "n": 35,
+  "best": "change_pin",
+  "acceptable": [
+   "change_pin"
+  ],
+  "candidates": {
+   "change_pin": true,
+   "exchange_charge": false
+  }
+ },
+ {
+  "n": 36,
+  "best": "card_delivery_estimate",
+  "acceptable": [
+   "card_delivery_estimate"
+  ],
+  "candidates": {
+   "card_arrival": false,
+   "card_delivery_estimate": true
+  }
+ },
+ {
+  "n": 37,
+  "best": "getting_virtual_card",
+  "acceptable": [
+   "getting_virtual_card"
+  ],
+  "candidates": {
+   "getting_virtual_card": true,
+   "get_disposable_virtual_card": false
+  }
+ },
+ {
+  "n": 38,
+  "best": "card_payment_wrong_exchange_rate",
+  "acceptable": [
+   "card_payment_wrong_exchange_rate"
+  ],
+  "candidates": {
+   "exchange_charge": false,
+   "card_payment_wrong_exchange_rate": true
+  }
+ },
+ {
+  "n": 39,
+  "best": "extra_charge_on_statement",
+  "acceptable": [
+   "extra_charge_on_statement"
+  ],
+  "candidates": {
+   "extra_charge_on_statement": true,
+   "transfer_fee_charged": false
+  }
+ },
+ {
+  "n": 40,
+  "best": "supported_cards_and_currencies",
+  "acceptable": [
+   "supported_cards_and_currencies",
+   "topping_up_by_card"
+  ],
+  "candidates": {
+   "topping_up_by_card": true,
+   "supported_cards_and_currencies": true
+  }
+ },
+ {
+  "n": 41,
+  "best": "direct_debit_payment_not_recognised",
+  "acceptable": [
+   "direct_debit_payment_not_recognised"
+  ],
+  "candidates": {
+   "direct_debit_payment_not_recognised": true,
+   "request_refund": false
+  }
+ },
+ {
+  "n": 42,
+  "best": "card_payment_fee_charged",
+  "acceptable": [
+   "card_payment_fee_charged"
+  ],
+  "candidates": {
+   "card_payment_fee_charged": true,
+   "transfer_fee_charged": false
+  }
+ },
+ {
+  "n": 43,
+  "best": "declined_cash_withdrawal",
+  "acceptable": [
+   "declined_cash_withdrawal"
+  ],
+  "candidates": {
+   "declined_cash_withdrawal": true,
+   "get_disposable_virtual_card": false
+  }
+ },
+ {
+  "n": 44,
+  "best": "declined_card_payment",
+  "acceptable": [
+   "declined_card_payment",
+   "declined_transfer"
+  ],
+  "candidates": {
+   "declined_transfer": true,
+   "declined_card_payment": true
+  }
+ },
+ {
+  "n": 45,
+  "best": "Refund_not_showing_up",
+  "acceptable": [
+   "Refund_not_showing_up"
+  ],
+  "candidates": {
+   "Refund_not_showing_up": true,
+   "top_up_reverted": false
+  }
+ },
+ {
+  "n": 46,
+  "best": "top_up_by_card_charge",
+  "acceptable": [
+   "top_up_by_card_charge"
+  ],
+  "candidates": {
+   "request_refund": false,
+   "top_up_by_card_charge": true
+  }
+ },
+ {
+  "n": 47,
+  "best": "declined_card_payment",
+  "acceptable": [
+   "declined_card_payment"
+  ],
+  "candidates": {
+   "declined_card_payment": true,
+   "card_not_working": false
+  }
+ },
+ {
+  "n": 48,
+  "best": "receiving_money",
+  "acceptable": [
+   "receiving_money"
+  ],
+  "candidates": {
+   "receiving_money": true,
+   "fiat_currency_support": false
+  }
+ },
+ {
+  "n": 49,
+  "best": "atm_support",
+  "acceptable": [
+   "atm_support"
+  ],
+  "candidates": {
+   "atm_support": true,
+   "wrong_exchange_rate_for_cash_withdrawal": false
+  }
+ },
+ {
+  "n": 50,
+  "best": "top_up_failed",
+  "acceptable": [
+   "top_up_failed"
+  ],
+  "candidates": {
+   "top_up_failed": true,
+   "topping_up_by_card": false
+  }
+ },
+ {
+  "n": 51,
+  "best": "get_physical_card",
+  "acceptable": [
+   "get_physical_card"
+  ],
+  "candidates": {
+   "get_physical_card": true,
+   "change_pin": false
+  }
+ },
+ {
+  "n": 52,
+  "best": "failed_transfer",
+  "acceptable": [
+   "failed_transfer",
+   "declined_transfer"
+  ],
+  "candidates": {
+   "declined_transfer": true,
+   "failed_transfer": true
+  }
+ },
+ {
+  "n": 53,
+  "best": "pending_transfer",
+  "acceptable": [
+   "pending_transfer"
+  ],
+  "candidates": {
+   "pending_transfer": true,
+   "declined_cash_withdrawal": false
+  }
+ },
+ {
+  "n": 54,
+  "best": "failed_transfer",
+  "acceptable": [
+   "failed_transfer",
+   "declined_transfer"
+  ],
+  "candidates": {
+   "failed_transfer": true,
+   "declined_transfer": true
+  }
+ },
+ {
+  "n": 55,
+  "best": "wrong_amount_of_cash_received",
+  "acceptable": [
+   "wrong_amount_of_cash_received"
+  ],
+  "candidates": {
+   "top_up_by_card_charge": false,
+   "wrong_amount_of_cash_received": true
+  }
+ },
+ {
+  "n": 56,
+  "best": "reverted_card_payment?",
+  "acceptable": [
+   "reverted_card_payment?",
+   "declined_card_payment"
+  ],
+  "candidates": {
+   "reverted_card_payment?": true,
+   "declined_card_payment": true
+  }
+ },
+ {
+  "n": 57,
+  "best": "transaction_charged_twice",
+  "acceptable": [
+   "transaction_charged_twice"
+  ],
+  "candidates": {
+   "transfer_not_received_by_recipient": false,
+   "transaction_charged_twice": true
+  }
+ },
+ {
+  "n": 58,
+  "best": "atm_support",
+  "acceptable": [
+   "atm_support"
+  ],
+  "candidates": {
+   "atm_support": true,
+   "wrong_exchange_rate_for_cash_withdrawal": false
+  }
+ },
+ {
+  "n": 59,
+  "best": "cash_withdrawal_not_recognised",
+  "acceptable": [
+   "cash_withdrawal_not_recognised",
+   "lost_or_stolen_card"
+  ],
+  "candidates": {
+   "cash_withdrawal_not_recognised": true,
+   "lost_or_stolen_card": true
+  }
+ },
+ {
+  "n": 60,
+  "best": "beneficiary_not_allowed",
+  "acceptable": [
+   "beneficiary_not_allowed"
+  ],
+  "candidates": {
+   "failed_transfer": false,
+   "beneficiary_not_allowed": true
+  }
+ },
+ {
+  "n": 61,
+  "best": "compromised_card",
+  "acceptable": [
+   "compromised_card"
+  ],
+  "candidates": {
+   "compromised_card": true,
+   "card_not_working": false
+  }
+ },
+ {
+  "n": 62,
+  "best": "pin_blocked",
+  "acceptable": [
+   "pin_blocked"
+  ],
+  "candidates": {
+   "pin_blocked": true,
+   "disposable_card_limits": false
+  }
+ },
+ {
+  "n": 63,
+  "best": "activate_my_card",
+  "acceptable": [
+   "activate_my_card"
+  ],
+  "candidates": {
+   "activate_my_card": true,
+   "transfer_not_received_by_recipient": false
+  }
+ },
+ {
+  "n": 64,
+  "best": "compromised_card",
+  "acceptable": [
+   "compromised_card",
+   "card_payment_not_recognised"
+  ],
+  "candidates": {
+   "compromised_card": true,
+   "card_payment_not_recognised": true
+  }
+ },
+ {
+  "n": 65,
+  "best": "pending_top_up",
+  "acceptable": [
+   "pending_top_up"
+  ],
+  "candidates": {
+   "pending_top_up": true,
+   "top_up_failed": false
+  }
+ },
+ {
+  "n": 66,
+  "best": "balance_not_updated_after_bank_transfer",
+  "acceptable": [
+   "balance_not_updated_after_bank_transfer",
+   "pending_transfer"
+  ],
+  "candidates": {
+   "balance_not_updated_after_bank_transfer": true,
+   "pending_transfer": true
+  }
+ },
+ {
+  "n": 67,
+  "best": "wrong_amount_of_cash_received",
+  "acceptable": [
+   "wrong_amount_of_cash_received"
+  ],
+  "candidates": {
+   "wrong_amount_of_cash_received": true,
+   "get_physical_card": false
+  }
+ },
+ {
+  "n": 68,
+  "best": "direct_debit_payment_not_recognised",
+  "acceptable": [
+   "direct_debit_payment_not_recognised"
+  ],
+  "candidates": {
+   "direct_debit_payment_not_recognised": true,
+   "declined_cash_withdrawal": false
+  }
+ },
+ {
+  "n": 69,
+  "best": "failed_transfer",
+  "acceptable": [
+   "failed_transfer"
+  ],
+  "candidates": {
+   "failed_transfer": true,
+   "beneficiary_not_allowed": false
+  }
+ },
+ {
+  "n": 70,
+  "best": "fiat_currency_support",
+  "acceptable": [
+   "fiat_currency_support"
+  ],
+  "candidates": {
+   "fiat_currency_support": true,
+   "beneficiary_not_allowed": false
+  }
+ },
+ {
+  "n": 71,
+  "best": "get_disposable_virtual_card",
+  "acceptable": [
+   "get_disposable_virtual_card"
+  ],
+  "candidates": {
+   "get_disposable_virtual_card": true,
+   "disposable_card_limits": false
+  }
+ },
+ {
+  "n": 72,
+  "best": "card_not_working",
+  "acceptable": [
+   "card_not_working"
+  ],
+  "candidates": {
+   "card_not_working": true,
+   "activate_my_card": false
+  }
+ },
+ {
+  "n": 73,
+  "best": "transfer_not_received_by_recipient",
+  "acceptable": [
+   "transfer_not_received_by_recipient"
+  ],
+  "candidates": {
+   "pending_top_up": false,
+   "transfer_not_received_by_recipient": true
+  }
+ },
+ {
+  "n": 74,
+  "best": "verify_top_up",
+  "acceptable": [
+   "verify_top_up"
+  ],
+  "candidates": {
+   "card_linking": false,
+   "verify_top_up": true
+  }
+ },
+ {
+  "n": 75,
+  "best": "cash_withdrawal_charge",
+  "acceptable": [
+   "cash_withdrawal_charge",
+   "extra_charge_on_statement"
+  ],
+  "candidates": {
+   "extra_charge_on_statement": true,
+   "cash_withdrawal_charge": true
+  }
+ },
+ {
+  "n": 76,
+  "best": "transfer_timing",
+  "acceptable": [
+   "transfer_timing"
+  ],
+  "candidates": {
+   "transfer_timing": true,
+   "balance_not_updated_after_bank_transfer": false
+  }
+ },
+ {
+  "n": 77,
+  "best": "top_up_limits",
+  "acceptable": [
+   "top_up_limits"
+  ],
+  "candidates": {
+   "card_linking": false,
+   "top_up_limits": true
+  }
+ },
+ {
+  "n": 78,
+  "best": "lost_or_stolen_card",
+  "acceptable": [
+   "lost_or_stolen_card"
+  ],
+  "candidates": {
+   "lost_or_stolen_card": true,
+   "pending_transfer": false
+  }
+ },
+ {
+  "n": 79,
+  "best": "card_linking",
+  "acceptable": [
+   "card_linking"
+  ],
+  "candidates": {
+   "topping_up_by_card": false,
+   "card_linking": true
+  }
+ },
+ {
+  "n": 80,
+  "best": "verify_source_of_funds",
+  "acceptable": [
+   "verify_source_of_funds"
+  ],
+  "candidates": {
+   "pending_top_up": false,
+   "verify_source_of_funds": true
+  }
+ },
+ {
+  "n": 81,
+  "best": "order_physical_card",
+  "acceptable": [
+   "order_physical_card"
+  ],
+  "candidates": {
+   "card_arrival": false,
+   "order_physical_card": true
+  }
+ },
+ {
+  "n": 82,
+  "best": "card_acceptance",
+  "acceptable": [
+   "card_acceptance"
+  ],
+  "candidates": {
+   "card_acceptance": true,
+   "contactless_not_working": false
+  }
+ },
+ {
+  "n": 83,
+  "best": "card_payment_wrong_exchange_rate",
+  "acceptable": [
+   "card_payment_wrong_exchange_rate"
+  ],
+  "candidates": {
+   "card_payment_wrong_exchange_rate": true,
+   "disposable_card_limits": false
+  }
+ },
+ {
+  "n": 84,
+  "best": "pin_blocked",
+  "acceptable": [
+   "pin_blocked"
+  ],
+  "candidates": {
+   "transfer_into_account": false,
+   "pin_blocked": true
+  }
+ },
+ {
+  "n": 85,
+  "best": "card_payment_wrong_exchange_rate",
+  "acceptable": [
+   "card_payment_wrong_exchange_rate"
+  ],
+  "candidates": {
+   "card_payment_wrong_exchange_rate": true,
+   "cancel_transfer": false
+  }
+ },
+ {
+  "n": 86,
+  "best": "transfer_into_account",
+  "acceptable": [
+   "transfer_into_account"
+  ],
+  "candidates": {
+   "topping_up_by_card": false,
+   "transfer_into_account": true
+  }
+ },
+ {
+  "n": 87,
+  "best": "Refund_not_showing_up",
+  "acceptable": [
+   "Refund_not_showing_up"
+  ],
+  "candidates": {
+   "topping_up_by_card": false,
+   "Refund_not_showing_up": true
+  }
+ },
+ {
+  "n": 88,
+  "best": "lost_or_stolen_phone",
+  "acceptable": [
+   "lost_or_stolen_phone"
+  ],
+  "candidates": {
+   "lost_or_stolen_phone": true,
+   "lost_or_stolen_card": false
+  }
+ },
+ {
+  "n": 89,
+  "best": "failed_transfer",
+  "acceptable": [
+   "failed_transfer",
+   "declined_transfer"
+  ],
+  "candidates": {
+   "failed_transfer": true,
+   "declined_transfer": true
+  }
+ },
+ {
+  "n": 90,
+  "best": "topping_up_by_card",
+  "acceptable": [
+   "topping_up_by_card",
+   "pending_top_up"
+  ],
+  "candidates": {
+   "topping_up_by_card": true,
+   "pending_top_up": true
+  }
+ },
+ {
+  "n": 91,
+  "best": "pending_card_payment",
+  "acceptable": [
+   "pending_card_payment"
+  ],
+  "candidates": {
+   "pending_card_payment": true,
+   "pending_transfer": false
+  }
+ },
+ {
+  "n": 92,
+  "best": "compromised_card",
+  "acceptable": [
+   "compromised_card",
+   "card_payment_not_recognised"
+  ],
+  "candidates": {
+   "compromised_card": true,
+   "card_payment_not_recognised": true
+  }
+ },
+ {
+  "n": 93,
+  "best": "pending_cash_withdrawal",
+  "acceptable": [
+   "pending_cash_withdrawal",
+   "declined_cash_withdrawal"
+  ],
+  "candidates": {
+   "declined_cash_withdrawal": true,
+   "pending_cash_withdrawal": true
+  }
+ },
+ {
+  "n": 94,
+  "best": "unable_to_verify_identity",
+  "acceptable": [
+   "unable_to_verify_identity"
+  ],
+  "candidates": {
+   "verify_my_identity": false,
+   "unable_to_verify_identity": true
+  }
+ },
+ {
+  "n": 95,
+  "best": "balance_not_updated_after_bank_transfer",
+  "acceptable": [
+   "balance_not_updated_after_bank_transfer",
+   "pending_transfer"
+  ],
+  "candidates": {
+   "pending_transfer": true,
+   "balance_not_updated_after_bank_transfer": true
+  }
+ },
+ {
+  "n": 96,
+  "best": "card_arrival",
+  "acceptable": [
+   "card_arrival"
+  ],
+  "candidates": {
+   "card_arrival": true,
+   "getting_spare_card": false
+  }
+ },
+ {
+  "n": 97,
+  "best": "extra_charge_on_statement",
+  "acceptable": [
+   "extra_charge_on_statement"
+  ],
+  "candidates": {
+   "extra_charge_on_statement": true,
+   "transfer_fee_charged": false
+  }
+ },
+ {
+  "n": 98,
+  "best": "transfer_not_received_by_recipient",
+  "acceptable": [
+   "transfer_not_received_by_recipient",
+   "balance_not_updated_after_bank_transfer"
+  ],
+  "candidates": {
+   "transfer_not_received_by_recipient": true,
+   "balance_not_updated_after_bank_transfer": true
+  }
+ },
+ {
+  "n": 99,
+  "best": "atm_support",
+  "acceptable": [
+   "atm_support"
+  ],
+  "candidates": {
+   "card_linking": false,
+   "atm_support": true
+  }
+ },
+ {
+  "n": 100,
+  "best": "transfer_fee_charged",
+  "acceptable": [
+   "transfer_fee_charged"
+  ],
+  "candidates": {
+   "getting_spare_card": false,
+   "transfer_fee_charged": true
+  }
+ },
+ {
+  "n": 101,
+  "best": "topping_up_by_card",
+  "acceptable": [
+   "topping_up_by_card",
+   "pending_top_up"
+  ],
+  "candidates": {
+   "pending_top_up": true,
+   "topping_up_by_card": true
+  }
+ },
+ {
+  "n": 102,
+  "best": "contactless_not_working",
+  "acceptable": [
+   "contactless_not_working"
+  ],
+  "candidates": {
+   "apple_pay_or_google_pay": false,
+   "contactless_not_working": true
+  }
+ },
+ {
+  "n": 103,
+  "best": "cancel_transfer",
+  "acceptable": [
+   "cancel_transfer"
+  ],
+  "candidates": {
+   "request_refund": false,
+   "cancel_transfer": true
+  }
+ },
+ {
+  "n": 104,
+  "best": "pending_cash_withdrawal",
+  "acceptable": [
+   "pending_cash_withdrawal"
+  ],
+  "candidates": {
+   "pending_cash_withdrawal": true,
+   "wrong_amount_of_cash_received": false
+  }
+ },
+ {
+  "n": 105,
+  "best": "transfer_fee_charged",
+  "acceptable": [
+   "transfer_fee_charged"
+  ],
+  "candidates": {
+   "transfer_fee_charged": true,
+   "top_up_by_bank_transfer_charge": false
+  }
+ }
+]

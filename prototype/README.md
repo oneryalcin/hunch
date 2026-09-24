@@ -64,9 +64,14 @@ Caveat: only disputes were reviewed (rows where the model disagreed). Rows where
 
 ### swe_agent: judging real agent runs (200 traces, balanced 100/100)
 
-- `resolved` (does the patch pass the hidden tests?): **AUROC 0.835**, accuracy 74.5%. Calibration error 0.114, partly an artifact of the 50/50 sample (real pass rate ≈17%).
-- Asymmetric: when p(resolved) < 0.2, **51 of 53** actually failed. At act 0.90 only 15.5% of rows are confidently decided (3.2% error). Yes/no questions need separate yes and no thresholds.
-- Overclaiming: agents claimed a fix in 153/200 runs; **60 of those (39%) failed** the tests. Jev put 20 of the 60 below p=0.2. `claims_fixed` has no gold, so that column is unverified.
+- `resolved` (does the patch pass the hidden tests?): **AUROC 0.831**, accuracy 73.5%. Calibration error 0.114, partly an artifact of the 50/50 sample (real pass rate ≈17%).
+- Asymmetric: when p(resolved) < 0.2, **52 of 55** actually failed. Yes/no questions need separate yes and no thresholds.
+- Overclaiming: agents claimed a fix in 160/200 runs; **66 of those (41%) failed** the tests. Jev put 23 of the 66 below p=0.2. `claims_fixed` was checked by a blind 3-reviewer panel: Jev matches the reviewer majority on 29/30 decided rows (see `review_panel/`).
+- Bug found by the panel: `prepare.py` clipped the end of long final messages (where the claim is); fixed to keep the tail, 17 rows changed, numbers above are after the fix.
+
+### neutral review panel
+
+Three context-free Claude subagents, blind protocol (`review_panel/README.md`): Jev **95.8%** acceptable (95% CI 88.7–97.9%) vs the answer key's 91.9% on the BANKING77 holdout; of 45 disagreements, key wrong 20, Jev wrong 5, both acceptable 20. Replaces the biased 91% upper bound above.
 
 ### online and the store
 

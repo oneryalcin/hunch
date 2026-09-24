@@ -1,0 +1,2207 @@
+{
+ "opus:1": {
+  "id": "2690",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "opus:2": {
+  "id": "1404",
+  "gold": "compromised_card",
+  "jev": "card_not_working",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "opus:3": {
+  "id": "641",
+  "gold": "pending_top_up",
+  "jev": "top_up_failed",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "opus:4": {
+  "id": "399",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:5": {
+  "id": "696",
+  "gold": "cancel_transfer",
+  "jev": "request_refund",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "opus:6": {
+  "id": "1869",
+  "gold": "pending_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:7": {
+  "id": "1337",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "opus:8": {
+  "id": "1276",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "opus:9": {
+  "id": "219",
+  "gold": "pending_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "opus:10": {
+  "id": "2576",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "opus:11": {
+  "id": "2287",
+  "gold": "failed_transfer",
+  "jev": "declined_transfer",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "opus:12": {
+  "id": "1447",
+  "gold": "atm_support",
+  "jev": "atm_support",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:13": {
+  "id": "2622",
+  "gold": "get_disposable_virtual_card",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.67,
+  "kind": "disagree"
+ },
+ "opus:14": {
+  "id": "150",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:15": {
+  "id": "1655",
+  "gold": "lost_or_stolen_phone",
+  "jev": "lost_or_stolen_phone",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:16": {
+  "id": "1608",
+  "gold": "pending_card_payment",
+  "jev": "pending_card_payment",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "opus:17": {
+  "id": "1773",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:18": {
+  "id": "1576",
+  "gold": "declined_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:19": {
+  "id": "788",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:20": {
+  "id": "1008",
+  "gold": "top_up_reverted",
+  "jev": "top_up_failed",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "opus:21": {
+  "id": "2194",
+  "gold": "beneficiary_not_allowed",
+  "jev": "beneficiary_not_allowed",
+  "jev_p": 0.93,
+  "kind": "agree"
+ },
+ "opus:22": {
+  "id": "2206",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:23": {
+  "id": "2246",
+  "gold": "receiving_money",
+  "jev": "receiving_money",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "opus:24": {
+  "id": "724",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:25": {
+  "id": "1489",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "opus:26": {
+  "id": "1394",
+  "gold": "disposable_card_limits",
+  "jev": "get_disposable_virtual_card",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "opus:27": {
+  "id": "2148",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "opus:28": {
+  "id": "1518",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "opus:29": {
+  "id": "379",
+  "gold": "card_not_working",
+  "jev": "declined_card_payment",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "opus:30": {
+  "id": "2811",
+  "gold": "top_up_by_card_charge",
+  "jev": "top_up_by_card_charge",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:31": {
+  "id": "2390",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:32": {
+  "id": "1117",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.87,
+  "kind": "agree"
+ },
+ "opus:33": {
+  "id": "2234",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.64,
+  "kind": "agree"
+ },
+ "opus:34": {
+  "id": "2197",
+  "gold": "beneficiary_not_allowed",
+  "jev": "fiat_currency_support",
+  "jev_p": 0.45,
+  "kind": "disagree"
+ },
+ "opus:35": {
+  "id": "777",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:36": {
+  "id": "1725",
+  "gold": "declined_transfer",
+  "jev": "declined_card_payment",
+  "jev_p": 0.49,
+  "kind": "disagree"
+ },
+ "opus:37": {
+  "id": "2741",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "verify_source_of_funds",
+  "jev_p": 0.4,
+  "kind": "disagree"
+ },
+ "opus:38": {
+  "id": "2233",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "opus:39": {
+  "id": "2599",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "opus:40": {
+  "id": "1212",
+  "gold": "unable_to_verify_identity",
+  "jev": "unable_to_verify_identity",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:41": {
+  "id": "1334",
+  "gold": "topping_up_by_card",
+  "jev": "receiving_money",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "opus:42": {
+  "id": "1252",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:43": {
+  "id": "560",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.89,
+  "kind": "agree"
+ },
+ "opus:44": {
+  "id": "1988",
+  "gold": "transaction_charged_twice",
+  "jev": "transaction_charged_twice",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:45": {
+  "id": "1293",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.78,
+  "kind": "agree"
+ },
+ "opus:46": {
+  "id": "1922",
+  "gold": "card_swallowed",
+  "jev": "card_swallowed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:47": {
+  "id": "1338",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "opus:48": {
+  "id": "602",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "opus:49": {
+  "id": "729",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:50": {
+  "id": "595",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "opus:51": {
+  "id": "783",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:52": {
+  "id": "773",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "pending_cash_withdrawal",
+  "jev_p": 0.93,
+  "kind": "disagree"
+ },
+ "opus:53": {
+  "id": "562",
+  "gold": "contactless_not_working",
+  "jev": "verify_my_identity",
+  "jev_p": 0.6,
+  "kind": "disagree"
+ },
+ "opus:54": {
+  "id": "2692",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 0.6900000000000001,
+  "kind": "disagree"
+ },
+ "opus:55": {
+  "id": "2565",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.73,
+  "kind": "disagree"
+ },
+ "opus:56": {
+  "id": "872",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:57": {
+  "id": "2027",
+  "gold": "verify_source_of_funds",
+  "jev": "verify_source_of_funds",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:58": {
+  "id": "1090",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.83,
+  "kind": "agree"
+ },
+ "opus:59": {
+  "id": "1192",
+  "gold": "why_verify_identity",
+  "jev": "verify_my_identity",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "opus:60": {
+  "id": "656",
+  "gold": "pending_top_up",
+  "jev": "pending_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:61": {
+  "id": "2943",
+  "gold": "card_about_to_expire",
+  "jev": "card_about_to_expire",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:62": {
+  "id": "852",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "failed_transfer",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "opus:63": {
+  "id": "2751",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.86,
+  "kind": "disagree"
+ },
+ "opus:64": {
+  "id": "2350",
+  "gold": "transfer_into_account",
+  "jev": "transfer_into_account",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:65": {
+  "id": "2835",
+  "gold": "top_up_by_card_charge",
+  "jev": "supported_cards_and_currencies",
+  "jev_p": 0.83,
+  "kind": "disagree"
+ },
+ "opus:66": {
+  "id": "2844",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:67": {
+  "id": "457",
+  "gold": "lost_or_stolen_card",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:68": {
+  "id": "139",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:69": {
+  "id": "2101",
+  "gold": "reverted_card_payment?",
+  "jev": "declined_card_payment",
+  "jev_p": 0.77,
+  "kind": "disagree"
+ },
+ "opus:70": {
+  "id": "843",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:71": {
+  "id": "288",
+  "gold": "card_delivery_estimate",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.8200000000000001,
+  "kind": "agree"
+ },
+ "opus:72": {
+  "id": "2371",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:73": {
+  "id": "1867",
+  "gold": "pending_transfer",
+  "jev": "balance_not_updated_after_bank_transfer",
+  "jev_p": 0.63,
+  "kind": "disagree"
+ },
+ "opus:74": {
+  "id": "367",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:75": {
+  "id": "22",
+  "gold": "card_arrival",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.94,
+  "kind": "disagree"
+ },
+ "opus:76": {
+  "id": "550",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:77": {
+  "id": "1514",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:78": {
+  "id": "66",
+  "gold": "card_linking",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "opus:79": {
+  "id": "2588",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:80": {
+  "id": "2691",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "opus:81": {
+  "id": "851",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "pending_transfer",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "opus:82": {
+  "id": "2051",
+  "gold": "transfer_timing",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:83": {
+  "id": "2176",
+  "gold": "beneficiary_not_allowed",
+  "jev": "failed_transfer",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "opus:84": {
+  "id": "2496",
+  "gold": "order_physical_card",
+  "jev": "card_arrival",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "opus:85": {
+  "id": "2859",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:86": {
+  "id": "0",
+  "gold": "card_arrival",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "opus:87": {
+  "id": "35",
+  "gold": "card_arrival",
+  "jev": "card_arrival",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:88": {
+  "id": "2282",
+  "gold": "failed_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "opus:89": {
+  "id": "1808",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:90": {
+  "id": "74",
+  "gold": "card_linking",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.76,
+  "kind": "disagree"
+ },
+ "opus:91": {
+  "id": "539",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:92": {
+  "id": "828",
+  "gold": "card_payment_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "opus:93": {
+  "id": "1752",
+  "gold": "declined_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.81,
+  "kind": "disagree"
+ },
+ "opus:94": {
+  "id": "2891",
+  "gold": "cash_withdrawal_charge",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.96,
+  "kind": "agree"
+ },
+ "opus:95": {
+  "id": "1825",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:96": {
+  "id": "2658",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:97": {
+  "id": "2159",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:98": {
+  "id": "142",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "opus:99": {
+  "id": "899",
+  "gold": "supported_cards_and_currencies",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "opus:100": {
+  "id": "2236",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.8,
+  "kind": "disagree"
+ },
+ "opus:101": {
+  "id": "621",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "receiving_money",
+  "jev_p": 0.96,
+  "kind": "disagree"
+ },
+ "opus:102": {
+  "id": "1309",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "opus:103": {
+  "id": "1765",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:104": {
+  "id": "2644",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "opus:105": {
+  "id": "1092",
+  "gold": "card_payment_not_recognised",
+  "jev": "compromised_card",
+  "jev_p": 0.71,
+  "kind": "disagree"
+ },
+ "sonnet_a:1": {
+  "id": "1293",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.78,
+  "kind": "agree"
+ },
+ "sonnet_a:2": {
+  "id": "0",
+  "gold": "card_arrival",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "sonnet_a:3": {
+  "id": "2051",
+  "gold": "transfer_timing",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:4": {
+  "id": "66",
+  "gold": "card_linking",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "sonnet_a:5": {
+  "id": "2644",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:6": {
+  "id": "22",
+  "gold": "card_arrival",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.94,
+  "kind": "disagree"
+ },
+ "sonnet_a:7": {
+  "id": "2588",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:8": {
+  "id": "783",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:9": {
+  "id": "562",
+  "gold": "contactless_not_working",
+  "jev": "verify_my_identity",
+  "jev_p": 0.6,
+  "kind": "disagree"
+ },
+ "sonnet_a:10": {
+  "id": "872",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:11": {
+  "id": "851",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "pending_transfer",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "sonnet_a:12": {
+  "id": "729",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:13": {
+  "id": "2576",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "sonnet_a:14": {
+  "id": "1825",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:15": {
+  "id": "828",
+  "gold": "card_payment_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_a:16": {
+  "id": "1008",
+  "gold": "top_up_reverted",
+  "jev": "top_up_failed",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "sonnet_a:17": {
+  "id": "641",
+  "gold": "pending_top_up",
+  "jev": "top_up_failed",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "sonnet_a:18": {
+  "id": "1489",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "sonnet_a:19": {
+  "id": "621",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "receiving_money",
+  "jev_p": 0.96,
+  "kind": "disagree"
+ },
+ "sonnet_a:20": {
+  "id": "1334",
+  "gold": "topping_up_by_card",
+  "jev": "receiving_money",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_a:21": {
+  "id": "379",
+  "gold": "card_not_working",
+  "jev": "declined_card_payment",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_a:22": {
+  "id": "2835",
+  "gold": "top_up_by_card_charge",
+  "jev": "supported_cards_and_currencies",
+  "jev_p": 0.83,
+  "kind": "disagree"
+ },
+ "sonnet_a:23": {
+  "id": "2148",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "sonnet_a:24": {
+  "id": "1117",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.87,
+  "kind": "agree"
+ },
+ "sonnet_a:25": {
+  "id": "1309",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:26": {
+  "id": "852",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "failed_transfer",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "sonnet_a:27": {
+  "id": "1922",
+  "gold": "card_swallowed",
+  "jev": "card_swallowed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:28": {
+  "id": "2943",
+  "gold": "card_about_to_expire",
+  "jev": "card_about_to_expire",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:29": {
+  "id": "367",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:30": {
+  "id": "1192",
+  "gold": "why_verify_identity",
+  "jev": "verify_my_identity",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "sonnet_a:31": {
+  "id": "2844",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:32": {
+  "id": "2390",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:33": {
+  "id": "2741",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "verify_source_of_funds",
+  "jev_p": 0.4,
+  "kind": "disagree"
+ },
+ "sonnet_a:34": {
+  "id": "1276",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_a:35": {
+  "id": "2159",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:36": {
+  "id": "288",
+  "gold": "card_delivery_estimate",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.8200000000000001,
+  "kind": "agree"
+ },
+ "sonnet_a:37": {
+  "id": "2622",
+  "gold": "get_disposable_virtual_card",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.67,
+  "kind": "disagree"
+ },
+ "sonnet_a:38": {
+  "id": "142",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_a:39": {
+  "id": "2233",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_a:40": {
+  "id": "899",
+  "gold": "supported_cards_and_currencies",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "sonnet_a:41": {
+  "id": "1518",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_a:42": {
+  "id": "2234",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.64,
+  "kind": "agree"
+ },
+ "sonnet_a:43": {
+  "id": "1576",
+  "gold": "declined_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:44": {
+  "id": "1725",
+  "gold": "declined_transfer",
+  "jev": "declined_card_payment",
+  "jev_p": 0.49,
+  "kind": "disagree"
+ },
+ "sonnet_a:45": {
+  "id": "1765",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:46": {
+  "id": "2811",
+  "gold": "top_up_by_card_charge",
+  "jev": "top_up_by_card_charge",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:47": {
+  "id": "1808",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:48": {
+  "id": "2246",
+  "gold": "receiving_money",
+  "jev": "receiving_money",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_a:49": {
+  "id": "2599",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "sonnet_a:50": {
+  "id": "2658",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:51": {
+  "id": "1252",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:52": {
+  "id": "2287",
+  "gold": "failed_transfer",
+  "jev": "declined_transfer",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "sonnet_a:53": {
+  "id": "1869",
+  "gold": "pending_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:54": {
+  "id": "1752",
+  "gold": "declined_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.81,
+  "kind": "disagree"
+ },
+ "sonnet_a:55": {
+  "id": "777",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:56": {
+  "id": "2101",
+  "gold": "reverted_card_payment?",
+  "jev": "declined_card_payment",
+  "jev_p": 0.77,
+  "kind": "disagree"
+ },
+ "sonnet_a:57": {
+  "id": "1988",
+  "gold": "transaction_charged_twice",
+  "jev": "transaction_charged_twice",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:58": {
+  "id": "2565",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.73,
+  "kind": "disagree"
+ },
+ "sonnet_a:59": {
+  "id": "2751",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.86,
+  "kind": "disagree"
+ },
+ "sonnet_a:60": {
+  "id": "2194",
+  "gold": "beneficiary_not_allowed",
+  "jev": "beneficiary_not_allowed",
+  "jev_p": 0.93,
+  "kind": "agree"
+ },
+ "sonnet_a:61": {
+  "id": "1404",
+  "gold": "compromised_card",
+  "jev": "card_not_working",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "sonnet_a:62": {
+  "id": "539",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:63": {
+  "id": "2859",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:64": {
+  "id": "1092",
+  "gold": "card_payment_not_recognised",
+  "jev": "compromised_card",
+  "jev_p": 0.71,
+  "kind": "disagree"
+ },
+ "sonnet_a:65": {
+  "id": "656",
+  "gold": "pending_top_up",
+  "jev": "pending_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:66": {
+  "id": "2692",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 0.6900000000000001,
+  "kind": "disagree"
+ },
+ "sonnet_a:67": {
+  "id": "788",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:68": {
+  "id": "1514",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:69": {
+  "id": "2176",
+  "gold": "beneficiary_not_allowed",
+  "jev": "failed_transfer",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_a:70": {
+  "id": "2197",
+  "gold": "beneficiary_not_allowed",
+  "jev": "fiat_currency_support",
+  "jev_p": 0.45,
+  "kind": "disagree"
+ },
+ "sonnet_a:71": {
+  "id": "1394",
+  "gold": "disposable_card_limits",
+  "jev": "get_disposable_virtual_card",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_a:72": {
+  "id": "399",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:73": {
+  "id": "843",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:74": {
+  "id": "2371",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:75": {
+  "id": "2891",
+  "gold": "cash_withdrawal_charge",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.96,
+  "kind": "agree"
+ },
+ "sonnet_a:76": {
+  "id": "2691",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_a:77": {
+  "id": "724",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:78": {
+  "id": "457",
+  "gold": "lost_or_stolen_card",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:79": {
+  "id": "74",
+  "gold": "card_linking",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.76,
+  "kind": "disagree"
+ },
+ "sonnet_a:80": {
+  "id": "2027",
+  "gold": "verify_source_of_funds",
+  "jev": "verify_source_of_funds",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:81": {
+  "id": "2496",
+  "gold": "order_physical_card",
+  "jev": "card_arrival",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_a:82": {
+  "id": "560",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.89,
+  "kind": "agree"
+ },
+ "sonnet_a:83": {
+  "id": "139",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:84": {
+  "id": "550",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:85": {
+  "id": "150",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:86": {
+  "id": "2350",
+  "gold": "transfer_into_account",
+  "jev": "transfer_into_account",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:87": {
+  "id": "1773",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:88": {
+  "id": "1655",
+  "gold": "lost_or_stolen_phone",
+  "jev": "lost_or_stolen_phone",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:89": {
+  "id": "2282",
+  "gold": "failed_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_a:90": {
+  "id": "1337",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_a:91": {
+  "id": "1608",
+  "gold": "pending_card_payment",
+  "jev": "pending_card_payment",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_a:92": {
+  "id": "1090",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.83,
+  "kind": "agree"
+ },
+ "sonnet_a:93": {
+  "id": "219",
+  "gold": "pending_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "sonnet_a:94": {
+  "id": "1212",
+  "gold": "unable_to_verify_identity",
+  "jev": "unable_to_verify_identity",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_a:95": {
+  "id": "1867",
+  "gold": "pending_transfer",
+  "jev": "balance_not_updated_after_bank_transfer",
+  "jev_p": 0.63,
+  "kind": "disagree"
+ },
+ "sonnet_a:96": {
+  "id": "35",
+  "gold": "card_arrival",
+  "jev": "card_arrival",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:97": {
+  "id": "2236",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.8,
+  "kind": "disagree"
+ },
+ "sonnet_a:98": {
+  "id": "2690",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "sonnet_a:99": {
+  "id": "1447",
+  "gold": "atm_support",
+  "jev": "atm_support",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:100": {
+  "id": "2206",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_a:101": {
+  "id": "1338",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "sonnet_a:102": {
+  "id": "595",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "sonnet_a:103": {
+  "id": "696",
+  "gold": "cancel_transfer",
+  "jev": "request_refund",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "sonnet_a:104": {
+  "id": "773",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "pending_cash_withdrawal",
+  "jev_p": 0.93,
+  "kind": "disagree"
+ },
+ "sonnet_a:105": {
+  "id": "602",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "sonnet_b:1": {
+  "id": "777",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:2": {
+  "id": "1725",
+  "gold": "declined_transfer",
+  "jev": "declined_card_payment",
+  "jev_p": 0.49,
+  "kind": "disagree"
+ },
+ "sonnet_b:3": {
+  "id": "2350",
+  "gold": "transfer_into_account",
+  "jev": "transfer_into_account",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:4": {
+  "id": "399",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:5": {
+  "id": "1404",
+  "gold": "compromised_card",
+  "jev": "card_not_working",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "sonnet_b:6": {
+  "id": "872",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:7": {
+  "id": "602",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "sonnet_b:8": {
+  "id": "2835",
+  "gold": "top_up_by_card_charge",
+  "jev": "supported_cards_and_currencies",
+  "jev_p": 0.83,
+  "kind": "disagree"
+ },
+ "sonnet_b:9": {
+  "id": "2943",
+  "gold": "card_about_to_expire",
+  "jev": "card_about_to_expire",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:10": {
+  "id": "828",
+  "gold": "card_payment_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_b:11": {
+  "id": "2565",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.73,
+  "kind": "disagree"
+ },
+ "sonnet_b:12": {
+  "id": "2741",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "verify_source_of_funds",
+  "jev_p": 0.4,
+  "kind": "disagree"
+ },
+ "sonnet_b:13": {
+  "id": "2159",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:14": {
+  "id": "724",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:15": {
+  "id": "1276",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_b:16": {
+  "id": "2148",
+  "gold": "change_pin",
+  "jev": "change_pin",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "sonnet_b:17": {
+  "id": "1514",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:18": {
+  "id": "2692",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 0.6900000000000001,
+  "kind": "disagree"
+ },
+ "sonnet_b:19": {
+  "id": "641",
+  "gold": "pending_top_up",
+  "jev": "top_up_failed",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "sonnet_b:20": {
+  "id": "0",
+  "gold": "card_arrival",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "sonnet_b:21": {
+  "id": "219",
+  "gold": "pending_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "sonnet_b:22": {
+  "id": "1252",
+  "gold": "get_physical_card",
+  "jev": "get_physical_card",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:23": {
+  "id": "843",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:24": {
+  "id": "773",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "pending_cash_withdrawal",
+  "jev_p": 0.93,
+  "kind": "disagree"
+ },
+ "sonnet_b:25": {
+  "id": "1309",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:26": {
+  "id": "2101",
+  "gold": "reverted_card_payment?",
+  "jev": "declined_card_payment",
+  "jev_p": 0.77,
+  "kind": "disagree"
+ },
+ "sonnet_b:27": {
+  "id": "2891",
+  "gold": "cash_withdrawal_charge",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.96,
+  "kind": "agree"
+ },
+ "sonnet_b:28": {
+  "id": "2282",
+  "gold": "failed_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_b:29": {
+  "id": "899",
+  "gold": "supported_cards_and_currencies",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "sonnet_b:30": {
+  "id": "2194",
+  "gold": "beneficiary_not_allowed",
+  "jev": "beneficiary_not_allowed",
+  "jev_p": 0.93,
+  "kind": "agree"
+ },
+ "sonnet_b:31": {
+  "id": "1117",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.87,
+  "kind": "agree"
+ },
+ "sonnet_b:32": {
+  "id": "1192",
+  "gold": "why_verify_identity",
+  "jev": "verify_my_identity",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "sonnet_b:33": {
+  "id": "2690",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_not_received_by_recipient",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "sonnet_b:34": {
+  "id": "729",
+  "gold": "top_up_limits",
+  "jev": "top_up_limits",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:35": {
+  "id": "539",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:36": {
+  "id": "142",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_b:37": {
+  "id": "2859",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:38": {
+  "id": "696",
+  "gold": "cancel_transfer",
+  "jev": "request_refund",
+  "jev_p": 0.64,
+  "kind": "disagree"
+ },
+ "sonnet_b:39": {
+  "id": "2644",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:40": {
+  "id": "560",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.89,
+  "kind": "agree"
+ },
+ "sonnet_b:41": {
+  "id": "288",
+  "gold": "card_delivery_estimate",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.8200000000000001,
+  "kind": "agree"
+ },
+ "sonnet_b:42": {
+  "id": "1338",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.52,
+  "kind": "disagree"
+ },
+ "sonnet_b:43": {
+  "id": "852",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "failed_transfer",
+  "jev_p": 0.5,
+  "kind": "disagree"
+ },
+ "sonnet_b:44": {
+  "id": "1922",
+  "gold": "card_swallowed",
+  "jev": "card_swallowed",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:45": {
+  "id": "1518",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "direct_debit_payment_not_recognised",
+  "jev_p": 0.98,
+  "kind": "agree"
+ },
+ "sonnet_b:46": {
+  "id": "2599",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "atm_support",
+  "jev_p": 0.62,
+  "kind": "disagree"
+ },
+ "sonnet_b:47": {
+  "id": "1447",
+  "gold": "atm_support",
+  "jev": "atm_support",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:48": {
+  "id": "1394",
+  "gold": "disposable_card_limits",
+  "jev": "get_disposable_virtual_card",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_b:49": {
+  "id": "2576",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "cash_withdrawal_charge",
+  "jev_p": 0.99,
+  "kind": "disagree"
+ },
+ "sonnet_b:50": {
+  "id": "2811",
+  "gold": "top_up_by_card_charge",
+  "jev": "top_up_by_card_charge",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:51": {
+  "id": "2236",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.8,
+  "kind": "disagree"
+ },
+ "sonnet_b:52": {
+  "id": "1752",
+  "gold": "declined_transfer",
+  "jev": "failed_transfer",
+  "jev_p": 0.81,
+  "kind": "disagree"
+ },
+ "sonnet_b:53": {
+  "id": "783",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:54": {
+  "id": "2691",
+  "gold": "balance_not_updated_after_bank_transfer",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_b:55": {
+  "id": "1576",
+  "gold": "declined_cash_withdrawal",
+  "jev": "declined_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:56": {
+  "id": "1867",
+  "gold": "pending_transfer",
+  "jev": "balance_not_updated_after_bank_transfer",
+  "jev_p": 0.63,
+  "kind": "disagree"
+ },
+ "sonnet_b:57": {
+  "id": "2751",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 0.86,
+  "kind": "disagree"
+ },
+ "sonnet_b:58": {
+  "id": "457",
+  "gold": "lost_or_stolen_card",
+  "jev": "lost_or_stolen_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:59": {
+  "id": "851",
+  "gold": "transfer_not_received_by_recipient",
+  "jev": "pending_transfer",
+  "jev_p": 0.79,
+  "kind": "disagree"
+ },
+ "sonnet_b:60": {
+  "id": "2233",
+  "gold": "transfer_fee_charged",
+  "jev": "extra_charge_on_statement",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_b:61": {
+  "id": "1988",
+  "gold": "transaction_charged_twice",
+  "jev": "transaction_charged_twice",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:62": {
+  "id": "66",
+  "gold": "card_linking",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "sonnet_b:63": {
+  "id": "562",
+  "gold": "contactless_not_working",
+  "jev": "verify_my_identity",
+  "jev_p": 0.6,
+  "kind": "disagree"
+ },
+ "sonnet_b:64": {
+  "id": "595",
+  "gold": "contactless_not_working",
+  "jev": "contactless_not_working",
+  "jev_p": 0.71,
+  "kind": "agree"
+ },
+ "sonnet_b:65": {
+  "id": "1092",
+  "gold": "card_payment_not_recognised",
+  "jev": "compromised_card",
+  "jev_p": 0.71,
+  "kind": "disagree"
+ },
+ "sonnet_b:66": {
+  "id": "139",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:67": {
+  "id": "1825",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:68": {
+  "id": "2371",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:69": {
+  "id": "2206",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:70": {
+  "id": "1869",
+  "gold": "pending_transfer",
+  "jev": "pending_transfer",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:71": {
+  "id": "2496",
+  "gold": "order_physical_card",
+  "jev": "card_arrival",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_b:72": {
+  "id": "74",
+  "gold": "card_linking",
+  "jev": "topping_up_by_card",
+  "jev_p": 0.76,
+  "kind": "disagree"
+ },
+ "sonnet_b:73": {
+  "id": "2622",
+  "gold": "get_disposable_virtual_card",
+  "jev": "getting_virtual_card",
+  "jev_p": 0.67,
+  "kind": "disagree"
+ },
+ "sonnet_b:74": {
+  "id": "379",
+  "gold": "card_not_working",
+  "jev": "declined_card_payment",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_b:75": {
+  "id": "1337",
+  "gold": "topping_up_by_card",
+  "jev": "pending_top_up",
+  "jev_p": 0.95,
+  "kind": "disagree"
+ },
+ "sonnet_b:76": {
+  "id": "1212",
+  "gold": "unable_to_verify_identity",
+  "jev": "unable_to_verify_identity",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:77": {
+  "id": "367",
+  "gold": "card_not_working",
+  "jev": "card_not_working",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:78": {
+  "id": "1808",
+  "gold": "declined_card_payment",
+  "jev": "declined_card_payment",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:79": {
+  "id": "656",
+  "gold": "pending_top_up",
+  "jev": "pending_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:80": {
+  "id": "2844",
+  "gold": "activate_my_card",
+  "jev": "activate_my_card",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:81": {
+  "id": "2588",
+  "gold": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev": "wrong_exchange_rate_for_cash_withdrawal",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:82": {
+  "id": "1334",
+  "gold": "topping_up_by_card",
+  "jev": "receiving_money",
+  "jev_p": 0.84,
+  "kind": "disagree"
+ },
+ "sonnet_b:83": {
+  "id": "1655",
+  "gold": "lost_or_stolen_phone",
+  "jev": "lost_or_stolen_phone",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:84": {
+  "id": "1773",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:85": {
+  "id": "1608",
+  "gold": "pending_card_payment",
+  "jev": "pending_card_payment",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_b:86": {
+  "id": "2246",
+  "gold": "receiving_money",
+  "jev": "receiving_money",
+  "jev_p": 0.97,
+  "kind": "agree"
+ },
+ "sonnet_b:87": {
+  "id": "1765",
+  "gold": "Refund_not_showing_up",
+  "jev": "Refund_not_showing_up",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:88": {
+  "id": "2027",
+  "gold": "verify_source_of_funds",
+  "jev": "verify_source_of_funds",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:89": {
+  "id": "1489",
+  "gold": "direct_debit_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.51,
+  "kind": "disagree"
+ },
+ "sonnet_b:90": {
+  "id": "2176",
+  "gold": "beneficiary_not_allowed",
+  "jev": "failed_transfer",
+  "jev_p": 1.0,
+  "kind": "disagree"
+ },
+ "sonnet_b:91": {
+  "id": "788",
+  "gold": "wrong_amount_of_cash_received",
+  "jev": "wrong_amount_of_cash_received",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:92": {
+  "id": "2287",
+  "gold": "failed_transfer",
+  "jev": "declined_transfer",
+  "jev_p": 0.54,
+  "kind": "disagree"
+ },
+ "sonnet_b:93": {
+  "id": "2234",
+  "gold": "transfer_fee_charged",
+  "jev": "transfer_fee_charged",
+  "jev_p": 0.64,
+  "kind": "agree"
+ },
+ "sonnet_b:94": {
+  "id": "22",
+  "gold": "card_arrival",
+  "jev": "card_delivery_estimate",
+  "jev_p": 0.94,
+  "kind": "disagree"
+ },
+ "sonnet_b:95": {
+  "id": "1293",
+  "gold": "visa_or_mastercard",
+  "jev": "visa_or_mastercard",
+  "jev_p": 0.78,
+  "kind": "agree"
+ },
+ "sonnet_b:96": {
+  "id": "621",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "receiving_money",
+  "jev_p": 0.96,
+  "kind": "disagree"
+ },
+ "sonnet_b:97": {
+  "id": "1090",
+  "gold": "card_payment_not_recognised",
+  "jev": "card_payment_not_recognised",
+  "jev_p": 0.83,
+  "kind": "agree"
+ },
+ "sonnet_b:98": {
+  "id": "2390",
+  "gold": "verify_top_up",
+  "jev": "verify_top_up",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:99": {
+  "id": "2658",
+  "gold": "top_up_failed",
+  "jev": "top_up_failed",
+  "jev_p": 0.99,
+  "kind": "agree"
+ },
+ "sonnet_b:100": {
+  "id": "35",
+  "gold": "card_arrival",
+  "jev": "card_arrival",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:101": {
+  "id": "150",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "card_payment_wrong_exchange_rate",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:102": {
+  "id": "1008",
+  "gold": "top_up_reverted",
+  "jev": "top_up_failed",
+  "jev_p": 0.97,
+  "kind": "disagree"
+ },
+ "sonnet_b:103": {
+  "id": "550",
+  "gold": "pin_blocked",
+  "jev": "pin_blocked",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:104": {
+  "id": "2051",
+  "gold": "transfer_timing",
+  "jev": "transfer_timing",
+  "jev_p": 1.0,
+  "kind": "agree"
+ },
+ "sonnet_b:105": {
+  "id": "2197",
+  "gold": "beneficiary_not_allowed",
+  "jev": "fiat_currency_support",
+  "jev_p": 0.45,
+  "kind": "disagree"
+ }
+}

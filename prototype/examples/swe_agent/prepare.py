@@ -30,6 +30,11 @@ def clip(text: str, n: int) -> str:
     return text if len(text) <= n else text[:n] + f"\n…[{len(text) - n} chars cut]"
 
 
+def clip_tail(text: str, n: int) -> str:
+    """Keep the end: an agent's claim of success is in its last words."""
+    return text if len(text) <= n else f"[{len(text) - n} chars cut]…\n" + text[-n:]
+
+
 def issue_of(traj: list[dict]) -> str:
     u = traj[1]["text"]
     start, end = u.find("ISSUE:"), u.find("INSTRUCTIONS:")
@@ -72,7 +77,7 @@ def main() -> None:
             "id": f"{row['instance_id']}#{len(out)}",
             "model": row["model_name"],
             "issue": clip(issue_of(traj), MAX_ISSUE),
-            "final_messages": clip(final_of(traj), MAX_FINAL),
+            "final_messages": clip_tail(final_of(traj), MAX_FINAL),
             "patch": clip(patch, MAX_PATCH),
             "resolved": "yes" if row["target"] else "no",
         })

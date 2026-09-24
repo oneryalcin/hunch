@@ -1,0 +1,722 @@
+{
+ "opus:1": {
+  "id": "iterative__dvc-3428#55",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:2": {
+  "id": "springload__typed_environment_configuration-7#51",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:3": {
+  "id": "DCC-Lab__RayTracing-192#98",
+  "jev_pyes": 0.16,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:4": {
+  "id": "sqlfluff__sqlfluff-5206#97",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:5": {
+  "id": "pydantic__pydantic-2114#80",
+  "jev_pyes": 0.38,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:6": {
+  "id": "google__yapf-441#86",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:7": {
+  "id": "googleapis__python-api-core-546#58",
+  "jev_pyes": 0.95,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:8": {
+  "id": "agronholm__anyio-273#64",
+  "jev_pyes": 0.76,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:9": {
+  "id": "joke2k__faker-828#159",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:10": {
+  "id": "mherrmann__gitignore_parser-38#169",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:11": {
+  "id": "stfc__PSyclone-1111#187",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:12": {
+  "id": "ameily__cincoconfig-26#107",
+  "jev_pyes": 0.93,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:13": {
+  "id": "andialbrecht__sqlparse-445#199",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:14": {
+  "id": "pydantic__pydantic-4012#156",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:15": {
+  "id": "tcalmant__ipopo-120#38",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:16": {
+  "id": "asottile__babi-328#150",
+  "jev_pyes": 0.88,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:17": {
+  "id": "pydantic__pydantic-611#186",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:18": {
+  "id": "tobymao__sqlglot-2591#21",
+  "jev_pyes": 0.7,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:19": {
+  "id": "tehmaze__ansi-34#125",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:20": {
+  "id": "python-control__python-control-834#183",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:21": {
+  "id": "Azure__msrest-for-python-208#10",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:22": {
+  "id": "auth0__auth0-python-500#179",
+  "jev_pyes": 0.4,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "opus:23": {
+  "id": "asottile__pyupgrade-380#54",
+  "jev_pyes": 0.92,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:24": {
+  "id": "pydantic__pydantic-3177#197",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:25": {
+  "id": "rapidpro__rapidpro-python-66#175",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:26": {
+  "id": "iterative__dvc-2190#135",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:27": {
+  "id": "iterative__dvc-8904#103",
+  "jev_pyes": 0.29,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:28": {
+  "id": "iterative__dvc-5785#137",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:29": {
+  "id": "swar__nba_api-286#153",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:30": {
+  "id": "pydantic__pydantic-3216#63",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:31": {
+  "id": "palantir__python-language-server-275#99",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:32": {
+  "id": "pydantic__pydantic-1175#95",
+  "jev_pyes": 0.9,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:33": {
+  "id": "scikit-hep__cabinetry-396#195",
+  "jev_pyes": 0.91,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:34": {
+  "id": "absent1706__sqlalchemy-mixins-108#118",
+  "jev_pyes": 0.02,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:35": {
+  "id": "blairconrad__dicognito-158#145",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "opus:36": {
+  "id": "iterative__dvc-8425#34",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:37": {
+  "id": "zulip__zulip-terminal-1424#191",
+  "jev_pyes": 0.26,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "opus:38": {
+  "id": "nion-software__niondata-20#45",
+  "jev_pyes": 0.64,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "opus:39": {
+  "id": "wireservice__agate-637#120",
+  "jev_pyes": 0.24,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "opus:40": {
+  "id": "geopandas__geopandas-1336#22",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:1": {
+  "id": "asottile__pyupgrade-380#54",
+  "jev_pyes": 0.92,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:2": {
+  "id": "nion-software__niondata-20#45",
+  "jev_pyes": 0.64,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:3": {
+  "id": "Azure__msrest-for-python-208#10",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:4": {
+  "id": "tcalmant__ipopo-120#38",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:5": {
+  "id": "stfc__PSyclone-1111#187",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:6": {
+  "id": "iterative__dvc-5785#137",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:7": {
+  "id": "mherrmann__gitignore_parser-38#169",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:8": {
+  "id": "agronholm__anyio-273#64",
+  "jev_pyes": 0.76,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:9": {
+  "id": "python-control__python-control-834#183",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:10": {
+  "id": "blairconrad__dicognito-158#145",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:11": {
+  "id": "scikit-hep__cabinetry-396#195",
+  "jev_pyes": 0.91,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:12": {
+  "id": "palantir__python-language-server-275#99",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:13": {
+  "id": "pydantic__pydantic-3216#63",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:14": {
+  "id": "absent1706__sqlalchemy-mixins-108#118",
+  "jev_pyes": 0.02,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:15": {
+  "id": "iterative__dvc-8425#34",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:16": {
+  "id": "asottile__babi-328#150",
+  "jev_pyes": 0.88,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:17": {
+  "id": "iterative__dvc-8904#103",
+  "jev_pyes": 0.29,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:18": {
+  "id": "sqlfluff__sqlfluff-5206#97",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:19": {
+  "id": "geopandas__geopandas-1336#22",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:20": {
+  "id": "pydantic__pydantic-1175#95",
+  "jev_pyes": 0.9,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:21": {
+  "id": "auth0__auth0-python-500#179",
+  "jev_pyes": 0.4,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "sonnet_a:22": {
+  "id": "joke2k__faker-828#159",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:23": {
+  "id": "DCC-Lab__RayTracing-192#98",
+  "jev_pyes": 0.16,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:24": {
+  "id": "tobymao__sqlglot-2591#21",
+  "jev_pyes": 0.7,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:25": {
+  "id": "wireservice__agate-637#120",
+  "jev_pyes": 0.24,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:26": {
+  "id": "iterative__dvc-2190#135",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:27": {
+  "id": "ameily__cincoconfig-26#107",
+  "jev_pyes": 0.93,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:28": {
+  "id": "google__yapf-441#86",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:29": {
+  "id": "pydantic__pydantic-2114#80",
+  "jev_pyes": 0.38,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:30": {
+  "id": "pydantic__pydantic-4012#156",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:31": {
+  "id": "tehmaze__ansi-34#125",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:32": {
+  "id": "springload__typed_environment_configuration-7#51",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_a:33": {
+  "id": "rapidpro__rapidpro-python-66#175",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:34": {
+  "id": "zulip__zulip-terminal-1424#191",
+  "jev_pyes": 0.26,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "sonnet_a:35": {
+  "id": "pydantic__pydantic-3177#197",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:36": {
+  "id": "pydantic__pydantic-611#186",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:37": {
+  "id": "iterative__dvc-3428#55",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:38": {
+  "id": "andialbrecht__sqlparse-445#199",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_a:39": {
+  "id": "googleapis__python-api-core-546#58",
+  "jev_pyes": 0.95,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_a:40": {
+  "id": "swar__nba_api-286#153",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:1": {
+  "id": "googleapis__python-api-core-546#58",
+  "jev_pyes": 0.95,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:2": {
+  "id": "auth0__auth0-python-500#179",
+  "jev_pyes": 0.4,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "sonnet_b:3": {
+  "id": "tehmaze__ansi-34#125",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:4": {
+  "id": "swar__nba_api-286#153",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:5": {
+  "id": "asottile__pyupgrade-380#54",
+  "jev_pyes": 0.92,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:6": {
+  "id": "blairconrad__dicognito-158#145",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:7": {
+  "id": "tcalmant__ipopo-120#38",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:8": {
+  "id": "python-control__python-control-834#183",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:9": {
+  "id": "rapidpro__rapidpro-python-66#175",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:10": {
+  "id": "agronholm__anyio-273#64",
+  "jev_pyes": 0.76,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:11": {
+  "id": "springload__typed_environment_configuration-7#51",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:12": {
+  "id": "sqlfluff__sqlfluff-5206#97",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:13": {
+  "id": "pydantic__pydantic-611#186",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:14": {
+  "id": "google__yapf-441#86",
+  "jev_pyes": 0.05,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:15": {
+  "id": "DCC-Lab__RayTracing-192#98",
+  "jev_pyes": 0.16,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:16": {
+  "id": "pydantic__pydantic-4012#156",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:17": {
+  "id": "zulip__zulip-terminal-1424#191",
+  "jev_pyes": 0.26,
+  "jev": "no",
+  "resolved": "yes"
+ },
+ "sonnet_b:18": {
+  "id": "pydantic__pydantic-3177#197",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:19": {
+  "id": "absent1706__sqlalchemy-mixins-108#118",
+  "jev_pyes": 0.02,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:20": {
+  "id": "tobymao__sqlglot-2591#21",
+  "jev_pyes": 0.7,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:21": {
+  "id": "ameily__cincoconfig-26#107",
+  "jev_pyes": 0.93,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:22": {
+  "id": "iterative__dvc-2190#135",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:23": {
+  "id": "palantir__python-language-server-275#99",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:24": {
+  "id": "pydantic__pydantic-1175#95",
+  "jev_pyes": 0.9,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:25": {
+  "id": "mherrmann__gitignore_parser-38#169",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:26": {
+  "id": "Azure__msrest-for-python-208#10",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:27": {
+  "id": "asottile__babi-328#150",
+  "jev_pyes": 0.88,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:28": {
+  "id": "pydantic__pydantic-3216#63",
+  "jev_pyes": 0.87,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:29": {
+  "id": "iterative__dvc-8425#34",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:30": {
+  "id": "joke2k__faker-828#159",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:31": {
+  "id": "wireservice__agate-637#120",
+  "jev_pyes": 0.24,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:32": {
+  "id": "andialbrecht__sqlparse-445#199",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:33": {
+  "id": "iterative__dvc-8904#103",
+  "jev_pyes": 0.29,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:34": {
+  "id": "nion-software__niondata-20#45",
+  "jev_pyes": 0.64,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:35": {
+  "id": "scikit-hep__cabinetry-396#195",
+  "jev_pyes": 0.91,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:36": {
+  "id": "iterative__dvc-3428#55",
+  "jev_pyes": 0.96,
+  "jev": "yes",
+  "resolved": "no"
+ },
+ "sonnet_b:37": {
+  "id": "geopandas__geopandas-1336#22",
+  "jev_pyes": 0.98,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:38": {
+  "id": "stfc__PSyclone-1111#187",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ },
+ "sonnet_b:39": {
+  "id": "pydantic__pydantic-2114#80",
+  "jev_pyes": 0.38,
+  "jev": "no",
+  "resolved": "no"
+ },
+ "sonnet_b:40": {
+  "id": "iterative__dvc-5785#137",
+  "jev_pyes": 0.97,
+  "jev": "yes",
+  "resolved": "yes"
+ }
+}

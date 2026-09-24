@@ -189,6 +189,17 @@ Full numbers in `prototype/README.md`. Dev 770 rows, disjoint holdout 385, 77 in
 - **Overclaiming is measurable.** Agents claimed a fix in 153/200 runs and 39% of those failed; a cheap per-turn check flags a third of the false claims with few false alarms.
 - **Sampling changes calibration.** A 50/50 sample of a ~17%-base-rate population makes a well-calibrated judge look underconfident. Calibration tests need samples at the production base rate, or reweighting.
 
+## Findings, round 4: a neutral review panel (2026-09-24)
+
+Details: `prototype/review_panel/README.md`. Three context-free Claude subagents (Opus, Sonnet, Sonnet), blind protocol, majority vote.
+
+- **A blind LLM panel is a workable neutral reviewer.** Fleiss kappa 0.76. It replaced a biased upper bound (91%, disputes only, reviewed by the analyst) with an estimate and interval: Jev 95.8% (88.7–97.9%) acceptable vs the answer key's 91.9%. → Product feature: `review --panel` with this protocol (blind first, sources hidden, random audit slice), humans for what the panel splits on.
+- **The analyst's bias ran the other way.** Claude's own verdicts matched the panel 6/13, always harsher on Jev. Self-review is unreliable in both directions; this is the argument for the panel.
+- **Gold needs acceptable sets, not one label.** 20 of 45 disagreements had two defensible labels. Exact-match accuracy punishes overlap in the taxonomy, not model error. → Gold format: `label` plus optional `also_ok`; test reports exact and acceptable accuracy.
+- **Yes/no questions need a way out.** On truncated or ambiguous input, reviewers said "unclear" 10/40 times; Jev, forced to yes/no, answered confidently. → Lint: suggest a no-match or unclear outcome (a `choice` with `unclear`, or a separate presence check) when the state can be incomplete. TypeSafe's own guidance says the same.
+- **Trim traces from the end that matters.** `prepare.py` kept the start of long final messages and dropped the claim. Clipping is a semantic decision per field (keep the head of an issue, the tail of a conversation); hunch's trace source should make it explicit.
+- **Beware small-sample retractions.** A 40-row subset suggested 26% overclaiming against 39% on the full set; the full set after the fix says 41%. The panel verified the *detector* (97%), not the rate.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
