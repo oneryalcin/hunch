@@ -33,15 +33,16 @@ Everything below gets prioritized against that workload.
 
 Consequences for the phases below: trace ingestion (OpenTelemetry GenAI conventions) moves up from Phase 5 into Phase 3 as a batch source; asymmetric yes/no thresholds (Phase 1) and conditional nodes (Phase 2) matter most, because agent evals are mostly yes/no checks chained on earlier answers.
 
-## Phase 1: trust the numbers (prototype, ~1 session, <$0.10)
+## Phase 1: trust the numbers: DONE 2026-09-24 ($0 new API spend)
 
-Finishes the measurement story. Each item fixes a known way our numbers can mislead.
+| Item | Result |
+|---|---|
+| Random audit slice | `review --audit N` mixes a fixed random sample of agreeing rows into the queue; `test` reports a stratified estimate with a 95% CI and refuses to estimate from disputes alone. Reproduces the panel's 95.8% (88.7–97.9%) exactly. |
+| Asymmetric yes/no thresholds | `act: {yes, no}` + two-sided dial. Agent evals: auto-reject 44% of runs at 1.9% error; auto-accept is never safe. |
+| Calibration at the production base rate | `base_rate` reweights; SWE at 16.7% shows Jev **over**confident on "yes" (the 50/50 sample made it look under). |
+| Gold as acceptable sets | `both_ok` verdicts; 20 of 45 BANKING77 disagreements. |
 
-| Item | Question it answers | Done when |
-|---|---|---|
-| Random audit slice in the review queue | What is the gold error rate where the model *agrees* with gold? | `review` mixes N random agreed rows into the queue; `test` reports accuracy with a confidence interval instead of the disputes-only upper bound. |
-| Asymmetric thresholds for yes/no (`act_yes`, `act_no`) | Can we automate the reliable side only? (SWE: p < 0.2 → 51/53 failed) | Dial shows automation and error separately for each side; SWE example automates confident "no" at < 5% error. |
-| Calibration at the production base rate | Is Jev under- or over-confident on the real population? | `test` accepts a base rate (or sample weights) and reweights; SWE example re-scored at ~17%. |
+Also found: YAML's Norway problem (yes/no parsed as booleans), fixed in the spec loader. Open: calibration and auto-acted accuracy under review-corrected gold still lean upward; per-class base rates for choice questions.
 
 ## Phase 2: the graph and the first recipes (prototype, the big unknown, ~$0.10–0.30)
 
@@ -78,6 +79,19 @@ Known engineering; do it once phases 1–3 have settled the shapes.
 - **Recipes as packages**: `hunch init agent-eval`, `hunch add <recipe>`; a recipe hub later. Recipes are versioned, have their own tests and gold, and are overridable (change a threshold or a question without forking).
 - **UX pass**: first-ten-minutes path timed with a new user; every error message says what to do next; a Python API (decorators, like dlt) that produces the same spec as the YAML.
 - **dlt interop**: dlt resources as sources; hunch results loadable by dlt to any destination.
+- **Run-level checks (built in, need run history)**: label-distribution drift vs the previous run, review-rate ceiling, confidence drift, cost budget per run. Generic checks on the output table (nulls, accepted values, ranges) are *not* built: documented as Great Expectations / Soda / dbt tests pointed at hunch's table.
+
+## Ideas borrowed from Great Expectations (UX, not integration)
+
+GX is a reference for what makes quality checks *useful to people*, not a dependency. Decided 2026-09-24: no GX integration unless a user needs it. What to borrow:
+
+- **Named, readable checks.** GX's "expect_column_values_to_be_between" reads like a sentence a non-engineer can review. hunch tests should read the same way in the spec and in reports ("expect accuracy ≥ 90% on the holdout", "expect ≤ 15% sent to review").
+- **Docs generated from results.** GX's Data Docs turn every validation into a browsable report. hunch equivalent: `hunch report` writes one shareable page per run (dial, calibration, confident mistakes, diff, lineage), like the field-report artifact but generated.
+- **Checkpoints.** A named bundle of "which data, which checks, what to do on failure" (fail CI, notify, open review queue). hunch equivalent: a `checks:` block per recipe that CI and schedules run.
+- **Profiling to get started.** GX can propose checks from a sample. hunch equivalent: `hunch suggest` proposes thresholds from the dial, flags bare options, and drafts option descriptions from example rows, so a new user starts from a reasonable spec.
+- **A gallery of checks.** Browsable, documented, reusable. hunch equivalent: the recipe hub, with tests included.
+
+Parked: a GX custom expectation / dbt generic test backed by hunch (`expect_column_values_to_satisfy("company_name", "is a real company")`). Revisit only if users ask for it.
 - **Release**: PyPI name decided (`hunch` is a squatted placeholder), repo public, docs site.
 
 ## Phase 5: server (ELv2)

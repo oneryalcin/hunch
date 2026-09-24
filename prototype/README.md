@@ -10,11 +10,11 @@ uv run ../../hunch.py compile intent.yml                    # exact request payl
 uv run ../../hunch.py run     intent.yml                    # ask what's missing, materialize table in .hunch/store.sqlite
 uv run ../../hunch.py test    intent.yml [--source holdout.csv]   # accuracy, calibration, AUROC, dial, confident mistakes, order stability
 uv run ../../hunch.py diff    intent.yml --against git:HEAD [--source ...]   # flips, fixed/broken, sign test
-uv run ../../hunch.py review  intent.yml [--list] [--limit N]    # disputed + uncertain rows → <judgment>.reviews.csv
+uv run ../../hunch.py review  intent.yml [--list] [--limit N] [--audit N]   # disputed + audit + uncertain rows → <judgment>.reviews.csv
 uv run online_demo.py                                       # judge() from an app, same store as batch
 ```
 
-Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `order_stability: {sample, permutations, max_flip_rate}` (choice).
+Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `act` is a number, or `{yes: .., no: ..}` on yes/no questions. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `base_rate` (noul: score as if this share of rows were yes), `order_stability: {sample, permutations, max_flip_rate}` (choice).
 
 ## What it does
 
@@ -23,7 +23,7 @@ Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part 
 - **lint**: unknown keys (typos), act range, missing columns, API limits, and *partially described choice options* (measured to hurt).
 - **test**: accuracy; calibration error + reliability table; AUROC for yes/no; the dial (automated % vs error among automated); most confident mistakes; confusion pairs; option-order stability. With reviews, shows reviewed-gold and raw-gold numbers side by side.
 - **diff**: old spec (file or `git:REF`) on *today's* data; flips, ✓ fixed / ✗ broken, paired sign test, `~noise` flag.
-- **review**: queue of *disputed* rows (confident answer ≠ gold: a model error or a gold error) and *uncertain* rows (below `act`, no gold). Verdicts (`model_right`, `key_right`, `labeled`, `ambiguous`) append to `<judgment>.reviews.csv` next to the spec, tied to a hash of the row's text; they override gold in `test`/`diff`, `ambiguous` drops the row from scoring.
+- **review**: queue of *disputed* rows (model ≠ answer key), *audit* rows (a fixed random sample where they agree) and *uncertain* rows (below `act`, no gold). Verdicts (`model_right`, `key_right`, `both_ok`, `confirmed`, `labeled`, `ambiguous`) append to `<judgment>.reviews.csv` next to the spec, tied to a hash of the row's text. Gold is a set of acceptable labels. With both disagreements and an audit reviewed, `test` headlines a stratified accuracy estimate with a 95% CI.
 - **online**: `judge(spec, **fields)` / `ajudge` share keys with batch in both directions.
 
 ## Examples
@@ -68,6 +68,11 @@ Caveat: only disputes were reviewed (rows where the model disagreed). Rows where
 - Asymmetric: when p(resolved) < 0.2, **52 of 55** actually failed. Yes/no questions need separate yes and no thresholds.
 - Overclaiming: agents claimed a fix in 160/200 runs; **66 of those (41%) failed** the tests. Jev put 23 of the 66 below p=0.2. `claims_fixed` was checked by a blind 3-reviewer panel: Jev matches the reviewer majority on 29/30 decided rows (see `review_panel/`).
 - Bug found by the panel: `prepare.py` clipped the end of long final messages (where the claim is); fixed to keep the tail, 17 rows changed, numbers above are after the fix.
+
+### Phase 1 (trust the numbers)
+
+- BANKING77 holdout with the panel's 105 verdicts imported (`review_panel/to_reviews.py`): `test` headlines **estimated accuracy 95.8% (95% CI 88.7–97.9%)**, matching the panel's own scorer; current-gold accuracy (98.2%) and raw-key accuracy (88.3%) shown as secondary.
+- SWE `resolved` at the real pass rate (16.7%, `base_rate`): Jev is overconfident on "yes"; two-sided dial with `act: {yes: 0.90, no: 0.80}`: acting on "no" automates 44% of runs at 1.9% error, acting on "yes" is never safe.
 
 ### neutral review panel
 

@@ -26,6 +26,7 @@ import json
 import math
 import os
 import random
+import re
 import sqlite3
 import subprocess
 import sys
@@ -42,7 +43,7 @@ PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
 HUNCH_ONLY_FIELDS = {"act", "gold"}  # routing/test config: never sent, never part of the key
 QUESTION_KEYS = {"type", "instructions", "criteria"} | HUNCH_ONLY_FIELDS
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests"}
-TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability"}
+TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability", "base_rate"}
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = 16
 NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside this margin are flagged
@@ -53,8 +54,19 @@ REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", 
 
 # ---------- spec ----------
 
+class SpecLoader(yaml.SafeLoader):
+    """YAML 1.1 reads yes/no/on/off as booleans (the "Norway problem"): `act: {yes: .9, no: .8}` became
+    {True: .9, False: .8}, and options named on/off/NO silently collapsed into two keys. Specs keep them as text;
+    only true/false are booleans."""
+
+
+SpecLoader.yaml_implicit_resolvers = {
+    k: [(tag, rx) for tag, rx in v if tag != "tag:yaml.org,2002:bool"] for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()}
+SpecLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF"))
+
+
 def load_spec(path: Path, text: str | None = None) -> dict:
-    spec = yaml.safe_load(text if text is not None else path.read_text())
+    spec = yaml.load(text if text is not None else path.read_text(), Loader=SpecLoader)
     if spec["model"].endswith("latest"):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
     spec["_dir"] = path.parent
@@ -145,8 +157,15 @@ def lint(spec: dict) -> tuple[list[str], list[str]]:
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
-        if "act" in q and not 0 < q["act"] <= 1:
-            errors.append(f"{qid}: act must be in (0, 1], got {q['act']}")
+        if "act" in q:
+            act = q["act"]
+            if isinstance(act, dict):
+                if q["type"] != "noul" or set(act) != {"yes", "no"}:
+                    errors.append(f"{qid}: act as a mapping must be {{yes: …, no: …}} on a noul question")
+                elif not all(isinstance(v, (int, float)) and 0 < v <= 1 for v in act.values()):
+                    errors.append(f"{qid}: act thresholds must be in (0, 1], got {act}")
+            elif not isinstance(act, (int, float)) or not 0 < act <= 1:
+                errors.append(f"{qid}: act must be in (0, 1], got {act}")
         if header is not None and q.get("gold") and q["gold"] not in header:
             # normal for production rows (no gold yet); a warning still catches a typo in the column name
             warnings.append(f"{qid}: gold column {q['gold']!r} not in {Path(spec['source']).name}; these rows have no gold")
@@ -305,8 +324,21 @@ def ranked(a: dict) -> list[tuple[str, float]]:
     return sorted(((f"{k}:{a['legend'][k]}", v) for k, v in a["probabilities"].items()), key=lambda x: -x[1])
 
 
-def route(q: dict, confidence: float) -> str:
-    return "" if "act" not in q else ("act" if confidence >= q["act"] else "review")
+def act_needed(q: dict, label: str) -> float | None:
+    """Confidence needed to act on this label. `act: 0.9`, or for yes/no `act: {yes: 0.95, no: 0.8}`:
+    a judge's "no" and "yes" are rarely equally reliable (SWE-agent: p(yes) < 0.2 was right 52/55)."""
+    act = q.get("act")
+    if act is None:
+        return None
+    if isinstance(act, dict):
+        return act[label]
+    return act
+
+
+def route(q: dict, a: dict) -> str:
+    label, conf, _ = decide(a)
+    need = act_needed(q, label)
+    return "" if need is None else ("act" if conf >= need else "review")
 
 
 def show(a: dict) -> str:
@@ -330,17 +362,29 @@ def auroc(pos: list[float], neg: list[float]) -> float:
     return wins / (len(pos) * len(neg))
 
 
-def calibration(pairs: list[tuple[float, bool]], bins: int = 10) -> tuple[float, list[tuple]]:
-    """Expected calibration error over equal-width bins, and the reliability table."""
+def calibration(pairs: list[tuple], bins: int = 10) -> tuple[float, list[tuple]]:
+    """Expected calibration error over equal-width bins, and the reliability table.
+    pairs: (stated p, happened) or (stated p, happened, weight); weights re-create a population's base rate."""
+    pairs = [(p[0], p[1], p[2] if len(p) > 2 else 1.0) for p in pairs]
+    total = sum(w for _, _, w in pairs)
     table, ece = [], 0.0
     for b in range(bins):
         lo, hi = b / bins, (b + 1) / bins
-        sel = [(p, h) for p, h in pairs if lo <= p < hi or (b == bins - 1 and p == hi)]
+        sel = [(p, h, w) for p, h, w in pairs if lo <= p < hi or (b == bins - 1 and p == hi)]
         if sel:
-            conf, acc = sum(p for p, _ in sel) / len(sel), sum(h for _, h in sel) / len(sel)
-            ece += len(sel) / len(pairs) * abs(acc - conf)
+            ws = sum(w for _, _, w in sel)
+            conf, acc = sum(p * w for p, _, w in sel) / ws, sum(h * w for _, h, w in sel) / ws
+            ece += ws / total * abs(acc - conf)
             table.append((lo, hi, len(sel), conf, acc))
     return ece, table
+
+
+def wilson(k: float, n: float, z: float = 1.96) -> tuple[float, float]:
+    if n == 0:
+        return 0.0, 1.0
+    p, d = k / n, 1 + z * z / n
+    c, h = p + z * z / (2 * n), z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (c - h) / d, (c + h) / d
 
 
 # ---------- gold and reviews ----------
@@ -368,23 +412,36 @@ def append_review(spec: dict, rec: dict) -> None:
         w.writerow(rec)
 
 
-def normalize_gold(q: dict, v: str) -> str | None:
+def normalize_gold(q: dict, v: str) -> frozenset | None:
+    """Gold is a set of acceptable labels: taxonomies overlap (BANKING77: 20 of 45 disagreements had two
+    defensible labels), so "right" means "in the set". Source columns give one label; reviews can give more."""
     v = (v or "").strip()
     if not v:
         return None
-    return ("yes" if is_yes(v) else "no") if q["type"] == "noul" else v
+    return frozenset({("yes" if is_yes(v) else "no") if q["type"] == "noul" else v})
+
+
+def gold_str(g: frozenset | None) -> str:
+    return "|".join(sorted(g)) if g else "-"
+
+
+def hit(it: dict, a: dict, gold: str = "gold") -> bool:
+    return decide(a)[0] in it[gold]
 
 
 def attach_gold(items: list[dict], reviews: dict) -> None:
-    """Effective gold = a human verdict on this exact row text if there is one, else the source column.
-    `ambiguous` verdicts drop the row from scoring. A verdict on text that has since changed is ignored."""
+    """Effective gold = a review verdict on this exact row text if there is one, else the source column.
+    Verdicts: model_right / key_right / labeled / confirmed → that label; both_ok → both labels;
+    ambiguous → row dropped from scoring. A verdict on text that has since changed is ignored."""
     for it in items:
         col = it["q"].get("gold")
         it["raw_gold"] = normalize_gold(it["q"], it["row"].get(col, "")) if col else None
         r = reviews.get((it["qid"], it["id"]))
-        if r and r["state_hash"] == it["shash"]:
-            ambiguous = r["verdict"] == "ambiguous"
-            it["gold"], it["gold_src"] = (None, "excluded") if ambiguous else (r["label"], "review")
+        it["verdict"] = r["verdict"] if r and r["state_hash"] == it["shash"] else None
+        if it["verdict"] == "ambiguous":
+            it["gold"], it["gold_src"] = None, "excluded"
+        elif it["verdict"]:
+            it["gold"], it["gold_src"] = frozenset(r["label"].split("|")), "review"
         else:
             it["gold"], it["gold_src"] = it["raw_gold"], ("source" if it["raw_gold"] else None)
 
@@ -446,7 +503,7 @@ def materialize(spec: dict, db, items: list[dict], answers: dict) -> None:
         if a["type"] == "noul":
             r[f"{it['qid']}_pyes"] = round(a["noul"], 3)
         if "act" in it["q"]:
-            r[f"{it['qid']}_route"] = route(it["q"], conf)
+            r[f"{it['qid']}_route"] = route(it["q"], a)
     recs = list(by_row.values())
     cols = list(recs[0])
     typed = ", ".join(f'"{c}" {"real" if c.endswith(("_p", "_pyes")) else "text"}' for c in cols)
@@ -474,28 +531,65 @@ def cmd_run(spec: dict, _args) -> None:
     print(f"materialized table \"{spec['judgment']}\" in .hunch/store.sqlite ({len({it['id'] for it in items})} rows)")
     for qid, q in spec["questions"].items():
         if "act" in q:
-            n = sum(1 for it in items if it["qid"] == qid and route(q, decide(answers[it["key"]])[1]) == "review")
+            n = sum(1 for it in items if it["qid"] == qid and route(q, answers[it["key"]]) == "review")
             print(f"  {qid}: {n} rows below act={q['act']} → review queue")
 
 
 def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> float | None:
     its = [it for it in items if it["qid"] == qid and it[gold]]
-    return sum(decide(answers[it["key"]])[0] == it[gold] for it in its) / len(its) if its else None
+    return sum(hit(it, answers[it["key"]], gold) for it in its) / len(its) if its else None
 
 
-def calib_pairs(its: list[dict], answers: dict, gold: str = "gold") -> list[tuple[float, bool]]:
-    """(stated probability, did it happen). choice: top p vs correct; noul: p(yes) vs gold yes."""
+def calib_pairs(its: list[dict], answers: dict, gold: str = "gold", weights: dict | None = None) -> list[tuple]:
+    """(stated probability, did it happen, weight). choice: top p vs label in gold; noul: p(yes) vs "yes" in gold."""
     out = []
     for it in its:
         a, g = answers[it["key"]], it[gold]
         if not g:
             continue
+        w = weights.get(it["id"], 1.0) if weights else 1.0
         if a["type"] == "choice":
             label, p, _ = decide(a)
-            out.append((p, label == g))
+            out.append((p, label in g, w))
         elif a["type"] == "noul":
-            out.append((a["noul"], g == "yes"))
+            out.append((a["noul"], "yes" in g, w))
     return out
+
+
+def base_rate_weights(gold_its: list[dict], rate: float) -> tuple[dict, float] | None:
+    """Weights that make a sample look like a population with `rate` share of "yes" (e.g. a 50/50 eval set
+    scored as if 17% of agent runs pass). Returns (weights by row id, the sample's own yes share)."""
+    yes = sum("yes" in it["gold"] for it in gold_its) / len(gold_its)
+    if not 0 < yes < 1:
+        return None
+    return {it["id"]: rate / yes if "yes" in it["gold"] else (1 - rate) / (1 - yes) for it in gold_its}, yes
+
+
+def estimate_accuracy(its: list[dict], answers: dict) -> tuple[float, float, float, dict] | None:
+    """Accuracy corrected by reviews, with a 95% interval. Rows are split by whether the model agreed with the
+    source answer key: agreements are many (audit a random sample), disagreements few (review them all).
+    Each group's reviewed rows estimate that group; groups are weighted by size. A fully reviewed group is exact.
+    None until both groups have reviews: an unreviewed group would silently trust the answer key."""
+    groups: dict[str, list[dict]] = {"agree": [], "disagree": []}
+    for it in its:
+        if it["raw_gold"] and it["gold_src"] != "excluded":
+            groups["agree" if hit(it, answers[it["key"]], "raw_gold") else "disagree"].append(it)
+    total = sum(map(len, groups.values()))
+    est = lo = hi = 0.0
+    detail = {}
+    for name, members in groups.items():
+        if not members:
+            continue
+        reviewed = [it for it in members if it["gold_src"] == "review"]
+        detail[name] = (len(reviewed), len(members))
+        if not reviewed:
+            return None
+        k = sum(hit(it, answers[it["key"]]) for it in reviewed)
+        p = k / len(reviewed)
+        l, h = (p, p) if len(reviewed) >= len(members) else wilson(k, len(reviewed))
+        w = len(members) / total
+        est, lo, hi = est + w * p, lo + w * l, hi + w * h
+    return est, lo, hi, detail
 
 
 class Checks:
@@ -505,6 +599,29 @@ class Checks:
     def __call__(self, ok: bool, text: str) -> None:
         self.failed |= not ok
         print(f"  {'PASS' if ok else 'FAIL'} {text}")
+
+
+def print_dial(q: dict, rows_: list[tuple]) -> None:
+    """rows_: (answer, correct, weight). Share of rows acted on automatically at each threshold, and how many of
+    those are wrong. Yes/no questions get one column per side: the two sides are separate decisions."""
+    total = sum(w for _, _, w in rows_)
+
+    def side(label: str | None, t: float) -> tuple[float, float]:
+        auto = [(c, w) for a, c, w in rows_ if decide(a)[1] >= t and (label is None or decide(a)[0] == label)]
+        ws = sum(w for _, w in auto)
+        return ws / total, (sum(w for c, w in auto if not c) / ws if ws else 0.0)
+
+    if q["type"] == "noul":
+        print("       dial   act on yes: automated  wrong   │  act on no: automated  wrong")
+        for t in DIAL:
+            (ya, yw), (na, nw) = side("yes", t), side("no", t)
+            mark = "".join(f"  ← act {s}" for s in ("yes", "no") if act_needed(q, s) == t)
+            print(f"       {t:>4.2f}   {ya:>20.1%}  {yw:>5.1%}   │  {na:>19.1%}  {nw:>5.1%}{mark}")
+    else:
+        print("       dial   automated   wrong among automated")
+        for t in DIAL:
+            auto, wrong = side(None, t)
+            print(f"       {t:>4.2f}   {auto:>9.1%}   {wrong:>21.1%}{'  ← act' if act_needed(q, '') == t else ''}")
 
 
 def cmd_test(spec: dict, _args) -> None:
@@ -520,49 +637,68 @@ def cmd_test(spec: dict, _args) -> None:
         gold_its = [it for it in its if it["gold"]]
         if not gold_its:
             continue
+        both = sum(len(it["gold"]) > 1 for it in gold_its)
         print(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
+              f"{f', {both} with two acceptable labels' if both else ''}"
               f"{f', {src['excluded']} excluded as ambiguous' if src['excluded'] else ''})")
         reviewed = src["review"] + src["excluded"] > 0
 
-        acc = accuracy(items, answers, qid)
-        raw = f" (raw source gold: {accuracy(items, answers, qid, 'raw_gold'):.1%})" if reviewed else ""
-        check(acc >= conf.get("min_accuracy", 0), f"accuracy {acc:.1%}{raw} (min {conf.get('min_accuracy', 0):.0%})")
+        weights, note = None, ""
+        if q["type"] == "noul" and conf.get("base_rate"):
+            got = base_rate_weights(gold_its, conf["base_rate"])
+            if got:
+                weights, yes_share = got
+                note = f" [reweighted: sample is {yes_share:.0%} yes, population {conf['base_rate']:.0%}]"
+                print(f"  base rate: scoring as if {conf['base_rate']:.0%} of rows are yes (sample: {yes_share:.0%})")
+        w = (lambda it: weights[it["id"]]) if weights else (lambda it: 1.0)
 
-        pairs = calib_pairs(its, answers)
-        ece, table = calibration(pairs)
-        raw = f" (raw source gold: {calibration(calib_pairs(its, answers, 'raw_gold'))[0]:.3f})" if reviewed else ""
-        check(ece <= conf.get("max_calibration_error", 1), f"calibration error {ece:.3f}{raw} (max {conf.get('max_calibration_error', 1)})")
+        acc = sum(w(it) * hit(it, answers[it["key"]]) for it in gold_its) / sum(w(it) for it in gold_its)
+        want = conf.get("min_accuracy", 0)
+        est = estimate_accuracy(its, answers) if not weights else None
+        if est:
+            # Headline = the estimate. Accuracy on "current gold" trusts every unreviewed row, so once
+            # disagreements are corrected it only errs upward.
+            e, lo, hi, d = est
+            check(e >= want, f"estimated accuracy {e:.1%} (95% CI {lo:.1%}–{hi:.1%}) from reviews of "
+                  + ", ".join(f"{n}/{m} {g}ing rows" for g, (n, m) in d.items()) + f" (min {want:.0%})")
+            print(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
+                  f"on the raw answer key {accuracy(items, answers, qid, 'raw_gold'):.1%}")
+        else:
+            raw = f" (raw source gold: {accuracy(items, answers, qid, 'raw_gold'):.1%})" if reviewed else ""
+            check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})")
+            if reviewed:
+                print("       upper bound only: an estimate needs reviews of agreeing rows too (hunch review --audit N)")
+
+        ece, table = calibration(calib_pairs(its, answers, weights=weights))
+        raw = f" (raw source gold: {calibration(calib_pairs(its, answers, 'raw_gold', weights))[0]:.3f})" if reviewed else ""
+        check(ece <= conf.get("max_calibration_error", 1), f"calibration error {ece:.3f}{raw}{note} (max {conf.get('max_calibration_error', 1)})")
         print(f"         {'stated p(yes)' if q['type'] == 'noul' else 'stated p':<13} {'n':>5}   avg stated   observed")
-        for lo, hi, n, c, a in table:
-            print(f"       {lo:.1f}–{hi:.1f}      {n:>6}   {c:>10.3f}   {a:>8.3f}")
+        for lo_, hi_, n, c, a in table:
+            print(f"       {lo_:.1f}–{hi_:.1f}      {n:>6}   {c:>10.3f}   {a:>8.3f}")
 
         if q["type"] == "noul":
-            pos = [answers[it["key"]]["noul"] for it in gold_its if it["gold"] == "yes"]
-            neg = [answers[it["key"]]["noul"] for it in gold_its if it["gold"] == "no"]
+            pos = [answers[it["key"]]["noul"] for it in gold_its if "yes" in it["gold"]]
+            neg = [answers[it["key"]]["noul"] for it in gold_its if "no" in it["gold"]]
             if pos and neg:
                 auc = auroc(pos, neg)
                 check(auc >= conf.get("min_auroc", 0),
-                      f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss) (min {conf.get('min_auroc', 0)})")
+                      f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {conf.get('min_auroc', 0)})")
 
-        dial = [(decide(answers[it["key"]])[1], decide(answers[it["key"]])[0] == it["gold"]) for it in gold_its]
-        print("       dial   automated   wrong among automated")
-        for t in DIAL:
-            auto = [h for p, h in dial if p >= t]
-            wrong = (1 - sum(auto) / len(auto)) if auto else 0
-            print(f"       {t:>4.2f}   {len(auto) / len(dial):>9.1%}   {wrong:>21.1%}{'  ← act' if t == q.get('act') else ''}")
+        scored = [(answers[it["key"]], hit(it, answers[it["key"]]), w(it)) for it in gold_its]
+        print_dial(q, scored)
         if "act" in q and "min_act_accuracy" in conf:
-            auto = [h for p, h in dial if p >= q["act"]]
-            a = sum(auto) / len(auto) if auto else 1
-            check(a >= conf["min_act_accuracy"],
-                  f"accuracy among auto-acted {a:.1%} on {len(auto) / len(dial):.0%} of rows at act={q['act']} (min {conf['min_act_accuracy']:.0%})")
+            acted = [(c, wt) for (a, c, wt) in scored if route(q, a) == "act"]
+            ws = sum(wt for _, wt in acted)
+            a_acc = sum(wt for c, wt in acted if c) / ws if ws else 1.0
+            check(a_acc >= conf["min_act_accuracy"],
+                  f"accuracy among auto-acted {a_acc:.1%} on {ws / sum(wt for *_, wt in scored):.0%} of rows at act={q['act']} (min {conf['min_act_accuracy']:.0%})")
 
-        wrong = sorted((it for it in gold_its if decide(answers[it["key"]])[0] != it["gold"]),
-                       key=lambda it: -decide(answers[it["key"]])[1])
+        wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -decide(answers[it["key"]])[1])
         print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
         for it in wrong[:SHOW]:
-            print(f"         #{it['id']:>4} gold={it['gold']:<32} got {show(answers[it['key']]):<38} {label_of(spec, it['row'], 50)}")
+            print(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {show(answers[it['key']]):<38} {label_of(spec, it['row'], 50)}")
         print("       most confused (gold → got):")
-        for (g, got), n in Counter((it["gold"], decide(answers[it["key"]])[0]) for it in wrong).most_common(8):
+        for (g, got), n in Counter((gold_str(it["gold"]), decide(answers[it["key"]])[0]) for it in wrong).most_common(8):
             print(f"         {n:>3}  {g} → {got}")
 
         order = conf.get("order_stability")
@@ -622,8 +758,8 @@ def cmd_diff(spec: dict, args) -> None:
                 flips.append((n, oa, na, min(om, nm) < NOISE))
         print(f"\n{qid}: {len(flips)}/{len(pairs)} rows flip ({sum(f[3] for f in flips)} within noise band)")
         if any(n["gold"] for _, n in pairs):
-            fixed = sum(decide(na)[0] == n["gold"] for n, _, na, _ in flips if n["gold"])
-            broke = sum(decide(oa)[0] == n["gold"] for n, oa, _, _ in flips if n["gold"])
+            fixed = sum(hit(n, na) and not hit(n, oa) for n, oa, na, _ in flips if n["gold"])
+            broke = sum(hit(n, oa) and not hit(n, na) for n, oa, na, _ in flips if n["gold"])
             p = sign_test(fixed, broke)
             verdict = "significant" if p < 0.05 else "NOT significant: could be noise, get more gold rows"
             print(f"  gold accuracy {accuracy(old_items, old_a, qid):.1%} → {accuracy(new_items, new_a, qid):.1%}"
@@ -632,41 +768,50 @@ def cmd_diff(spec: dict, args) -> None:
         flips.sort(key=lambda f: f[3])  # real flips first, noise-band flips last
         for n, oa, na, noisy in flips[:SHOW]:
             g = n["gold"]
-            mark = "✓" if g and decide(na)[0] == g else ("✗" if g and decide(oa)[0] == g else " ")
+            mark = "✓" if g and hit(n, na) and not hit(n, oa) else ("✗" if g and hit(n, oa) and not hit(n, na) else " ")
             print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(spec, n['row'], 40)}")
         if len(flips) > SHOW:
             print(f"  … {len(flips) - SHOW} more")
 
 
-def review_queue(items: list[dict], answers: dict) -> list[tuple[str, dict]]:
-    """disputed: confident answer disagrees with source gold (a model error, or a gold error).
-    uncertain: below the act threshold and no gold yet (a human label makes it gold).
-    Rows with a current human verdict are done."""
-    disputed, uncertain = [], []
+def review_queue(items: list[dict], answers: dict, audit: int) -> list[tuple[str, dict]]:
+    """disputed: model ≠ source answer key (a model error, or a gold error); all of them, most confident first.
+    audit: a fixed random sample of rows where model = answer key, topped up to `audit` reviewed rows per question.
+      Without it, reviewing only disputes can only move accuracy up.
+    uncertain: no gold and below the act threshold (a human label makes it gold).
+    Rows with a current verdict are done."""
+    disputed, uncertain, agree = [], [], {}
+    audited = Counter()
     for it in items:
-        if "act" not in it["q"] or it["gold_src"] in ("review", "excluded"):
+        a = answers[it["key"]]
+        agrees = bool(it["raw_gold"]) and hit(it, a, "raw_gold")
+        if it["gold_src"] in ("review", "excluded"):
+            audited[it["qid"]] += agrees
             continue
-        label, conf, _ = decide(answers[it["key"]])
-        if it["raw_gold"] and label != it["raw_gold"] and conf >= it["q"]["act"]:
+        if it["raw_gold"] and not agrees:
             disputed.append(it)
-        elif not it["raw_gold"] and conf < it["q"]["act"]:
+        elif agrees:
+            agree.setdefault(it["qid"], []).append(it)
+        elif not it["raw_gold"] and route(it["q"], a) == "review":
             uncertain.append(it)
+    audits = [it for qid, members in agree.items()
+              for it in sorted(members, key=lambda it: digest([it["qid"], it["id"]]))[: max(0, audit - audited[qid])]]
     disputed.sort(key=lambda it: -decide(answers[it["key"]])[1])
     uncertain.sort(key=lambda it: decide(answers[it["key"]])[1])
-    return [("disputed", it) for it in disputed] + [("uncertain", it) for it in uncertain]
+    return [("disputed", it) for it in disputed] + [("audit", it) for it in audits] + [("uncertain", it) for it in uncertain]
 
 
 def cmd_review(spec: dict, args) -> None:
     _, items, answers = load(spec)
-    queue = review_queue(items, answers)
+    queue = review_queue(items, answers, args.audit)
     kinds = Counter(k for k, _ in queue)
-    print(f"review queue: {kinds['disputed']} disputed (confident answer ≠ gold), "
-          f"{kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
+    print(f"review queue: {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows where "
+          f"they agree), {kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
     queue = queue[: args.limit] if args.limit else queue
     if args.list:
         for kind, it in queue:
             print(f"  {kind:<9} #{it['id']:>5} {it['qid']:<10} {show(answers[it['key']]):<36} "
-                  f"gold={it['raw_gold'] or '-':<24} {label_of(spec, it['row'], 50)}")
+                  f"gold={gold_str(it['raw_gold']):<24} {label_of(spec, it['row'], 50)}")
         return
 
     reviewer = args.reviewer or getpass.getuser()
@@ -674,15 +819,23 @@ def cmd_review(spec: dict, args) -> None:
     for n, (kind, it) in enumerate(queue, 1):
         a = answers[it["key"]]
         top = ranked(a)[:3]
+        key = gold_str(it["raw_gold"])
         options = set(it["aq"].get("criteria") or {}) if a["type"] == "choice" else {"yes", "no"}
         print(f"\n[{kind} {n}/{len(queue)}] #{it['id']}  {it['qid']}")
         for col in spec["state"]:
             print(f"  {col}: {label_of({'state': [col]}, it['row'], 400)}")
         if kind == "disputed":
-            print(f"  answer key: {it['raw_gold']}")
-        print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
-        keys = "[m] model is right   [k] answer key is right   " if kind == "disputed" else ""
-        print(f"  {keys}[1-3] pick   [a] ambiguous   [s] skip   [q] quit   or type an option")
+            print(f"  answer key: {key}")
+            print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
+            keys = "[m] model is right   [k] answer key is right   [b] both acceptable   [1-3] pick   "
+        elif kind == "audit":
+            print(f"  label: {key}")
+            print("  other options: " + "   ".join(f"{i}) {lab}" for i, (lab, _) in enumerate(top, 1)))
+            keys = "[y] label is right   [1-3] pick the right one   "
+        else:
+            print("  model:      " + "   ".join(f"{i}) {lab} {p:.2f}" for i, (lab, p) in enumerate(top, 1)))
+            keys = "[1-3] pick   "
+        print(f"  {keys}[a] ambiguous   [s] skip   [q] quit   or type an option")
         while True:
             try:
                 ans = input("> ").strip()
@@ -699,7 +852,11 @@ def cmd_review(spec: dict, args) -> None:
             elif ans == "m" and kind == "disputed":
                 verdict, label = "model_right", top[0][0]
             elif ans == "k" and kind == "disputed":
-                verdict, label = "key_right", it["raw_gold"]
+                verdict, label = "key_right", key
+            elif ans == "b" and kind == "disputed":
+                verdict, label = "both_ok", f"{key}|{top[0][0]}"
+            elif ans == "y" and kind == "audit":
+                verdict, label = "confirmed", key
             elif ans in {"1", "2", "3"} and int(ans) <= len(top):
                 verdict, label = "labeled", top[int(ans) - 1][0]
             elif ans in options:
@@ -732,7 +889,7 @@ async def ajudge(spec_path: str | Path, **fields) -> dict:
     out = {}
     for it in items:
         label, conf, _ = decide(answers[it["key"]])
-        out[it["qid"]] = {"label": label, "p": conf, "route": route(it["q"], conf), "cached": it["key"] in hits}
+        out[it["qid"]] = {"label": label, "p": conf, "route": route(it["q"], answers[it["key"]]), "cached": it["key"] in hits}
     return out
 
 
@@ -750,6 +907,7 @@ def main() -> None:
     p.add_argument("--source", type=Path, help="run on this CSV instead of the spec's source (e.g. a holdout set)")
     p.add_argument("--list", action="store_true", help="review: print the queue without prompting")
     p.add_argument("--limit", type=int, help="review: at most N items")
+    p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
     p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
     args = p.parse_args()
     spec = load_spec(args.spec)

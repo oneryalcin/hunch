@@ -200,6 +200,15 @@ Details: `prototype/review_panel/README.md`. Three context-free Claude subagents
 - **Trim traces from the end that matters.** `prepare.py` kept the start of long final messages and dropped the claim. Clipping is a semantic decision per field (keep the head of an issue, the tail of a conversation); hunch's trace source should make it explicit.
 - **Beware small-sample retractions.** A 40-row subset suggested 26% overclaiming against 39% on the full set; the full set after the fix says 41%. The panel verified the *detector* (97%), not the rate.
 
+## Findings, round 5: Phase 1, trust the numbers (2026-09-24)
+
+- **Stratified estimate replaces the one-sided bound.** `test` splits rows by whether the model agreed with the answer key; reviews of each group (all disagreements, a random audit of agreements) estimate that group; groups are weighted by size. On the BANKING77 holdout with the panel's verdicts imported, hunch reports 95.8% (95% CI 88.7–97.9%), matching the panel's independent scorer exactly. With disputes reviewed and no audit, `test` now refuses to estimate and says why.
+- **Accuracy "on current gold" is a trap once disagreements are reviewed.** It jumped to 98.2% because it trusts every unreviewed agreeing row, while the audit found ~3% of those wrong. The estimate is now the headline and the number `min_accuracy` checks. Calibration and auto-acted accuracy still use current gold; same upward lean, open item.
+- **Gold is a set.** `both_ok` verdicts give two acceptable labels (20 of 45 BANKING77 disagreements); right means "in the set" everywhere (test, diff, sign test, queue).
+- **Asymmetric thresholds are the product for agent evals.** At the real pass rate (16.7%), acting on "yes" is never safe (53–60% wrong at 0.5–0.8), while acting on "no" at 0.80 automates 44% of all runs at 1.9% error (0.90: 27% at 0.6%). `act: {yes: .., no: ..}` and a two-sided dial.
+- **Base rate flips the calibration story.** On the 50/50 sample Jev looked underconfident; reweighted to 16.7% it is overconfident about "yes" (stated 0.54 → observed 0.30; 0.74 → 0.47). Never read calibration off a balanced eval set. AUROC is unaffected by base rate (0.831 either way). `tests.<q>.base_rate` reweights accuracy, calibration and the dial; choice questions (per-class rates) still open.
+- **YAML's Norway problem bit the spec.** `act: {yes: .9, no: .8}` parsed as `{True: .9, False: .8}`; options named on/off/NO collapse silently (three options became two in a test). Specs now load with only true/false as booleans. Any spec format that is YAML must do this.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
