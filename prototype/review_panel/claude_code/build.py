@@ -7,8 +7,8 @@ import hashlib, json, sys
 from pathlib import Path
 
 R = Path(__file__).parent
-sys.path.insert(0, str(R.parent.parent))
-import hunch  # noqa: E402
+sys.path.insert(0, str(R.parents[2] / "src"))
+import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
 
 spec = hunch.load_spec(R.parent.parent / "examples/claude_code/outcome.yml")
 rows = [{**r, **hunch.state_of(spec, r)} for r in hunch.rows(spec)]  # what the judgment sees: redacted, clipped

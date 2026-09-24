@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).parent
-sys.path.insert(0, str(HERE.parent))
-import hunch  # noqa: E402
+sys.path.insert(0, str(HERE.parents[1] / "src"))
+import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
 
 EX = HERE.parent / "examples" / "banking77"
 spec = hunch.load_spec(EX / "intent.yml")

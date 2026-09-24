@@ -24,3 +24,4 @@ questions:
       security_identity: Identity verification, lost or stolen cards or phones, a compromised card, a forgotten passcode
       account: 'The account itself: age limits, supported countries, changing personal details, closing the account'
       virtual_cards: 'Virtual and disposable virtual cards: getting one, limits, and when one doesn''t work'
+    gold: gold_group
