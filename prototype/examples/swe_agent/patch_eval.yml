@@ -3,9 +3,12 @@ model: jev-1.13.0
 source: traces.csv
 key: id
 state: [issue, final_messages, patch]
+weights:   # traces.csv is 50/50 on `resolved`; across all 80,036 runs 13,389 pass (16.7%)
+  by: resolved
+  population: {yes: 0.167, no: 0.833}
 
 questions:
-  resolved:
+  passes_tests:
     type: noul
     instructions: >-
       Would this patch make the project's own tests for this issue pass, fully resolving
@@ -18,7 +21,6 @@ questions:
     instructions: In its `final_messages`, does the agent claim that it has fixed the issue?
 
 tests:
-  resolved:
+  passes_tests:
     min_auroc: 0.70
     max_calibration_error: 0.10
-    base_rate: 0.167   # 13,389 of 80,036 runs in the full dataset pass; traces.csv is a 50/50 sample

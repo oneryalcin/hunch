@@ -1,12 +1,13 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["httpx", "duckdb", "pyyaml"]
+# dependencies = ["httpx", "pyyaml"]
 # ///
 """Online judge(): same spec, same cache keys as batch. Run after `hunch.py run intent.yml`."""
 
 import csv
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -34,7 +35,7 @@ timed(new)
 timed(new)
 
 print("3. a later batch over a CSV containing that text: already answered, $0")
-tmp = HERE / ".hunch" / "online_rows.csv"
+tmp = Path(tempfile.mkdtemp()) / "online_rows.csv"
 with open(tmp, "w", newline="") as f:
     csv.writer(f).writerows([["id", "text"], ["online-1", new]])
 out = subprocess.run(["uv", "run", "-q", str(HERE.parent.parent / "hunch.py"), "compile", str(SPEC), "--source", str(tmp)],

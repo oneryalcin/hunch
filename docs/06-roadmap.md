@@ -44,16 +44,30 @@ Consequences for the phases below: trace ingestion (OpenTelemetry GenAI conventi
 
 Also found: YAML's Norway problem (yes/no parsed as booleans), fixed in the spec loader. Open: calibration and auto-acted accuracy under review-corrected gold still lean upward; per-class base rates for choice questions.
 
-## Phase 2: the graph and the first recipes (prototype, the big unknown, ~$0.10–0.30)
+## Phase 2: the graph and the first recipes: DONE 2026-09-24 (~$0.10 API; corrected after an adversarial review, see 04 round 6)
 
-| Item | Question it answers | Done when |
+| Item | Result |
+|---|---|
+| `ref()` between judgments | Projects (folders of specs), `source: ref(x)`, dependency order, cycle and unknown-ref errors, graph-aware lint. |
+| Hierarchical vs flat (BANKING77) | Flat wins on accuracy (95.8% vs 87.5% estimated; 35 broken vs 3 fixed, p < 0.001); tree is 48% cheaper. Chained confidence (opt-in `chain: true`) separates right from wrong far better (AUROC 0.80 → 0.90). |
+| Diff across a graph | Upstream change → per-judgment flips plus rows entering/leaving, flagged "own spec unchanged". |
+| Conditional nodes | `where:`; skipped rows cost nothing (agent_eval: 149 of 200 reach the checks). |
+| First recipe: agent-eval | `recipes/agent_eval`: claims → fix_correct / verified, with weights, tests, review (gating filters, so not chained). Not yet run on Claude Code session logs (needs the Phase 3 trace source). |
+| Generality check | The tree (routing + union) and agent_eval (conditional checks) used only general primitives. New general pieces the recipes forced: chained confidence (refinements only), source weights, review `kind`, one store per workspace, name-collision errors. Gap: repetitive graphs need a generator (Python API or templating). |
+
+## Next up, from Pydantic AI's TypeSafe integration (read 2026-09-24, see 03 related work)
+
+Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
+
+| Item | Why | Done when |
 |---|---|---|
-| `ref()` between judgments | Does chaining judgments work as a first-class idea? | A judgment's `source` or `state` can reference another judgment's output; `run` orders the DAG; the cache still keys each node by its exact input. |
-| Experiment: hierarchical vs flat on BANKING77 | Does coarse → fine (e.g. 10 groups, then only that group's intents) beat one 77-way question on accuracy, calibration, or cost? | Holdout numbers for both, with a sign test. Either answer is useful: it tells us whether the graph earns its complexity. |
-| Diff across a graph | When an upstream wording changes, which downstream labels move? | `diff` reports flips per node, including nodes whose own spec didn't change. |
-| Conditional nodes | Can a node run only where upstream said yes (e.g. judge fix quality only where `claims_fixed`)? | Cost drops in proportion to the filter, and the diff still holds. |
-| First recipe: agent-eval | Do the primitives compose into something a user would install? | One folder: trace source → `claimed_done` → `verified_before_done` / `fix_correct`, plus `asked_needless_question`; tests, gold, review, lineage. Runs on the SWE-agent traces and on Claude Code session logs. |
-| Generality check: a second, unrelated recipe | Are the primitives general, or shaped around agent evals? | A support-ticket triage recipe (coarse → fine, from the BANKING77 experiment) built with **zero** new special-case code. Any special case found = redesign the primitive, not patch it. |
+| Ablation: does the agent's own claim sway `fix_correct`? | "Adversarial text can move Jev"; the state includes the agent saying it fixed it | Same question without `final_messages`, paired diff + AUROC on the 149 claimed runs (~$0.004) |
+| "None of these" as a primitive | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `choice` gets an optional none-option; lint suggests it when state can be incomplete |
+| Multi-label questions | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option |
+| State-size lint | 32k tokens for state + longest question; past it the request fails | `lint`/`compile` warn at ~25k estimated tokens per row, name the largest column |
+| Redaction for traces | State leaves the machine; traces carry secrets and customer data | Per-column redaction rules in the spec (patterns + drop lists), applied before hashing and sending |
+| LLM escalation tier | Pydantic's `FallbackModel` on low confidence | `route` can escalate to an LLM as well as a person; the dial reports fallback rate and cost |
+| Confidence vocabulary | Pydantic reports a margin, abs(p − 0.5) × 2; hunch reports a probability | Documented side by side; `judge()` can return both |
 
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
@@ -69,7 +83,8 @@ Also found: YAML's Norway problem (yes/no parsed as booleans), fixed in the spec
 
 Known engineering; do it once phases 1–3 have settled the shapes.
 
-- **Library first**: `hunch.run()`, `hunch.judge()`, `hunch.results("x").df()`; CLI is a thin shell.
+- **Library first**: `hunch.run()`, `hunch.judge()`, `hunch.results("x").df()`; CLI is a thin shell. **Pydantic classes as specs**: accept Pydantic AI's type mapping (bool / Literal / Enum / IntEnum rubric / list fan-out / Optional) so the output type that runs live in an agent is the one hunch tests and diffs; YAML remains the stored form. A Python API that generates graphs (the BANKING77 tree needed `build.py` for 12 near-identical specs).
+- **Cost guard**: every command states what it will spend; `--max-cost` refuses above a cap (prototype has both); `compile` estimates for conditional graphs from past pass rates instead of a loose upper bound.
 - **Spec format**: JSON Schema, versioned; lint built on it.
 - **Lineage**: `_hunch_run_id` and `_hunch_key` on every materialized row; `_hunch_runs` table (spec hash, git sha, model, cost, status). Downstream reads complete runs only.
 - **Spec-change policy**: `on_change: reask | new_rows_only | freeze`; `diff` shows the cost before you pay it.

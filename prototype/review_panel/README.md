@@ -40,3 +40,11 @@ The 45 disagreements: Jev right and key wrong 20; key right and Jev wrong 5; bot
 ## Caveats
 
 The reviewers are Claude models, the same family as the model that ran the analysis, though with no shared context. This is a neutral panel, not a human one. The audit slice is 60 rows, so the confidence intervals are wide.
+
+## Round 2: the BANKING77 tree's own disputes (Phase 2)
+
+An adversarial review of Phase 2 pointed out that the tree's accuracy estimate reused reviews made for the *flat* model: the tree disagreed with the answer key on 24 rows that no one had reviewed (flat had agreed with the key there), and the estimator extrapolated from rows that were not a random sample. Same protocol, same three reviewers, just those 24 rows (`tree/`, appended by `tree_disputes.py`):
+
+- Answer key right, tree wrong: 19. Both acceptable: 5. Tree right, key wrong: 0. Unanimous on 19 of 24.
+- Tree estimate with all 69 of its disagreements reviewed: **87.5% (95% CI 80.0–89.8%)**, not the 89.1% first reported.
+- The same 24 reviews then briefly inflated the *flat* estimate (they sit in flat's agreeing rows but were chosen because the tree failed). Reviews now record `kind`: `audit` (random) or `disputed`; only audits stand in for unreviewed agreeing rows. Flat is back to 95.8%.

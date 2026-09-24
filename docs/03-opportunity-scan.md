@@ -133,6 +133,37 @@ Lessons to steal:
 - Their Slack-scanning SRE workflow is a judgment workload in disguise (per-message "is this an early incident signal?") — shows where Roast users would hit hunch's niche.
 - Integration, not competition: a Roast step could call `hunch judge` for its classification sub-steps.
 
+### Pydantic AI `TypeSafeModel`, [pydantic.dev/docs/ai/models/typesafe](https://pydantic.dev/docs/ai/models/typesafe/)
+
+Read 2026-09-24. Pydantic AI (the agent framework) runs Jev as a model: each field of an agent's `output_type` becomes one Jev question, the prompt is the text judged, and the filled Pydantic object comes back. Swap the model string and the same agent runs on an LLM. The page also shows Jev as a model router (`SelectModel`), a guard on every tool call, a picker among actions built at run time, a judge of a whole conversation (`judge.run_sync(message_history=...)`), and a `FallbackModel` that hands low-confidence answers to an LLM.
+
+**Relevance: the Python spec format to adopt, a positioning opening, and a risk to watch.**
+
+The type mapping is a de-facto standard Python developers will learn; hunch's Python API should accept it rather than invent another:
+
+| Pydantic type | Jev question | hunch |
+|---|---|---|
+| `bool` (+ `BoolCriteria` for what yes/no mean) | yes/no | `noul` (criteria true/false supported by the API, not yet by lint/docs) |
+| `Literal` / `Enum` with member docstrings | pick one, options described | `choice` |
+| `IntEnum` 0..n with a docstring per level | rubric | `score` |
+| `float` with `ge=0, le=1` | probability of yes | raw p (`_pyes`) |
+| `list[Literal]` / `dict[Literal, bool]` | one yes/no per option | missing: multi-label |
+| `Area \| None` | pick one or "none of these" | missing as a primitive (agent_eval hand-built `unclear`) |
+| nested model | `outer.inner` questions | not needed yet |
+
+Their docs state hunch's reason to exist: "A classifier in the loop is a component like any other, so it needs the same measurement as the classifier you would deploy on its own … nothing in the run will tell you", and "calibrate each [threshold] against labelled examples of your own". Pydantic AI makes Jev easy to deploy and says it must be measured, but offers nothing to measure it with. Position: **Pydantic AI runs Jev in your agent; hunch tells you whether to trust it.** Integration: a Pydantic output type imports as a hunch spec, so the class that runs live is the class that is tested and diffed.
+
+Risk: Pydantic also has an evals library and an observability product holding traces (from memory, not re-checked). Jev judges + evals + traces in one vendor would cover much of hunch's first use case. Defence is what the page shows no sign of: gold, calibration, the dial, significance-tested diffs, review with gold correction, audit estimates, graphs with chained confidence, a shared content-addressed store.
+
+Details that confirm or change hunch's design:
+- **Confirms:** asymmetric thresholds (`typesafe_boolean_threshold`: "the wrong setting for any field where the two mistakes do not cost the same"); option order moves answers, test several orders; pin the version once tuned (`jev-latest` and `jev-preview` move); trim the state, accuracy falls with unrelated context; one judgment per question ("a question that weighs several things at once … returns a plausible number with low confidence").
+- **Their confidence is a margin, not a probability:** for yes/no, |p − 0.5| × 2 (p = 0.45 → 0.10; hunch says 0.55). hunch uses probabilities, which is what calibration and chaining need; document the difference so numbers aren't compared across the two.
+- **Declining is an option, not an inference:** "declining is something Jev can *choose* rather than something you infer from a low confidence". Same lesson as the review panel's "unclear" traces.
+- **Privacy:** state goes to TypeSafe; "send the judge what it needs … rather than the whole argument dict, when those arguments can carry credentials or customer data". Agent traces carry both.
+- **Adversarial text moves Jev**, and an agent's own success claim is persuasive text inside agent_eval's `fix_correct` state.
+- **Limits:** 64k tokens per request, 32k for state plus the longest question; past it the request fails (`max_tokens_exceeded`). At most 255 options.
+- **LLM fallback is another escalation tier**, and "watch how often the fallback fires" is the dial by another name.
+
 ### dlt: data load tool, [dlt-hub/dlt](https://github.com/dlt-hub/dlt)
 
 Checked 2026-09-24: ~5.9k stars, Apache 2.0, v1.30.0 (2026-08-11), active since 2022. dlthub.com docs read: README, data-quality lifecycle, schema contracts, state, destination tables & lineage, AI Harness.

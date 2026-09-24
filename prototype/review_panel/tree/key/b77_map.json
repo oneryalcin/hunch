@@ -1,0 +1,506 @@
+{
+ "opus:1": {
+  "id": "152",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "996dab2eb58ab9bc"
+ },
+ "opus:2": {
+  "id": "2980",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "2fcc620425196346"
+ },
+ "opus:3": {
+  "id": "2730",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "compromised_card",
+  "kind": "disagree",
+  "state_hash": "b6374c8533805aa6"
+ },
+ "opus:4": {
+  "id": "2268",
+  "gold": "receiving_money",
+  "jev": "verify_source_of_funds",
+  "kind": "disagree",
+  "state_hash": "8d7fc090d806d165"
+ },
+ "opus:5": {
+  "id": "919",
+  "gold": "supported_cards_and_currencies",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "f5f29db637818214"
+ },
+ "opus:6": {
+  "id": "303",
+  "gold": "card_delivery_estimate",
+  "jev": "transfer_timing",
+  "kind": "disagree",
+  "state_hash": "75512ee807da7021"
+ },
+ "opus:7": {
+  "id": "336",
+  "gold": "automatic_top_up",
+  "jev": "top_up_limits",
+  "kind": "disagree",
+  "state_hash": "d7b0cf4320817bec"
+ },
+ "opus:8": {
+  "id": "2979",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "top_up_failed",
+  "kind": "disagree",
+  "state_hash": "7c314a43b201d2ca"
+ },
+ "opus:9": {
+  "id": "2971",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "85d7ccacdb623eff"
+ },
+ "opus:10": {
+  "id": "1326",
+  "gold": "topping_up_by_card",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dd741d66d722a8b9"
+ },
+ "opus:11": {
+  "id": "373",
+  "gold": "card_not_working",
+  "jev": "card_about_to_expire",
+  "kind": "disagree",
+  "state_hash": "b38aa0bc71010832"
+ },
+ "opus:12": {
+  "id": "2359",
+  "gold": "transfer_into_account",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dcbcba2ce9d892ab"
+ },
+ "opus:13": {
+  "id": "3044",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "3889982de17d82cf"
+ },
+ "opus:14": {
+  "id": "120",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "f9b843f8dd001748"
+ },
+ "opus:15": {
+  "id": "1343",
+  "gold": "topping_up_by_card",
+  "jev": "transfer_into_account",
+  "kind": "disagree",
+  "state_hash": "70730e083e30b852"
+ },
+ "opus:16": {
+  "id": "2992",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "7e1644b033db0a39"
+ },
+ "opus:17": {
+  "id": "2270",
+  "gold": "receiving_money",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "ee3ee80331a81b71"
+ },
+ "opus:18": {
+  "id": "608",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5180be929aec5012"
+ },
+ "opus:19": {
+  "id": "636",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5c1baed8b702df74"
+ },
+ "opus:20": {
+  "id": "3048",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "d39222720e80ef4d"
+ },
+ "opus:21": {
+  "id": "2969",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "6a308defa2d2ed88"
+ },
+ "opus:22": {
+  "id": "3047",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "74de5b655897df56"
+ },
+ "opus:23": {
+  "id": "2279",
+  "gold": "receiving_money",
+  "jev": "balance_not_updated_after_cheque_or_cash_deposit",
+  "kind": "disagree",
+  "state_hash": "b5a73bef7a7f329f"
+ },
+ "opus:24": {
+  "id": "1711",
+  "gold": "request_refund",
+  "jev": "reverted_card_payment?",
+  "kind": "disagree",
+  "state_hash": "f565ff435bd46582"
+ },
+ "sonnet_a:1": {
+  "id": "636",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5c1baed8b702df74"
+ },
+ "sonnet_a:2": {
+  "id": "2359",
+  "gold": "transfer_into_account",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dcbcba2ce9d892ab"
+ },
+ "sonnet_a:3": {
+  "id": "373",
+  "gold": "card_not_working",
+  "jev": "card_about_to_expire",
+  "kind": "disagree",
+  "state_hash": "b38aa0bc71010832"
+ },
+ "sonnet_a:4": {
+  "id": "2992",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "7e1644b033db0a39"
+ },
+ "sonnet_a:5": {
+  "id": "608",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5180be929aec5012"
+ },
+ "sonnet_a:6": {
+  "id": "3048",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "d39222720e80ef4d"
+ },
+ "sonnet_a:7": {
+  "id": "1711",
+  "gold": "request_refund",
+  "jev": "reverted_card_payment?",
+  "kind": "disagree",
+  "state_hash": "f565ff435bd46582"
+ },
+ "sonnet_a:8": {
+  "id": "120",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "f9b843f8dd001748"
+ },
+ "sonnet_a:9": {
+  "id": "2268",
+  "gold": "receiving_money",
+  "jev": "verify_source_of_funds",
+  "kind": "disagree",
+  "state_hash": "8d7fc090d806d165"
+ },
+ "sonnet_a:10": {
+  "id": "152",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "996dab2eb58ab9bc"
+ },
+ "sonnet_a:11": {
+  "id": "303",
+  "gold": "card_delivery_estimate",
+  "jev": "transfer_timing",
+  "kind": "disagree",
+  "state_hash": "75512ee807da7021"
+ },
+ "sonnet_a:12": {
+  "id": "1343",
+  "gold": "topping_up_by_card",
+  "jev": "transfer_into_account",
+  "kind": "disagree",
+  "state_hash": "70730e083e30b852"
+ },
+ "sonnet_a:13": {
+  "id": "919",
+  "gold": "supported_cards_and_currencies",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "f5f29db637818214"
+ },
+ "sonnet_a:14": {
+  "id": "2979",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "top_up_failed",
+  "kind": "disagree",
+  "state_hash": "7c314a43b201d2ca"
+ },
+ "sonnet_a:15": {
+  "id": "2279",
+  "gold": "receiving_money",
+  "jev": "balance_not_updated_after_cheque_or_cash_deposit",
+  "kind": "disagree",
+  "state_hash": "b5a73bef7a7f329f"
+ },
+ "sonnet_a:16": {
+  "id": "2730",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "compromised_card",
+  "kind": "disagree",
+  "state_hash": "b6374c8533805aa6"
+ },
+ "sonnet_a:17": {
+  "id": "1326",
+  "gold": "topping_up_by_card",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dd741d66d722a8b9"
+ },
+ "sonnet_a:18": {
+  "id": "2969",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "6a308defa2d2ed88"
+ },
+ "sonnet_a:19": {
+  "id": "2971",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "85d7ccacdb623eff"
+ },
+ "sonnet_a:20": {
+  "id": "336",
+  "gold": "automatic_top_up",
+  "jev": "top_up_limits",
+  "kind": "disagree",
+  "state_hash": "d7b0cf4320817bec"
+ },
+ "sonnet_a:21": {
+  "id": "2980",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "2fcc620425196346"
+ },
+ "sonnet_a:22": {
+  "id": "2270",
+  "gold": "receiving_money",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "ee3ee80331a81b71"
+ },
+ "sonnet_a:23": {
+  "id": "3047",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "74de5b655897df56"
+ },
+ "sonnet_a:24": {
+  "id": "3044",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "3889982de17d82cf"
+ },
+ "sonnet_b:1": {
+  "id": "1326",
+  "gold": "topping_up_by_card",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dd741d66d722a8b9"
+ },
+ "sonnet_b:2": {
+  "id": "1343",
+  "gold": "topping_up_by_card",
+  "jev": "transfer_into_account",
+  "kind": "disagree",
+  "state_hash": "70730e083e30b852"
+ },
+ "sonnet_b:3": {
+  "id": "919",
+  "gold": "supported_cards_and_currencies",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "f5f29db637818214"
+ },
+ "sonnet_b:4": {
+  "id": "608",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5180be929aec5012"
+ },
+ "sonnet_b:5": {
+  "id": "3044",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "3889982de17d82cf"
+ },
+ "sonnet_b:6": {
+  "id": "336",
+  "gold": "automatic_top_up",
+  "jev": "top_up_limits",
+  "kind": "disagree",
+  "state_hash": "d7b0cf4320817bec"
+ },
+ "sonnet_b:7": {
+  "id": "120",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "f9b843f8dd001748"
+ },
+ "sonnet_b:8": {
+  "id": "2979",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "top_up_failed",
+  "kind": "disagree",
+  "state_hash": "7c314a43b201d2ca"
+ },
+ "sonnet_b:9": {
+  "id": "2971",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "85d7ccacdb623eff"
+ },
+ "sonnet_b:10": {
+  "id": "303",
+  "gold": "card_delivery_estimate",
+  "jev": "transfer_timing",
+  "kind": "disagree",
+  "state_hash": "75512ee807da7021"
+ },
+ "sonnet_b:11": {
+  "id": "2730",
+  "gold": "cash_withdrawal_not_recognised",
+  "jev": "compromised_card",
+  "kind": "disagree",
+  "state_hash": "b6374c8533805aa6"
+ },
+ "sonnet_b:12": {
+  "id": "2992",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "topping_up_by_card",
+  "kind": "disagree",
+  "state_hash": "7e1644b033db0a39"
+ },
+ "sonnet_b:13": {
+  "id": "3048",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "d39222720e80ef4d"
+ },
+ "sonnet_b:14": {
+  "id": "2969",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "6a308defa2d2ed88"
+ },
+ "sonnet_b:15": {
+  "id": "152",
+  "gold": "card_payment_wrong_exchange_rate",
+  "jev": "exchange_rate",
+  "kind": "disagree",
+  "state_hash": "996dab2eb58ab9bc"
+ },
+ "sonnet_b:16": {
+  "id": "2270",
+  "gold": "receiving_money",
+  "jev": "fiat_currency_support",
+  "kind": "disagree",
+  "state_hash": "ee3ee80331a81b71"
+ },
+ "sonnet_b:17": {
+  "id": "373",
+  "gold": "card_not_working",
+  "jev": "card_about_to_expire",
+  "kind": "disagree",
+  "state_hash": "b38aa0bc71010832"
+ },
+ "sonnet_b:18": {
+  "id": "3047",
+  "gold": "country_support",
+  "jev": "order_physical_card",
+  "kind": "disagree",
+  "state_hash": "74de5b655897df56"
+ },
+ "sonnet_b:19": {
+  "id": "636",
+  "gold": "top_up_by_bank_transfer_charge",
+  "jev": "transfer_fee_charged",
+  "kind": "disagree",
+  "state_hash": "5c1baed8b702df74"
+ },
+ "sonnet_b:20": {
+  "id": "2980",
+  "gold": "apple_pay_or_google_pay",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "2fcc620425196346"
+ },
+ "sonnet_b:21": {
+  "id": "1711",
+  "gold": "request_refund",
+  "jev": "reverted_card_payment?",
+  "kind": "disagree",
+  "state_hash": "f565ff435bd46582"
+ },
+ "sonnet_b:22": {
+  "id": "2268",
+  "gold": "receiving_money",
+  "jev": "verify_source_of_funds",
+  "kind": "disagree",
+  "state_hash": "8d7fc090d806d165"
+ },
+ "sonnet_b:23": {
+  "id": "2279",
+  "gold": "receiving_money",
+  "jev": "balance_not_updated_after_cheque_or_cash_deposit",
+  "kind": "disagree",
+  "state_hash": "b5a73bef7a7f329f"
+ },
+ "sonnet_b:24": {
+  "id": "2359",
+  "gold": "transfer_into_account",
+  "jev": "supported_cards_and_currencies",
+  "kind": "disagree",
+  "state_hash": "dcbcba2ce9d892ab"
+ }
+}

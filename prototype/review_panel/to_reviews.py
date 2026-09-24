@@ -50,7 +50,8 @@ for rid, p in panel.items():
         verdict, label = ("labeled", best) if votes >= 2 and best != p["gold"] else ("ambiguous", "")
     it = hunch.item(spec, rows[rid], "intent")
     out.append({"qid": "intent", "row_id": rid, "state_hash": it["shash"], "verdict": verdict, "label": label,
-                "reviewer": "panel:opus+sonnet+sonnet", "at": now})
+                "reviewer": "panel:opus+sonnet+sonnet", "at": now,
+                "kind": "disputed" if p["kind"] == "disagree" else "audit"})  # agreements were a random sample
 
 path = EX / "intent.reviews.csv"
 with open(path, "w", newline="") as f:

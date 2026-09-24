@@ -71,14 +71,7 @@ pair = sum(r["gold_ok"][i] == r["gold_ok"][j] for r in rows for i, j in [(0, 1),
 print(f"  reviewer agreement: Fleiss kappa {fleiss_binary(votes):.2f}; pairwise agreement on answer-key label {pair:.1%}")
 print(f"  unanimous verdicts on disagreements: {sum(len(set(r['gold_ok']))==1 and len(set(r['jev_ok']))==1 for r in dis)}/{len(dis)}")
 
-# my earlier (non-blind) verdicts vs the panel
-mine = {r["row_id"]: r["verdict"] for r in csv.DictReader(open(R.parent / "examples/banking77/intent.reviews.csv"))}
-panel = {r["id"]: ("model_right" if r["j"] and not r["g"] else "key_right" if r["g"] and not r["j"] else "ambiguous" if r["j"] else "neither") for r in dis}
-same = [i for i in mine if panel.get(i) == mine[i]]
-print(f"  Claude's earlier verdicts vs panel: {len(same)}/{len(mine)} match")
-for i in mine:
-    if panel.get(i) != mine[i]:
-        print(f"    #{i}: Claude said {mine[i]}, panel says {panel.get(i)}")
+# (Claude's earlier verdicts matched the panel 6/13; intent.reviews.csv now holds the panel's verdicts, see README)
 
 # ---------- SWE claims_fixed ----------
 m2 = json.load(open(R / "key/swe_map.json"))

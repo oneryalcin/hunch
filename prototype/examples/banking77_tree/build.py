@@ -1,0 +1,85 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["pyyaml"]
+# ///
+"""Generate the tree-shaped BANKING77 project: a coarse `group` judgment, one fine judgment per group that only
+sees rows routed to it (`where`), and a `union` that collects them into one `intent` table comparable to the
+flat 77-way spec. Fine judgments are `chain: true`: an intent can only be right if the row was routed to
+its group, so their confidence includes P(routed here). Fine options reuse the flat spec's descriptions word for word, so the only difference
+under test is the shape. Re-run after editing GROUPS; the generated *.yml files are committed."""
+
+from pathlib import Path
+
+import yaml
+
+HERE = Path(__file__).parent
+FLAT = yaml.safe_load((HERE.parent / "banking77" / "intent.yml").read_text())
+DESC = FLAT["questions"]["intent"]["criteria"]
+MODEL = FLAT["model"]
+
+GROUPS = {
+    "card_setup": ("Getting, activating, replacing, linking or choosing a card, and the card's PIN",
+                   ["activate_my_card", "card_about_to_expire", "card_arrival", "card_delivery_estimate", "card_linking",
+                    "change_pin", "get_physical_card", "getting_spare_card", "order_physical_card", "pin_blocked",
+                    "visa_or_mastercard"]),
+    "card_payments": ("Paying with a card in shops or online: declined, pending, reversed, fees, unrecognised or duplicate charges, contactless, Apple/Google Pay",
+                      ["apple_pay_or_google_pay", "card_acceptance", "card_not_working", "card_payment_fee_charged",
+                       "card_payment_not_recognised", "card_payment_wrong_exchange_rate", "contactless_not_working",
+                       "declined_card_payment", "pending_card_payment", "reverted_card_payment?", "transaction_charged_twice"]),
+    "cash_atm": ("Cash machines and cash withdrawals: finding ATMs, fees, declined or pending withdrawals, wrong amounts or rates, swallowed cards",
+                 ["atm_support", "card_swallowed", "cash_withdrawal_charge", "cash_withdrawal_not_recognised",
+                  "declined_cash_withdrawal", "pending_cash_withdrawal", "wrong_amount_of_cash_received",
+                  "wrong_exchange_rate_for_cash_withdrawal"]),
+    "top_ups": ("Adding money to the account (topping up): how, limits, fees, failed, pending, reversed or unverified top-ups",
+                ["automatic_top_up", "pending_top_up", "supported_cards_and_currencies", "top_up_by_bank_transfer_charge",
+                 "top_up_by_card_charge", "top_up_by_cash_or_cheque", "top_up_failed", "top_up_limits",
+                 "top_up_reverted", "topping_up_by_card", "verify_top_up"]),
+    "transfers": ("Bank transfers in or out: sending, receiving, timing, fees, cancelling, and transfers that failed, were declined, pending or not received",
+                  ["balance_not_updated_after_bank_transfer", "beneficiary_not_allowed", "cancel_transfer",
+                   "declined_transfer", "failed_transfer", "pending_transfer", "receiving_money", "transfer_fee_charged",
+                   "transfer_into_account", "transfer_not_received_by_recipient", "transfer_timing"]),
+    "statement_refunds": ("Refunds, cheque or cash deposits, direct debits, unexplained charges on the statement, and where funds came from",
+                          ["Refund_not_showing_up", "balance_not_updated_after_cheque_or_cash_deposit",
+                           "direct_debit_payment_not_recognised", "extra_charge_on_statement", "request_refund",
+                           "verify_source_of_funds"]),
+    "exchange": ("Currency exchange: rates, fees, exchanging in the app, which currencies are supported",
+                 ["exchange_charge", "exchange_rate", "exchange_via_app", "fiat_currency_support"]),
+    "security_identity": ("Identity verification, lost or stolen cards or phones, a compromised card, a forgotten passcode",
+                          ["compromised_card", "lost_or_stolen_card", "lost_or_stolen_phone", "passcode_forgotten",
+                           "unable_to_verify_identity", "verify_my_identity", "why_verify_identity"]),
+    "account": ("The account itself: age limits, supported countries, changing personal details, closing the account",
+                ["age_limit", "country_support", "edit_personal_details", "terminate_account"]),
+    "virtual_cards": ("Virtual and disposable virtual cards: getting one, limits, and when one doesn't work",
+                      ["get_disposable_virtual_card", "disposable_card_limits", "getting_virtual_card",
+                       "virtual_card_not_working"]),
+}
+
+assigned = [i for _, (_, members) in GROUPS.items() for i in members]
+missing, extra = set(DESC) - set(assigned), set(assigned) - set(DESC)
+dupes = {i for i in assigned if assigned.count(i) > 1}
+assert not (missing or extra or dupes), f"missing={missing} extra={extra} dupes={dupes}"
+
+
+def dump(name: str, spec: dict) -> None:
+    (HERE / f"{name}.yml").write_text(f"# generated by build.py; edit GROUPS there\n" + yaml.safe_dump(spec, sort_keys=False, width=120))
+
+
+dump("group", {
+    "judgment": "group", "model": MODEL, "source": "../banking77/banking77_sample.csv", "key": "id", "state": ["text"],
+    "questions": {"group": {"type": "choice", "instructions": "Which area of banking is this customer asking about?",
+                            "criteria": {g: d for g, (d, _) in GROUPS.items()}}},
+})
+for g, (_, members) in GROUPS.items():
+    dump(f"intent_{g}", {
+        "judgment": f"intent_{g}", "model": MODEL, "source": "ref(group)", "where": f"group == '{g}'", "chain": True,
+        "reviews": "../banking77/intent.reviews.csv", "state": ["text"],
+        "questions": {"intent": {"type": "choice", "instructions": FLAT["questions"]["intent"]["instructions"],
+                                 "criteria": {i: DESC[i] for i in members}, "act": FLAT["questions"]["intent"]["act"],
+                                 "gold": "gold_intent"}},
+    })
+dump("intent_tree", {
+    "judgment": "intent_tree", "union": [f"intent_{g}" for g in GROUPS], "question": "intent",
+    "reviews": "../banking77/intent.reviews.csv",
+    "tests": {"intent": {k: v for k, v in FLAT["tests"]["intent"].items() if k != "order_stability"}},
+})
+print(f"wrote {2 + len(GROUPS)} specs: {len(GROUPS)} groups, {len(assigned)} intents")
