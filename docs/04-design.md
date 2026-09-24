@@ -133,7 +133,6 @@ No extraction/loading, no general orchestration, no general LLM app framework, n
 - Persona: analytics engineer, AI/app engineer, or ops? Online + batch spans two audiences — pick one to lead.
 - Multi-question calls: batch all questions of a judgment into one engine call per row (read-once) — yes by default; how to expose speculative fan-out?
 - Score questions: how does calibration apply to ordinal scales?
-- Order stability costs N× calls; run on a sample only?
 - Store format and GC for old versions.
 - Trace ingestion format for evals (OTel GenAI semantic conventions?).
 - PyPI name (see README).
@@ -162,3 +161,23 @@ Success criterion: the diff feels magical.
 - **Routing and test config must stay out of the key.** Changing `act` re-routes rows at $0, no calls.
 - **Option descriptions matter a lot.** Bare labels → 97.5%, 2 rows below 0.80; with one-line descriptions → 100%, 1 row below 0.95.
 - Latency: 40 requests in ~1.8 s wall with concurrency 16.
+
+## Findings, round 2: real data, tests, online (BANKING77, 2026-09-24)
+
+Full numbers in `prototype/README.md`. Dev 770 rows, disjoint holdout 385, 77 intents.
+
+- **Cache key must preserve option order.** First prototype used `sort_keys=True`: reordering options (which changes answers) hit the old cache entry. Any canonicalization must be semantics-preserving, and order is semantics here.
+- **Describe all options or none.** Partial descriptions (29/77) attracted rows from undescribed neighbours into described ones; holdout gain was not significant (22 fixed / 14 broken, p=0.24). Describing all 77 from the train split: 82.3% → 88.3% on holdout, 28/5, p<0.001. → Lint rule: warn when a choice has a mix of described and bare options.
+- **Label names lie.** BANKING77's `get_physical_card` is about PINs. Bare labels can't work when names mislead; descriptions are not optional polish.
+- **Significance is a feature.** Dev said v2 clearly won (p=0.005) because dev confusions chose what to describe; holdout disagreed. `diff` must print a paired sign test, and hunch should push a dev/holdout split (tune on one, report on the other). The tickets "97.5% → 100%" was one row, p=1.0.
+- **Confident mistakes are mostly gold errors.** Of 23 high-confidence misses adjudicated: 13 gold wrong, 10 ambiguous, 0 clearly model wrong. → Review queue needs a "gold disputed" path: human verdict corrects the gold set, not just the label. Measured calibration error is inflated by gold noise; calibration needs clean gold to mean anything.
+- **Jev overconfident but usable.** Holdout calibration error 0.053–0.066 (the independent Decision Index reported 0.065). Top bin states ~0.99, observes ~0.96. The dial table is what operators actually need: v3 automates 81% at 4.2% error at 0.90, 65% at 2.0% at 0.99.
+- **Order sensitivity is real but confined to the uncertain band.** 3.7–8.3% flips on a sample; all v1 flips had p ≤ 0.74. Better descriptions halved it (6.7% → 3.7%, mean |Δp| 0.055 → 0.032). Order test only matters for rows below `act`.
+- **Online judge works and shares keys both ways** (batch → online hit 9–20 ms; online → next batch $0).
+- **Store must be multi-process.** DuckDB single-writer lock: `judge()` fails whenever a batch runs. SQLite WAL: 0 errors in ~47k mixed concurrent ops, but tail latency up to 2.8 s under a bulk writer, and WAL must be enabled once at creation. → Online path: read-only lookups on the hot path, writes queued off the request path. Server edition: Postgres. DuckDB stays useful for analytics over materialized results, not as the cache.
+- Costs: 77-option request ≈ 2k input tokens ($0.00009/row); whole round $0.30.
+
+### Resolved open questions
+
+- Order stability costs N× calls → run on a deterministic sample (stable across runs, so cached). 150 rows × 2 permutations = $0.03.
+- Score calibration still open (ordinal); noul calibration implemented, untested on real gold.

@@ -1,0 +1,97 @@
+judgment: intent
+model: jev-1.13.0
+source: banking77_sample.csv
+key: id
+state: [text]
+
+questions:
+  intent:
+    type: choice
+    instructions: What is this bank customer asking about?
+    criteria:
+      Refund_not_showing_up: A refund they expected has not appeared in their account or statement
+      activate_my_card: How to activate a card, or problems activating it
+      age_limit: Age requirements, or opening an account for a child
+      apple_pay_or_google_pay: Using or topping up with Apple Pay or Google Pay
+      atm_support: Which ATMs accept their card, or where to find one
+      automatic_top_up: Setting up or using automatic top-ups
+      balance_not_updated_after_bank_transfer: Money transferred into their own account has not shown up in their balance
+      balance_not_updated_after_cheque_or_cash_deposit: A cheque or cash deposit has not shown up in their balance
+      beneficiary_not_allowed: A transfer to a particular recipient or beneficiary is not allowed or blocked
+      cancel_transfer: Wants to cancel or undo a transfer they made, e.g. sent to the wrong account
+      card_about_to_expire: Their card is expiring or expired and they need a replacement
+      card_acceptance: Where their card can or cannot be used to pay
+      card_arrival: A card that was sent to them has not arrived yet, or tracking it
+      card_delivery_estimate: How long card delivery takes in general
+      card_linking: Linking or re-adding a card to the app, or reactivating a card they found again
+      card_not_working: The card itself does not work, is broken, or is frozen
+      card_payment_fee_charged: They were charged a fee for paying with their card
+      card_payment_not_recognised: A card payment they did not make or do not recognise
+      card_payment_wrong_exchange_rate: A card purchase was charged at the wrong exchange rate
+      card_swallowed: An ATM kept or swallowed their card
+      cash_withdrawal_charge: They were charged a fee for a cash or ATM withdrawal
+      cash_withdrawal_not_recognised: A cash withdrawal they did not make or do not recognise
+      change_pin: Wants to change or reset their PIN
+      compromised_card: They suspect someone else has their card details or is using their card
+      contactless_not_working: Contactless payments are not working
+      country_support: Which countries are supported, or getting a card while living outside the UK
+      declined_card_payment: A card payment in a shop or online was declined
+      declined_cash_withdrawal: An ATM cash withdrawal was declined or did not work
+      declined_transfer: A transfer was declined or rejected
+      direct_debit_payment_not_recognised: A direct debit they did not set up or do not recognise
+      disposable_card_limits: Limits on disposable virtual cards, such as how many or how much
+      edit_personal_details: Changing personal details such as name or address
+      exchange_charge: Fees or charges for exchanging currencies
+      exchange_rate: What the exchange rates are and how they are set
+      exchange_via_app: How to exchange or convert between currencies using the app
+      extra_charge_on_statement: An unexplained extra fee or small charge on their statement
+      failed_transfer: A transfer attempt failed or gave an error
+      fiat_currency_support: Which currencies they can hold or exchange in their account
+      get_disposable_virtual_card: How to get a disposable virtual card, or what disposable cards are for
+      get_physical_card: About the PIN for their card - where to find it, not having received it, or getting started with a card that just arrived
+      getting_spare_card: Getting an additional or second card on the account
+      getting_virtual_card: How to get a virtual card, or a virtual card they have not received
+      lost_or_stolen_card: Their card is lost or stolen
+      lost_or_stolen_phone: Their phone is lost or stolen
+      order_physical_card: Wants to get, order, or pay for a physical (plastic) card
+      passcode_forgotten: Forgot or needs to reset the app passcode
+      pending_card_payment: A card payment is showing as pending
+      pending_cash_withdrawal: A cash withdrawal is showing as pending
+      pending_top_up: A top-up is still pending
+      pending_transfer: A transfer is showing as pending or stuck pending
+      pin_blocked: Their PIN or card is blocked after wrong PIN attempts
+      receiving_money: How to receive money from others, such as friends or salary
+      request_refund: Wants a refund for a purchase or to reverse a payment
+      reverted_card_payment?: A card payment was cancelled or reversed and the money came back
+      supported_cards_and_currencies: Which cards, payment methods, or currencies are accepted for top-ups
+      terminate_account: Wants to close or delete their account
+      top_up_by_bank_transfer_charge: Fees for adding money by bank transfer (SEPA, SWIFT)
+      top_up_by_card_charge: Fees for topping up with a card
+      top_up_by_cash_or_cheque: Topping up with cash or a cheque
+      top_up_failed: A top-up attempt failed or was rejected
+      top_up_limits: Limits on top-up amounts
+      top_up_reverted: A top-up was cancelled, returned, or reversed
+      topping_up_by_card: How to top up with a card, or a card top-up they cannot find
+      transaction_charged_twice: The same transaction was charged twice
+      transfer_fee_charged: They were charged a fee for a transfer
+      transfer_into_account: How to add money to their account by bank transfer
+      transfer_not_received_by_recipient: Money they sent to someone else has not arrived for the recipient
+      transfer_timing: How long transfers take to arrive
+      unable_to_verify_identity: They are trying but unable to verify their identity
+      verify_my_identity: How to verify their identity and which documents are needed
+      verify_source_of_funds: Where funds in their account came from
+      verify_top_up: Verifying a top-up, or verification codes for top-ups
+      virtual_card_not_working: A virtual or disposable card is not working or was rejected
+      visa_or_mastercard: Whether they can get a Visa or a Mastercard
+      why_verify_identity: Whether or why identity verification is required, or using the account before verification has passed
+      wrong_amount_of_cash_received: An ATM gave them less cash than requested or charged
+      wrong_exchange_rate_for_cash_withdrawal: The exchange rate applied to a cash withdrawal seems wrong
+    act: 0.90
+    gold: gold_intent
+
+tests:
+  intent:
+    min_accuracy: 0.85
+    max_calibration_error: 0.05
+    min_act_accuracy: 0.97
+    order_stability: {sample: 150, permutations: 2, max_flip_rate: 0.05}
