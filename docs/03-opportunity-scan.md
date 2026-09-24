@@ -132,3 +132,33 @@ Lessons to steal:
 - **"AI as placeholder, replace with deterministic later"** (Sam Schmidt quote). hunch can go further and *measure* it: if a deterministic rule agrees with the judgment on ≥X% of gold rows, suggest demoting the judgment to the rule. Possible feature: `hunch suggest-rules`.
 - Their Slack-scanning SRE workflow is a judgment workload in disguise (per-message "is this an early incident signal?") — shows where Roast users would hit hunch's niche.
 - Integration, not competition: a Roast step could call `hunch judge` for its classification sub-steps.
+
+### dlt: data load tool, [dlt-hub/dlt](https://github.com/dlt-hub/dlt)
+
+Checked 2026-09-24: ~5.9k stars, Apache 2.0, v1.30.0 (2026-08-11), active since 2022. dlthub.com docs read: README, data-quality lifecycle, schema contracts, state, destination tables & lineage, AI Harness.
+
+**What it is:** the "EL" in ELT as a Python library. Sources (REST APIs described declaratively, SQL databases, files, DataFrames, any generator) → schema inference and normalization → 20+ destinations, swapped by one string. Decorators declare intent: `primary_key`, `write_disposition="merge"`, `dlt.sources.incremental("updated_at")`, `schema_contract`. Business model: open-source `dlt` + commercial **dltHub** (managed runtime, built-in data-quality checks, transformations, an "AI Harness" of skills + MCP + workflow for Claude Code / Cursor / Codex, under a separate license).
+
+**Relevance: complement, not competitor.** dlt's "semantic validity" checks are rules (Pydantic `age > 0`, `is_in()`, filters); nothing judges meaning with a model. The stack reads naturally as **dlt loads → hunch judges → dbt transforms**. Integration points: in-flight via `resource.add_map(...)` / `add_filter(...)` calling `judge()`, or post-load over destination tables.
+
+| | dlt | hunch |
+|---|---|---|
+| Layer | extract + load | judge (semantic labels) |
+| Unit | resource (generator of rows) | judgment (question over rows) |
+| Incremental | cursor (`updated_at`) + state | content hash of row text + question |
+| Contracts | schema: evolve / freeze / discard_row / discard_value | none yet |
+| Lineage | `_dlt_load_id` on every row, `_dlt_loads` (status, schema hash) | answer key only; materialized table has none |
+| "Semantic" checks | rules | model judgments with calibration |
+| Swap by one string | destination | engine (planned), store (planned) |
+| Business model | Apache core + commercial hub | Apache core + ELv2 server (planned) |
+
+**Lessons to take** (details and decisions in 04-design):
+1. **Library, not platform.** "Dropped in anywhere: notebook, Lambda, Airflow DAG, laptop, or an AI coding agent." hunch should stay importable with no server needed; the CLI a thin shell over the library.
+2. **Lineage columns on every materialized row + a runs table.** dlt's `_dlt_load_id` / `_dlt_loads(status, schema_version_hash)` lets downstream read only complete loads and trace any row. hunch's tables lack this today.
+3. **Contracts as explicit policy modes.** dlt names what happens on schema change. hunch needs the same for *spec* change: a reworded question today silently means "re-ask everything".
+4. **Cursor + content hash at scale.** Content addressing still reads and hashes every source row each run; dlt's cursor avoids scanning. Large tables want both: cursor to find candidates, hash to decide.
+5. **Swap one string.** Engines and stores should switch like dlt destinations.
+6. **Agent-native from day one.** dlt ships an LLM-oriented docs index, skills and an MCP server so coding agents build pipelines. hunch specs are ideal agent output (YAML, lint, test, diff give the agent a feedback loop).
+7. **The open-core line is validated, and they put data-quality checks in the paid tier.** hunch's tests are its core value and must stay Apache or adoption stalls; paid = hosted review UI, online serving, monitoring (as planned).
+8. **Say no to adapters early.** dlt: "New destinations are unlikely to be merged due to high maintenance cost." Keep engine adapters few and pluggable.
+9. **Read-back API.** `pipeline.dataset().tracks.df()` / `.arrow()` / `.to_ibis()`. hunch results should be as easy to pull into a DataFrame as they are to query in SQL.

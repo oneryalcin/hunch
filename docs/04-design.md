@@ -189,6 +189,16 @@ Full numbers in `prototype/README.md`. Dev 770 rows, disjoint holdout 385, 77 in
 - **Overclaiming is measurable.** Agents claimed a fix in 153/200 runs and 39% of those failed; a cheap per-turn check flags a third of the false claims with few false alarms.
 - **Sampling changes calibration.** A 50/50 sample of a ~17%-base-rate population makes a well-calibrated judge look underconfident. Calibration tests need samples at the production base rate, or reweighting.
 
+## Lessons from dlt (prior art, see 03 related work)
+
+Decisions for the real build:
+
+- **Lineage on every materialized row**: `_hunch_run_id`, `_hunch_key` (answer key), plus a `_hunch_runs` table (run id, spec hash, git sha, model, engine, cost, status: running/complete/failed). Downstream (dbt) reads only complete runs; any label traces to the exact spec version that produced it.
+- **Spec-change policy, named like dlt contracts.** Per judgment: `on_change: reask` (default: every row, exact but costs a full run) | `new_rows_only` (old rows keep old labels; cheap, inconsistent, recorded in lineage) | `freeze` (refuse to run a changed spec without `--allow-change`). The diff already shows the cost of `reask` before you pay it.
+- **Cursor + hash for big sources**: optional `incremental: {cursor: updated_at}` to limit which rows are read and hashed; the content key still decides whether to ask.
+- **Library first**: `hunch.run("intent.yml")`, `hunch.results("intent").df()`; CLI calls the library. No daemon required for anything in the Apache layer.
+- **Agent-native**: ship a skill/MCP so coding agents write specs and iterate with `lint` → `test` → `diff` as their feedback loop.
+
 ### Resolved open questions
 
 - Order stability costs N× calls → run on a deterministic sample (stable across runs, so cached). 150 rows × 2 permutations = $0.03.
