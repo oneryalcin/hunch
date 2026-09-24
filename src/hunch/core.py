@@ -1192,8 +1192,8 @@ def hold_answers(spec: dict, db, items: list[dict]) -> set[int]:
 
 def previous_keys(db, judgment: str) -> dict[tuple[str, str], str]:
     try:
-        return {(r, q): k for r, q, k in db.execute(
-            "select row_id, qid, key from _hunch_row_answers where judgment = ?", (judgment,))}
+        return {(r, q): k for r, q, k in db.execute(  # run ids start with their time: the last one wins
+            "select row_id, qid, key from _hunch_row_answers where judgment = ? order by run_id", (judgment,))}
     except sqlite3.OperationalError:
         return {}
 
@@ -1326,8 +1326,9 @@ def record_run(db, run: dict) -> None:
 
 
 def record_row_answers(db, judgment: str, items: list[dict], run_id: str) -> None:
+    # one entry per row, question and run: the history drift checks compare; on_change reads each row's latest
     db.execute("""create table if not exists _hunch_row_answers (judgment text, row_id text, qid text, key text,
-        run_id text, primary key (judgment, row_id, qid))""")
+        run_id text, primary key (judgment, row_id, qid, run_id))""")
     write(db, "insert or replace into _hunch_row_answers values (?, ?, ?, ?, ?)",
           [(judgment, it["id"], it["qid"], it["key"], run_id) for it in items])
 
@@ -1960,8 +1961,9 @@ def spec_yaml(spec: dict) -> str:
 def cmd_suggest(project: dict, args) -> None:
     """Rewrites of one question, kept only when they win on gold they were not written from. Gold rows are
     split in two by a hash of their id: the writer sees the current spec's mistakes on one half; each rewrite
-    is judged on the other half, paired against the current answers (sign test). Rejected rewrites are
-    reported too; each rewrite is saved as a spec under .hunch/suggest/ to inspect or adopt."""
+    is judged on the other half, paired against the current answers (sign test, Bonferroni over the n tried:
+    the best of several looks better than it is). Rejected rewrites are reported too; each is saved as a spec
+    under .hunch/suggest/. Confirm a kept one on a holdout before adopting it."""
     name = pick(project, args.node)
     spec = project["nodes"][name]
     qids = [args.question] if args.question else list(spec["questions"])
@@ -2009,13 +2011,15 @@ def cmd_suggest(project: dict, args) -> None:
             fixed, broke = fixed + (b and not a), broke + (a and not b)
         acc = sum(hit(ci, cans[ci["key"]]) for ci in citems) / len(citems)
         p = sign_test(fixed, broke)
-        ok = p < 0.05 and fixed > broke
+        ok = p < 0.05 / args.n and fixed > broke  # Bonferroni: the best of n rewrites looks better than it is
         kept += [path] if ok else []
         print(f"  #{k}: {acc:.1%} ({acc - base_acc:+.1%}; ✓ {fixed} fixed, ✗ {broke} broken, p={p:.3f}) "
-              f"{'KEPT' if ok else 'rejected: not a significant gain'} → {path.name} (${cstats['cost']:.4f})")
+              f"{'KEPT' if ok else f'rejected: needs p < {0.05 / args.n:.3f} ({args.n} tried)'} → {path.name} "
+              f"(${cstats['cost']:.4f})")
     print(f"  writer cost ${writer_cost:.4f}")
     if kept:
-        print(f"  adopt one by copying it over the spec, then run `hunch diff` on a holdout before shipping")
+        print(f"  before adopting: `hunch diff <rewrite> --against <spec> --source <holdout>`: on BANKING77 a kept "
+              f"rewrite's +5.1% was +2.4% (n.s.) on the holdout")
 
 
 # ---------- online ----------
