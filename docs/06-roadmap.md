@@ -16,9 +16,9 @@ These decide between options at every phase. They come from why dbt and dlt won:
 
 ## Where we are
 
-Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree) and agent-run evals (SWE-agent). Every Phase 2 claim was checked by an independent adversarial review. Total API spend so far: about $0.49.
+Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree), agent-run evals (SWE-agent) and real developer ↔ agent conversations (Claude Code). Every Phase 2 claim was checked by an independent adversarial review; shadow mode compares a candidate on live traffic. Total API spend so far: about $0.51.
 
-**Not proven yet:** a second engine, scale beyond ~1k rows, reading real traces directly, and whether anyone besides us wants this (no external user yet).
+**Not proven yet:** a second engine, scale beyond ~1k rows, a general trace source (Claude Code sessions are read by a script, 04 round 9), and whether anyone besides us wants this (no external user yet).
 
 ## Phase 0: decide who it's for (no code)
 
@@ -52,7 +52,7 @@ Also found: YAML's Norway problem (yes/no parsed as booleans), fixed in the spec
 | Hierarchical vs flat (BANKING77) | Flat wins on accuracy (95.8% vs 87.5% estimated; 35 broken vs 3 fixed, p < 0.001); tree is 48% cheaper. Chained confidence (opt-in `chain: true`) separates right from wrong far better (AUROC 0.80 → 0.90). |
 | Diff across a graph | Upstream change → per-judgment flips plus rows entering/leaving, flagged "own spec unchanged". |
 | Conditional nodes | `where:`; skipped rows cost nothing (agent_eval: 149 of 200 reach the checks). |
-| First recipe: agent-eval | `recipes/agent_eval`: claims → fix_correct / verified, with weights, tests, review (gating filters, so not chained). Not yet run on Claude Code session logs (needs the Phase 3 trace source). |
+| First recipe: agent-eval | `recipes/agent_eval`: claims → fix_correct / verified, with weights, tests, review (gating filters, so not chained). Claude Code conversations: `examples/claude_code` (04 round 9), read by a script until the Phase 3 trace source. |
 | Generality check | The tree (routing + union) and agent_eval (conditional checks) used only general primitives. New general pieces the recipes forced: chained confidence (refinements only), source weights, review `kind`, one store per workspace, name-collision errors. Gap: repetitive graphs need a generator (Python API or templating). |
 
 ## Next up, from Pydantic AI's TypeSafe integration (read 2026-09-24, see 03 related work)

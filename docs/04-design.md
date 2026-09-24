@@ -253,6 +253,28 @@ Change a live judgment safely: the app keeps answering with the live spec while 
 - Fixed on the way: `diff` said "accuracy on the 40 shared rows" when 3 had gold; it now counts rows with gold (never visible before because every dataset had gold on every row).
 - Not done: the candidate adds latency (the slower of the two, not fire-and-forget; an `asyncio.run` per call can't outlive the call); traffic is logged only when shadowing, so a candidate written later can't be replayed on past traffic; logged rows are raw inputs kept in the local store (redaction, 06, applies here too).
 
+## Findings, round 9: real developer ↔ agent conversations (2026-09-24)
+
+The first-user workload for real: 28 Claude Code sessions from Trace Commons (CC BY 4.0, real developers, public repos) → 309 turns (`examples/claude_code/prepare.py`: request, the agent's final reply, the developer's next message; `edits` and `ran_after_edit` computed in code). Two judgments, $0.020:
+
+- `outcome` (from the developer's next message: worked / failed / redirected / unclear): 189 / 75 / 32 / 13.
+- `claims_done` (from the final reply only, so it can run live): does the agent say the work is done?
+
+**Checked by a blind panel** (3 reviewers, 60 random turns, same definitions, no model answers shown; `review_panel/claude_code/`): `outcome` 90% (95% CI 80–95%), `claims_done` 88% (78–94%); reviewers agree with each other at kappa 0.88 / 0.86. Jev's `outcome` errors lean one way: 5 of 6 say "worked" where the panel saw failed or redirected, so failure rates below are, if anything, low. At act = 0.80 `outcome` labels 77% of turns at 2.2% error.
+
+**Does running something after editing matter?** Among turns where the agent edited files and claimed it was done:
+
+| after the last edit, the agent… | turns | the developer reports it didn't work |
+|---|---|---|
+| ran nothing | 142 | 33% |
+| ran a command | 31 | 16% |
+
+Fisher p = 0.045 per turn, but turns cluster in 23 sessions: a session bootstrap puts the gap at +17 points, 95% CI −1 to +30. Suggestive, like agent_eval's `verified` (p = 0.079), not proven; "ran a command" is any Bash call, not necessarily a test.
+
+**Gold only from reviews broke `test`** (the normal case for live traffic and any new judgment): the estimator assumed an answer key, reported "0.0%, PASS" and then crashed. Now: with no key, random audits estimate every row (hits / audited, Wilson interval), and `review` draws its audits from every row. The audit quota counts only `audit` reviews (the Phase 2 fix already assumed this). BANKING77 estimates unchanged (95.8%, 87.5%).
+
+**Reading the format:** Claude Code 2.1 has no `origin` field, so a human message is a user message that is not a tool result, meta, a sidechain, a compaction summary, or wholly harness-injected tags (IDE selection, `!` shell I/O, reminders); `promptSource: sdk` turned out to be people in the VS Code extension. An interruption is a reaction, not a request.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

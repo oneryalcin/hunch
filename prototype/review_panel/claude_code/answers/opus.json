@@ -1,0 +1,302 @@
+[
+ {
+  "n": 1,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 2,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 3,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 4,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 5,
+  "outcome": "redirected",
+  "claims_done": "yes"
+ },
+ {
+  "n": 6,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 7,
+  "outcome": "worked",
+  "claims_done": "no"
+ },
+ {
+  "n": 8,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 9,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 10,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 11,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 12,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 13,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 14,
+  "outcome": "redirected",
+  "claims_done": "yes"
+ },
+ {
+  "n": 15,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 16,
+  "outcome": "unclear",
+  "claims_done": "no"
+ },
+ {
+  "n": 17,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 18,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 19,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 20,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 21,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 22,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 23,
+  "outcome": "unclear",
+  "claims_done": "yes"
+ },
+ {
+  "n": 24,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 25,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 26,
+  "outcome": "unclear",
+  "claims_done": "no"
+ },
+ {
+  "n": 27,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 28,
+  "outcome": "failed",
+  "claims_done": "no"
+ },
+ {
+  "n": 29,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 30,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 31,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 32,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 33,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 34,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 35,
+  "outcome": "unclear",
+  "claims_done": "no"
+ },
+ {
+  "n": 36,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 37,
+  "outcome": "worked",
+  "claims_done": "no"
+ },
+ {
+  "n": 38,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 39,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 40,
+  "outcome": "worked",
+  "claims_done": "no"
+ },
+ {
+  "n": 41,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 42,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 43,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 44,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 45,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 46,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 47,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 48,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 49,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 50,
+  "outcome": "redirected",
+  "claims_done": "yes"
+ },
+ {
+  "n": 51,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 52,
+  "outcome": "redirected",
+  "claims_done": "no"
+ },
+ {
+  "n": 53,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 54,
+  "outcome": "worked",
+  "claims_done": "no"
+ },
+ {
+  "n": 55,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 56,
+  "outcome": "worked",
+  "claims_done": "yes"
+ },
+ {
+  "n": 57,
+  "outcome": "unclear",
+  "claims_done": "yes"
+ },
+ {
+  "n": 58,
+  "outcome": "worked",
+  "claims_done": "no"
+ },
+ {
+  "n": 59,
+  "outcome": "failed",
+  "claims_done": "yes"
+ },
+ {
+  "n": 60,
+  "outcome": "worked",
+  "claims_done": "no"
+ }
+]

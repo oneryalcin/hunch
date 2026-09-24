@@ -1,0 +1,20 @@
+# How did the turn go? Read from what the developer wrote next: the closest thing to free gold in a
+# conversation. Check it with a review before trusting it (hunch review . --node outcome).
+judgment: outcome
+model: jev-1.13.0
+source: turns.csv   # built by prepare.py (gitignored)
+key: id
+state: [request, final_reply, next_message]
+questions:
+  outcome:
+    type: choice
+    instructions: >-
+      A developer asked a coding agent for something (`request`). `final_reply` is the agent's last message
+      for that turn and `next_message` is what the developer wrote next. Judging mainly from `next_message`,
+      how did the agent's turn go?
+    criteria:
+      worked: The developer accepts the result or moves on (thanks, approval, a next step that builds on it, a new unrelated task)
+      failed: The developer reports it did not work (the same or a new error, a bug, wrong output, "still broken", or pastes an error log)
+      redirected: The developer says the agent misunderstood, took the wrong approach, or should stop or undo; an interruption counts
+      unclear: The next message does not show whether the turn worked
+    act: 0.80

@@ -1,15 +1,22 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Claude Code transcripts (~/.claude/projects/*/*.jsonl) → turns.csv, one row per human turn.
+"""Claude Code transcripts (session .jsonl files) → turns.csv, one row per human turn.
 
 A turn: the human's request, what the agent did (tool counts, computed here: rules stay in code),
 its final reply, and the human's next message (their reaction, the closest thing to free gold).
 
-Only projects whose folder name contains an --include pattern are read. Secrets, emails and the home
-path are redacted here, before anything is written; turns.csv is gitignored and never committed.
+Public sessions (Trace Commons, CC BY 4.0: real developers, anonymized by each contributor, public repos):
+
+    uvx --from huggingface_hub hf download trace-commons/agent-traces --repo-type dataset \
+        --include "sessions/claude_code/*" --local-dir .cache/trace-commons
+    uv run prepare.py --root .cache/trace-commons/sessions/claude_code
+
+Your own (~/.claude/projects), only project folders whose name contains an --include pattern:
 
     uv run prepare.py --include dev-personal dev-games private-tmp
+
+Secrets, emails and the home path are redacted before anything is written; turns.csv is gitignored.
 """
 import argparse
 import csv
@@ -50,13 +57,25 @@ def text_of(content) -> str:
     return "\n".join(b.get("text", "") for b in content if b.get("type") == "text")
 
 
-def is_human(r: dict) -> bool:
+TAGGED = re.compile(r"<(ide_\w+|bash-\w+|command-\w+|local-command-\w+|system-reminder|task-notification|"
+                    r"teammate-message|user-prompt-submit-hook)[^>]*>.*?</\1>", re.S)  # injected by the harness
+INTERRUPT = "[Request interrupted by user"
+
+
+def human_text(r: dict) -> str | None:
+    """What a person typed, or None. `origin` exists only in newer Claude Code versions (2.1 has none), so the
+    fallback is: a user message that isn't a tool result, meta, a sidechain, or wholly harness-injected tags."""
     if r.get("type") != "user" or r.get("isSidechain") or r.get("isMeta"):
-        return False
-    if (r.get("origin") or {}).get("kind") != "human":
-        return False
-    t = text_of(r["message"]["content"]).strip()
-    return bool(t) and not t.startswith(("<command-", "<local-command", "/"))
+        return None
+    if (r.get("origin") or {}).get("kind") not in (None, "human"):
+        return None
+    content = r["message"]["content"]
+    if isinstance(content, list) and any(b.get("type") == "tool_result" for b in content):
+        return None
+    t = TAGGED.sub("", text_of(content)).strip()
+    if not t or t.startswith(("<", "/", "This session is being continued")):
+        return None
+    return t
 
 
 def turns(path: str) -> list[dict]:
@@ -69,8 +88,8 @@ def turns(path: str) -> list[dict]:
     session = Path(path).stem
     out, cur = [], None
     for r in recs:
-        if is_human(r):
-            text = text_of(r["message"]["content"]).strip()
+        text = human_text(r)
+        if text is not None:
             if cur:
                 cur["next_message"] = text
                 out.append(cur)
@@ -87,17 +106,23 @@ def turns(path: str) -> list[dict]:
                         cur["ran_after_edit"] = False
                     elif b["name"] == "Bash" and cur["edits"]:
                         cur["ran_after_edit"] = True
-    # the last turn has no reaction yet: dropped
-    return [{"id": f"{session[:8]}#{i}", **t} for i, t in enumerate(out) if t["final_reply"]]
+    # the last turn has no reaction yet: dropped; an interrupt is a reaction, not a request
+    return [{"id": f"{session[:8]}#{i}", **t} for i, t in enumerate(out)
+            if t["final_reply"] and not t["request"].startswith(INTERRUPT)]
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--include", nargs="+", required=True, help="project folder name substrings to read")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--root", type=Path, help="read every .jsonl under this folder")
+    src.add_argument("--include", nargs="+", help="~/.claude/projects folder name substrings to read")
     p.add_argument("--out", default=Path(__file__).with_name("turns.csv"))
     args = p.parse_args()
-    files = sorted(f for f in glob.glob(os.path.join(HOME, ".claude/projects/*/*.jsonl"))
-                   if any(k in Path(f).parent.name for k in args.include))
+    if args.root:
+        files = sorted(glob.glob(str(args.root / "**/*.jsonl"), recursive=True))
+    else:
+        files = sorted(f for f in glob.glob(os.path.join(HOME, ".claude/projects/*/*.jsonl"))
+                       if any(k in Path(f).parent.name for k in args.include))
     rows = [t for f in files for t in turns(f)]
     for r in rows:
         r["request"] = clip(redact(r["request"]), CLIP["request"])

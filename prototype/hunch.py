@@ -937,6 +937,13 @@ def estimate_accuracy(its: list[dict], answers: dict) -> tuple[float, float, flo
     Returns a reason instead of an estimate unless agreements have an audit and *every* disagreement is reviewed:
     reviews made for another judgment (shared gold) are not a random sample of this one's disagreements
     (BANKING77 tree: the 24 it never had reviewed were almost all its own errors; extrapolating said 89.1%)."""
+    if not any(it["raw_gold"] for it in its):  # no answer key: gold only from reviews; random audits estimate all rows
+        audits = [it for it in its if it["gold_src"] == "review" and it["review_kind"] == "audit"]
+        if not audits:
+            return "no answer key and no random audits yet (hunch review)"
+        k, n = sum(hit(it, answers[it["key"]]) for it in audits), len(audits)
+        lo, hi = (k / n, k / n) if n >= len(its) else wilson(k, n)
+        return k / n, lo, hi, {"random": (n, len(its))}
     groups: dict[str, list[dict]] = {"agree": [], "disagree": []}
     for it in its:
         if it["raw_gold"] and it["gold_src"] != "excluded":
@@ -1010,7 +1017,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     print(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
           f"{f', {both} with two acceptable labels' if both else ''}"
           f"{f', {src['excluded']} excluded as ambiguous' if src['excluded'] else ''})")
-    reviewed = src["review"] + src["excluded"] > 0
+    reviewed = src["review"] + src["excluded"] > 0 and any(it["raw_gold"] for it in its)  # raw vs reviewed needs a key
 
     weights, note = None, ""
     if any("_w" in it["row"] for it in gold_its):
@@ -1030,9 +1037,11 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         # disagreements are corrected it only errs upward.
         e, lo, hi, d = est
         check(e >= want, f"estimated accuracy {e:.1%} (95% CI {lo:.1%}–{hi:.1%}) from reviews of "
-              + ", ".join(f"{n}/{m} {g}ing rows" for g, (n, m) in d.items()) + f" (min {want:.0%})")
-        print(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
-              f"on the raw answer key {accuracy(its, answers, qid, 'raw_gold'):.1%}")
+              + ", ".join(f"{n}/{m} {g if g == 'random' else g + 'ing'} rows" for g, (n, m) in d.items())
+              + f" (min {want:.0%})")
+        if "random" not in d:
+            print(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
+                  f"on the raw answer key {accuracy(its, answers, qid, 'raw_gold'):.1%}")
     else:
         raw = f" (raw source gold: {accuracy(its, answers, qid, 'raw_gold'):.1%})" if reviewed else ""
         check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})")
@@ -1220,28 +1229,32 @@ def review_queue(items: list[dict], answers: dict, audit: int, other: dict | Non
     """shadow (with --against): the other spec answers this row differently. Reviewing just these decides which
       spec is better (diff's paired test only needs gold where they differ), so they come first.
     disputed: model ≠ source answer key (a model error, or a gold error); all of them, most confident first.
-    audit: a fixed random sample of rows where model = answer key, topped up to `audit` reviewed rows per question.
-      Without it, reviewing only disputes can only move accuracy up.
+    audit: a fixed random sample of rows where model = answer key (of every row, if there is no key), topped up to
+      `audit` audited rows per question. Without it, reviewing only disputes can only move accuracy up.
     uncertain: no gold and below the act threshold (a human label makes it gold).
     Rows with a current verdict are done."""
-    shadow, disputed, uncertain, agree = [], [], [], {}
+    shadow, disputed, uncertain, pool = [], [], [], {}
     audited = Counter()
+    has_key = {it["qid"] for it in items if it["raw_gold"]}
     for it in items:
         a = answers[it["key"]]
         agrees = bool(it["raw_gold"]) and hit(it, a, "raw_gold")
         if it["gold_src"] in ("review", "excluded"):
-            audited[it["qid"]] += agrees
+            audited[it["qid"]] += it["review_kind"] == "audit"
             continue
         if other and (it["id"], it["qid"]) in other:
             shadow.append(it)
         elif it["raw_gold"] and not agrees:
             disputed.append(it)
-        elif agrees:
-            agree.setdefault(it["qid"], []).append(it)
-        elif not it["raw_gold"] and route(it["q"], a, it.get("path_p", 1.0)) == "review":
-            uncertain.append(it)
-    audits = [it for qid, members in agree.items()
+        else:
+            if agrees or it["qid"] not in has_key:  # no answer key: the audit samples every row
+                pool.setdefault(it["qid"], []).append(it)
+            if not it["raw_gold"] and route(it["q"], a, it.get("path_p", 1.0)) == "review":
+                uncertain.append(it)
+    audits = [it for qid, members in pool.items()
               for it in sorted(members, key=lambda it: digest([it["qid"], it["id"]]))[: max(0, audit - audited[qid])]]
+    chosen = {id(it) for it in audits}
+    uncertain = [it for it in uncertain if id(it) not in chosen]
     disputed.sort(key=lambda it: -conf_of(it, answers[it["key"]]))
     uncertain.sort(key=lambda it: conf_of(it, answers[it["key"]]))
     return ([("shadow", it) for it in shadow] + [("disputed", it) for it in disputed] + [("audit", it) for it in audits]
@@ -1267,8 +1280,8 @@ def cmd_review(project: dict, args) -> None:
         other = {k: oa for k, oa in other.items() if k in by and decide(oa)[0] != decide(by[k])[0]}
     queue = review_queue(items, answers, args.audit, other)
     kinds = Counter(k for k, _ in queue)
-    print(f"review queue: {kinds['shadow']} shadow (--against answers differently), {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows where "
-          f"they agree), {kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
+    print(f"review queue: {kinds['shadow']} shadow (--against answers differently), {kinds['disputed']} disputed (model ≠ answer key), {kinds['audit']} audit (random rows: where "
+          f"model = key, or any row if no key), {kinds['uncertain']} uncertain (below act, no gold) → verdicts go to {reviews_path(spec).name}")
     queue = queue[: args.limit] if args.limit else queue
     if args.list:
         for kind, it in queue:

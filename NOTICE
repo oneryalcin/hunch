@@ -9,3 +9,6 @@ This product includes third-party data:
 - prototype/examples/swe_agent/traces.csv: derived sample of SWE-agent-trajectories by Nebius
   (https://huggingface.co/datasets/nebius/SWE-agent-trajectories), licensed CC BY 4.0.
   See prototype/examples/swe_agent/NOTICE.md.
+- prototype/review_panel/claude_code/packets/*.json: excerpts of Trace Commons — Agent Traces
+  (https://huggingface.co/datasets/trace-commons/agent-traces), licensed CC BY 4.0.
+  See prototype/examples/claude_code/NOTICE.md.

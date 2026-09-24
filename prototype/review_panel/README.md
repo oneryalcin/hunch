@@ -48,3 +48,14 @@ An adversarial review of Phase 2 pointed out that the tree's accuracy estimate r
 - Answer key right, tree wrong: 19. Both acceptable: 5. Tree right, key wrong: 0. Unanimous on 19 of 24.
 - Tree estimate with all 69 of its disagreements reviewed: **87.5% (95% CI 80.0–89.8%)**, not the 89.1% first reported.
 - The same 24 reviews then briefly inflated the *flat* estimate (they sit in flat's agreeing rows but were chosen because the tree failed). Reviews now record `kind`: `audit` (random) or `disputed`; only audits stand in for unreviewed agreeing rows. Flat is back to 95.8%.
+
+## Round 3: Claude Code turns (no answer key)
+
+60 random turns from `examples/claude_code` (`claude_code/`: `build.py` → packets, `score.py`, `to_reviews.py`). Each reviewer labels `outcome` (worked / failed / redirected / unclear, from the developer's next message) and `claims_done` (does the final reply say the work is done?), with the spec's own definitions and no model answers.
+
+| | Jev = reviewer majority | reviewers agree |
+|---|---|---|
+| outcome | 54/60, 90% (95% CI 80–95%) | kappa 0.88, unanimous 53/60 |
+| claims_done | 53/60, 88% (78–94%) | kappa 0.86, unanimous 54/60 |
+
+Jev's `outcome` errors: failed → worked ×2, redirected → worked ×2, redirected → unclear, unclear → worked. `claims_done`: yes → no ×5, no → yes ×2. The majority labels are the judgments' reviews (`kind=audit`, a random sample), so `hunch test examples/claude_code` reports the same estimates.
