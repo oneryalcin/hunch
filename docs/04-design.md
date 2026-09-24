@@ -177,6 +177,18 @@ Full numbers in `prototype/README.md`. Dev 770 rows, disjoint holdout 385, 77 in
 - **Store must be multi-process.** DuckDB single-writer lock: `judge()` fails whenever a batch runs. SQLite WAL: 0 errors in ~47k mixed concurrent ops, but tail latency up to 2.8 s under a bulk writer, and WAL must be enabled once at creation. → Online path: read-only lookups on the hot path, writes queued off the request path. Server edition: Postgres. DuckDB stays useful for analytics over materialized results, not as the cache.
 - Costs: 77-option request ≈ 2k input tokens ($0.00009/row); whole round $0.30.
 
+## Findings, round 3: store, review, lint, agent-trace evals (2026-09-24)
+
+- **Store: SQLite WAL works for batch + online on one machine.** Online `judge()` during a real batch writing 200 answers: 63 hits, p50 0.6 ms, p99 3.0 ms, 0 errors (DuckDB failed outright). Direct short write transactions were enough; the 2.8 s stalls in the earlier synthetic test came from tight-loop 200-row transactions, not realistic load. WAL must be switched on with retries (it needs a moment alone with the file). Server edition still wants Postgres.
+- **Save each response as it arrives.** The first prototype saved only after every request finished: one failure lost everything already paid for. Now a failed run reports how many answers were saved and a re-run asks only for the rest.
+- **Normalize line endings in the state, both sent and hashed.** A stress test "found" a cache bug that was really `\r\n` vs `\n` (174 of 200 traces differ). Apps posting forms and batches reading files would silently miss and possibly get different answers. Scores barely moved after normalizing (AUROC 0.834 → 0.835), so the ending carries no meaning here. Normalizing only the hash would be wrong: two different inputs would share a key.
+- **Reviews belong in git, not in the cache.** Verdicts go to `<judgment>.reviews.csv` next to the spec, keyed by row id + hash of the row's text (a verdict on text that changed is ignored). Review queue = *disputed* (confident answer ≠ gold) + *uncertain* (below act, no gold).
+- **Gold correction moves every metric.** 13 reviewed rows (3% of holdout): accuracy 88.3% → 91.0%, calibration error 0.053 → 0.030, auto-acted accuracy 95.8% → 99.3%. **But reviewing only disputes is biased toward the model** (wrong gold that agrees with the model is never seen). → The queue needs a random audit slice to estimate gold error everywhere; report reviewed-gold numbers as an upper bound until then.
+- **Lint must not block on missing gold.** Production rows have no gold; a missing gold column is a warning (still catches typos), not an error. Found by the online demo.
+- **Agent-trace evals work, as triage.** Resolved-or-not from issue + patch + final messages: AUROC 0.835 without running tests. Confident "no" is reliable (p < 0.2 → 51/53 failed); confident "yes" is rare. → Noul routing needs **asymmetric thresholds** (`act_yes`, `act_no`), not one `act` on max(p, 1−p).
+- **Overclaiming is measurable.** Agents claimed a fix in 153/200 runs and 39% of those failed; a cheap per-turn check flags a third of the false claims with few false alarms.
+- **Sampling changes calibration.** A 50/50 sample of a ~17%-base-rate population makes a well-calibrated judge look underconfident. Calibration tests need samples at the production base rate, or reweighting.
+
 ### Resolved open questions
 
 - Order stability costs N× calls → run on a deterministic sample (stable across runs, so cached). 150 rows × 2 permutations = $0.03.

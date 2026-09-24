@@ -39,7 +39,7 @@ Companies now classify tickets, transactions, companies, documents, leads, and L
 
 ## Status
 
-Throwaway prototype in [`prototype/`](prototype/README.md): content-addressed cache, statistical tests, backtest diff with significance, online `judge()`, validated on BANKING77 (dev + holdout). Findings that shape the real build are in [docs/04-design.md](docs/04-design.md).
+Throwaway prototype in [`prototype/`](prototype/README.md): content-addressed store shared by batch and online `judge()` (SQLite WAL), lint, statistical tests, backtest diff with significance, review queue with gold correction. Validated on BANKING77 (intent classification, dev + holdout) and SWE-agent trajectories (agent-run evals). Findings that shape the real build are in [docs/04-design.md](docs/04-design.md).
 
 ## Name availability (checked 2026-09-24)
 

@@ -5,59 +5,76 @@ Throwaway single-file prototype of hunch's core loop (see `docs/04-design.md`). 
 ```sh
 export TYPESAFE_AI_API_KEY=...        # or TYPESAFE_API_KEY
 cd examples/banking77
+uv run ../../hunch.py lint    intent.yml                    # spec checks (also run before every command)
 uv run ../../hunch.py compile intent.yml                    # exact request payload + cost estimate
-uv run ../../hunch.py run     intent.yml                    # ask what's missing, materialize table in .hunch/store.duckdb
-uv run ../../hunch.py test    intent.yml [--source holdout.csv]   # accuracy, calibration, dial, confident mistakes, order stability
+uv run ../../hunch.py run     intent.yml                    # ask what's missing, materialize table in .hunch/store.sqlite
+uv run ../../hunch.py test    intent.yml [--source holdout.csv]   # accuracy, calibration, AUROC, dial, confident mistakes, order stability
 uv run ../../hunch.py diff    intent.yml --against git:HEAD [--source ...]   # flips, fixed/broken, sign test
-uv run online_demo.py                                       # judge() from an app, same cache as batch
+uv run ../../hunch.py review  intent.yml [--list] [--limit N]    # disputed + uncertain rows → <judgment>.reviews.csv
+uv run online_demo.py                                       # judge() from an app, same store as batch
 ```
 
-Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `order_stability: {sample, permutations, max_flip_rate}`.
+Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `order_stability: {sample, permutations, max_flip_rate}` (choice).
 
 ## What it does
 
-- **Content-addressed cache**: `key = sha256(model, state, question)` per (row, question), **order-preserving** (option order is model input). DuckDB.
+- **Content-addressed store**: `key = sha256(model, state, question)` per (row, question), order-preserving, line endings normalized in what is sent *and* hashed. SQLite in WAL mode: batch runs and apps share it. Each response is saved as it arrives, so a failure part-way loses nothing already paid for; retries honour `retry-after`.
 - **Read once**: all uncached questions of a row (incl. permuted variants) go in one request.
-- **test**: gold accuracy; expected calibration error + reliability table; the dial (automated % vs error among automated per threshold); most confident mistakes (dangerous, or gold errors); most confused pairs; option-order stability on a deterministic sample (reversed + seeded shuffles, answers cached too).
-- **diff**: old spec (file or `git:REF`) on *today's* data; flips, ✓ fixed / ✗ broken, **paired sign test**, `~noise` flag near the boundary.
+- **lint**: unknown keys (typos), act range, missing columns, API limits, and *partially described choice options* (measured to hurt).
+- **test**: accuracy; calibration error + reliability table; AUROC for yes/no; the dial (automated % vs error among automated); most confident mistakes; confusion pairs; option-order stability. With reviews, shows reviewed-gold and raw-gold numbers side by side.
+- **diff**: old spec (file or `git:REF`) on *today's* data; flips, ✓ fixed / ✗ broken, paired sign test, `~noise` flag.
+- **review**: queue of *disputed* rows (confident answer ≠ gold: a model error or a gold error) and *uncertain* rows (below `act`, no gold). Verdicts (`model_right`, `key_right`, `labeled`, `ambiguous`) append to `<judgment>.reviews.csv` next to the spec, tied to a hash of the row's text; they override gold in `test`/`diff`, `ambiguous` drops the row from scoring.
 - **online**: `judge(spec, **fields)` / `ajudge` share keys with batch in both directions.
 
 ## Examples
 
-- `examples/tickets/`: 40 hand-written support tickets. Too easy; useful as a smoke test only.
-- `examples/banking77/`: 770-row dev + 385-row disjoint holdout from BANKING77 (77 intents, real messy queries, CC BY 4.0, see NOTICE). `intent.yml` is v3 (all 77 options described from the **train** split).
+- `examples/tickets/`: 40 hand-written support tickets. Smoke test only.
+- `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
+- `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it?
 
-## Results
+## Results (jev-1.13.0, 2026-09-24)
 
-### tickets (2026-09-24, jev-1.13.0)
+### tickets
 
 | Step | Calls | Cost | Result |
 |---|---|---|---|
 | First `run`, 40 × 3 questions | 40 requests, 1.8 s | $0.0007 | |
 | Second `run` | 0 | $0 | 0.18 s |
-| Add option descriptions, `diff` | 40 (department only) | $0.0007 | 1 flip (#21 fixed), 97.5% → 100%, **sign test p=1.0: not evidence** |
-| Change only `act` | 0 | $0 | re-routes rows |
-| Reword `urgent`, `diff` | 40 | $0.0005 | 10/40 flip, e.g. "Custom contract" → urgent (bad), visible before shipping |
+| Add option descriptions, `diff` | 40 | $0.0007 | 1 flip fixed; sign test p=1.0: not evidence |
+| Reword `urgent`, `diff` | 40 | $0.0005 | 10/40 flip, e.g. "Custom contract" → urgent, visible before shipping |
 
-### banking77 — three spec versions, scored on dev (770) and holdout (385)
+### banking77: three spec versions, dev (770) and holdout (385)
 
-| Version | Dev acc | Holdout acc | Holdout vs v1 (fixed/broken, p) | Holdout calib. error | Holdout automated @0.90 (error) | Holdout order flips |
+| Version | Dev acc | Holdout acc | Holdout vs v1 (fixed/broken, p) | Holdout calib. error | Holdout automated @0.90 (error) | Order flips |
 |---|---|---|---|---|---|---|
 | v1 bare labels | 78.6% | 82.3% | — | 0.066 | 68% (6.9%) | 6.7% |
-| v2 29 confused intents described | 81.8% | 84.4% | 22/14, p=0.24 **n.s.** | 0.053 | 69% (6.0%) | 8.3% |
+| v2 29 of 77 described | 81.8% | 84.4% | 22/14, p=0.24 n.s. | 0.053 | 69% (6.0%) | 8.3% |
 | v3 all 77 described | 85.5% | **88.3%** | 28/5, **p<0.001** | 0.053 | **81% (4.2%)** | **3.7%** |
 
-v3 holdout dial: 0.99 → 65% automated at 2.0% error; 0.95 → 76% at 3.7%.
+**Review of the 13 holdout disputes** (v3, act 0.90): 4 model right, 2 answer key right, 7 ambiguous.
 
-Order test on v1 dev: every flip had original p ≤ 0.74 → order effects live below any sensible `act`.
+| v3 holdout | raw gold | reviewed gold |
+|---|---|---|
+| accuracy | 88.3% | 91.0% |
+| calibration error | 0.053 | 0.030 |
+| top bin stated → observed | 0.990 → 0.958 | 0.991 → 0.993 |
+| accuracy among auto-acted @0.90 | 95.8% (81% of rows) | 99.3% (80%) |
 
-**Gold noise.** Adjudicated (by Claude, not a human) every mistake with p ≥ 0.99 on v1 dev (16) and p ≥ 0.97 on v3 holdout (7): 13 gold wrong, 10 ambiguous (dataset conventions conflict, e.g. near-identical train examples under different intents), **0 clearly Jev wrong**. Measured calibration error is partly gold error.
+Caveat: only disputes were reviewed (rows where the model disagreed). Rows where a wrong gold label *agrees* with the model are never checked, and dropping ambiguous rows only among disputes flatters accuracy. Treat 91.0% as an upper bound; the real queue needs a random audit slice.
 
-### online (banking77)
+### swe_agent: judging real agent runs (200 traces, balanced 100/100)
 
-- Row already judged by batch → `judge()` cache hit, 9–20 ms (mostly opening DuckDB per call).
-- New text → 790 ms (77-option request ≈ 2k tokens), then 9 ms; a later batch over it: 1 cached, $0.
-- **While a batch holds the store, `judge()` fails** (`Could not set lock on file`): DuckDB is single-writer-process.
-- SQLite WAL throwaway test (1 bulk writer + 2 online read/write loops, 3 s): 0 errors / ~47k ops, but worst single op up to 2.8 s under write contention. And switching to WAL must happen once at store creation (concurrent first opens raced: `database is locked`).
+- `resolved` (does the patch pass the hidden tests?): **AUROC 0.835**, accuracy 74.5%. Calibration error 0.114, partly an artifact of the 50/50 sample (real pass rate ≈17%).
+- Asymmetric: when p(resolved) < 0.2, **51 of 53** actually failed. At act 0.90 only 15.5% of rows are confidently decided (3.2% error). Yes/no questions need separate yes and no thresholds.
+- Overclaiming: agents claimed a fix in 153/200 runs; **60 of those (39%) failed** the tests. Jev put 20 of the 60 below p=0.2. `claims_fixed` has no gold, so that column is unverified.
 
-Total API spend for everything above: **$0.30** (4,826 answers).
+### online and the store
+
+| Situation | Result |
+|---|---|
+| Row already judged by batch | 0.5–6 ms |
+| New text | ~600 ms, then stored for everyone |
+| **`judge()` while a real batch writes 200 answers** (SQLite WAL) | **63 hits, p50 0.6 ms, p99 3.0 ms, 0 errors** (DuckDB: crashed) |
+| Same text, `\r\n` vs `\n` | was a miss (174/200 traces differ); fixed by normalizing line endings |
+
+Total API spend for everything: **$0.37**.

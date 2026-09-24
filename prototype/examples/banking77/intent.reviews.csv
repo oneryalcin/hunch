@@ -1,0 +1,14 @@
+qid,row_id,state_hash,verdict,label,reviewer,at
+intent,1394,ef789be13d0e10bc,model_right,get_disposable_virtual_card,claude,2026-09-24T13:30:28+00:00
+intent,2176,4ef69292f1d78405,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,2691,54cbac126ea54aeb,model_right,transfer_timing,claude,2026-09-24T13:30:28+00:00
+intent,899,4baa23a822766343,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,2576,c4c20b491f401663,model_right,cash_withdrawal_charge,claude,2026-09-24T13:30:28+00:00
+intent,1008,185f4678b5fe2f29,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,1192,cdd986d394953c51,model_right,verify_my_identity,claude,2026-09-24T13:30:28+00:00
+intent,621,e82b944b79420930,key_right,top_up_by_bank_transfer_charge,claude,2026-09-24T13:30:28+00:00
+intent,828,1541d227d47044c3,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,1337,59cb5fce5d49bad8,key_right,topping_up_by_card,claude,2026-09-24T13:30:28+00:00
+intent,2233,9eb772b52d7e97a6,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,22,30758c8f037e78f1,ambiguous,,claude,2026-09-24T13:30:28+00:00
+intent,773,d30fcdf5f5c775e7,ambiguous,,claude,2026-09-24T13:30:28+00:00
