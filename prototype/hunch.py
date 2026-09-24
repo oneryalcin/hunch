@@ -79,7 +79,7 @@ SpecLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true
 
 def load_spec(path: Path, text: str | None = None) -> dict:
     spec = yaml.load(text if text is not None else path.read_text(), Loader=SpecLoader)
-    if "model" in spec and spec["model"].endswith("latest"):
+    if "model" in spec and (spec["model"].endswith("latest") or ":~" in spec["model"]):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
     spec["_dir"] = path.parent
     return spec
@@ -271,7 +271,8 @@ def item(spec: dict, row: dict, qid: str, aq: dict | None = None, variant: str =
     state = state_of(spec, row)
     return {"row": row, "id": str(row.get(spec["key"], "online")), "qid": qid, "rid": qid + variant, "spec": spec,
             "q": q, "aq": aq, "state": state, "shash": digest(state)[:16],
-            "key": digest({"model": spec["model"], "state": state, "question": aq})}
+            "key": digest({"model": spec["model"], "state": state, "question": aq,
+                           **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else {})})}
 
 
 def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:
@@ -458,13 +459,114 @@ def cached(db, keys: list[str]) -> dict[str, dict]:
 
 # ---------- engine ----------
 
-async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions: dict) -> dict:
-    body = {"model": model, "state": state, "questions": questions}
+# ---------- engines ----------
+# A spec's `model` picks the engine: "jev-…" is TypeSafe's System One; "<endpoint>:<id>" is an LLM read through
+# its first answer token's log-probabilities. Both return the same answer shapes, so everything downstream
+# (routing, tests, diff, review) is engine-neutral, and the model is part of every cache key.
+
+OPENROUTER = "https://openrouter.ai/api/v1"
+ENDPOINTS = {  # OpenAI-compatible chat APIs that return top logprobs
+    "openrouter": {"base": OPENROUTER, "key": "OPENROUTER_API_KEY"},  # prices from its model listing
+    "deepseek": {"base": "https://api.deepseek.com", "key": "DEEPSEEK_API_KEY", "body": {"thinking": {"type": "disabled"}},
+                 "price": (0.15e-6, 0.60e-6)},  # list price per token (in, out); cache hits and off-peak cost less
+}
+LLM_ADAPTER = "logprobs-v1"  # part of an LLM answer's key: temperature 1, top-20, numbered options, question first
+LLM_OVERHEAD_TOKENS = 40  # prompt scaffolding per request beyond ~chars/4
+_llm_prices: dict[str, float] = {}
+_reasoning: dict[str, dict] = {}  # per model: reasoning off where allowed (it hides logprobs), else minimal
+
+
+def is_llm(model: str) -> bool:
+    return model.split(":", 1)[0] in ENDPOINTS
+
+
+def endpoint(model: str) -> dict:
+    return ENDPOINTS[model.split(":", 1)[0]]
+
+
+def price_per_token(model: str) -> float:
+    """Input price. For an LLM: OpenRouter's listed prompt price (an upper bound: cached prefixes cost less,
+    and the few output tokens are ignored in estimates; spend is always the provider's reported cost)."""
+    if not is_llm(model):
+        return PRICE_PER_INPUT_TOKEN
+    if "price" in endpoint(model):
+        return endpoint(model)["price"][0]
+    if not _llm_prices:
+        for m in httpx.get(f"{OPENROUTER}/models", timeout=30).json()["data"]:
+            _llm_prices[m["id"]] = float(m["pricing"]["prompt"])
+    return _llm_prices[llm_route(model)[0]]
+
+
+def llm_route(model: str) -> tuple[str, dict]:
+    """"<endpoint>:<id>[@provider]" → (id, OpenRouter provider preferences). Pin a provider for reproducible
+    answers: providers serve different builds of one model, and some ignore "reasoning off"."""
+    mid, _, provider = model.split(":", 1)[1].partition("@")
+    pref = {"require_parameters": True, **({"only": [provider]} if provider else {"sort": "price"})}
+    return mid, pref
+
+
+def estimate_cost(model: str, groups: list[list[dict]]) -> float:
+    if not is_llm(model):
+        return estimate_tokens(groups) * PRICE_PER_INPUT_TOKEN
+    tokens = sum((len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4 + LLM_OVERHEAD_TOKENS
+                 for g in groups for it in g)  # one request per question
+    return tokens * price_per_token(model)
+
+
+def llm_prompt(aq: dict, state: dict) -> tuple[str, list[str], list[str]]:
+    """(prompt, answer codes, labels). The fixed part (question, options) comes first so providers can cache it
+    across rows; the row's input comes last. Options are numbered: one short token each, whatever the label."""
+    t = aq["type"]
+    if t == "choice":
+        labels = list(aq["criteria"])
+        opts = "\n".join(f"{i}. {k}: {v}" if v else f"{i}. {k}" for i, (k, v) in enumerate(aq["criteria"].items(), 1))
+        codes, tail = [str(i) for i in range(1, len(labels) + 1)], "Answer with only the number of the best option."
+    elif t == "noul":
+        labels = codes = ["yes", "no"]
+        opts, tail = "", "Answer with only yes or no."
+    elif t == "score":
+        labels = list(aq["criteria"])
+        opts = "\n".join(f"{i}. {k}" for i, k in enumerate(labels))
+        codes, tail = [str(i) for i in range(len(labels))], "Answer with only the number of the level that fits best."
+    else:
+        raise ValueError(f"engine openrouter: unsupported question type {t!r}")
+    q = aq["instructions"] if isinstance(aq["instructions"], str) else json.dumps(aq["instructions"], ensure_ascii=False)
+    prompt = (f"Question: {q}\n" + (f"\nOptions:\n{opts}\n" if opts else "")
+              + f"\n{tail}\n\nInput (JSON):\n{json.dumps(state, ensure_ascii=False)}")
+    return prompt, codes, labels
+
+
+def llm_answer(aq: dict, codes: list[str], labels: list[str], logprobs: list[dict]) -> dict:
+    """Probabilities over the options from the first token that is an answer code, renormalised over codes
+    (top-20 logprobs: options outside the top 20 get 0). Same shapes as Jev's answers."""
+    pos = next((x for x in logprobs if any(y["token"].strip().lower() in codes for y in x["top_logprobs"])), None)
+    if pos is None:
+        raise RuntimeError(f"no answer code among the output tokens {[x['token'] for x in logprobs[:5]]}")
+    mass: dict[str, float] = {}
+    for x in pos["top_logprobs"]:
+        c = x["token"].strip().lower()
+        if c in codes:
+            mass[c] = mass.get(c, 0.0) + math.exp(x["logprob"])
+    tot = sum(mass.values())
+    probs = {lab: round(mass.get(c, 0.0) / tot, 4) for c, lab in zip(codes, labels)}
+    if aq["type"] == "noul":
+        return {"type": "noul", "noul": probs["yes"]}
+    best = max(probs, key=probs.get)
+    if aq["type"] == "choice":
+        return {"type": "choice", "choice": best, "confidence": probs[best], "probabilities": probs}
+    legend = {str(i): lab for i, lab in enumerate(labels)}
+    return {"type": "score", "score": round(sum(i * probs[lab] for i, lab in enumerate(labels)), 4),
+            "confidence": probs[best], "legend": legend,
+            "probabilities": {str(i): probs[lab] for i, lab in enumerate(labels)}}
+
+
+async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
+    """POST with retries on rate limits, overload and transport errors."""
     last = "no response"
     async with sem:
         for attempt in range(8):
             try:
-                r = await client.post(API, json=body)
+                r = await client.post(url, json=body)
             except httpx.TransportError as e:
                 last = repr(e)
                 await asyncio.sleep(0.5 * 2**attempt)
@@ -475,8 +577,57 @@ async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions
                 continue
             if r.status_code >= 400:
                 raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
-            return r.json()
+            j = r.json()
+            if "error" in j:  # OpenRouter reports some provider failures inside a 200
+                last = str(j["error"])[:200]
+                await asyncio.sleep(0.5 * 2**attempt)
+                continue
+            return j
     raise RuntimeError(f"gave up after retries ({last})")
+
+
+async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions: dict) -> dict:
+    """{answers: {rid: answer}, tokens, cost, model} for one row's questions."""
+    if not is_llm(model):
+        j = await post(client, sem, API, {"model": model, "state": state, "questions": questions})
+        tokens = j["usage"]["input_tokens"]
+        return {"answers": j["answers"], "tokens": tokens, "cost": tokens * PRICE_PER_INPUT_TOKEN, "model": j["model"]}
+
+    async def one(rid: str, aq: dict) -> tuple[str, dict, dict]:
+        prompt, codes, labels = llm_prompt(aq, state)
+        mid, pref = llm_route(model)
+        ep = endpoint(model)
+        body = {"model": mid, "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 256,  # room for providers that reason briefly anyway; the answer's logprobs come after
+                # temperature 1 = the model's own distribution; at 0 some APIs return -9999 for every other token.
+                # Only the probabilities are read, never the sampled text.
+                "temperature": 1, "logprobs": True, "top_logprobs": 20, **ep.get("body", {})}
+        if ep["base"] == OPENROUTER:
+            body |= {"reasoning": _reasoning.get(model, {"effort": "none"}), "provider": pref}
+        try:
+            j = await post(client, sem, f"{ep['base']}/chat/completions", body)
+        except RuntimeError as e:
+            minimal = {"effort": "minimal"}  # measured on GLM: 0 reasoning tokens, logprobs kept
+            if "mandatory" not in str(e) or body["reasoning"] == minimal:
+                raise
+            _reasoning[model] = body["reasoning"] = minimal
+            j = await post(client, sem, f"{ep['base']}/chat/completions", body)
+        c = j["choices"][0]
+        lp = (c.get("logprobs") or {}).get("content") or []
+        try:
+            u = j["usage"]
+            if "cost" not in u:
+                pin, pout = ep["price"]
+                u["cost"] = u["prompt_tokens"] * pin + u.get("completion_tokens", 0) * pout
+            return rid, llm_answer(aq, codes, labels, lp), u
+        except RuntimeError as e:
+            raise RuntimeError(f"{e}; provider {j.get('provider')}, reply {c['message'].get('content')!r}, "
+                               f"finish {c.get('finish_reason')} (this provider may reason despite 'off'; pin one with "
+                               f"openrouter:<id>@<provider>)") from None
+
+    got = await asyncio.gather(*[one(rid, aq) for rid, aq in questions.items()])
+    return {"answers": {rid: a for rid, a, _ in got}, "tokens": sum(u["prompt_tokens"] for *_, u in got),
+            "cost": sum(u.get("cost", 0.0) for *_, u in got), "model": model}
 
 
 async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
@@ -488,24 +639,28 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         if it["key"] not in have:
             missing.setdefault(it["id"], {})[it["key"]] = it  # dedupe identical keys within a row
     group = [list(g.values()) for g in missing.values()]
-    stats = {"cached": sum(it["key"] in have for it in items), "asked": 0, "requests": len(group), "tokens": 0}
+    model = spec["model"]
+    stats = {"cached": sum(it["key"] in have for it in items), "asked": 0, "tokens": 0, "cost": 0.0,
+             "requests": sum(len(g) for g in group) if is_llm(model) else len(group)}
 
     if group:
-        est = estimate_tokens(group) * PRICE_PER_INPUT_TOKEN
+        est = estimate_cost(model, group)
         if MAX_COST is not None and est > MAX_COST:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
                              f"(~${est:.4f}), above --max-cost ${MAX_COST}; nothing asked")
-        print(f"  asking {sum(map(len, group))} answers in {len(group)} requests (~${est:.4f})", file=sys.stderr)
-        key = os.environ.get("TYPESAFE_API_KEY") or os.environ["TYPESAFE_AI_API_KEY"]
+        print(f"  asking {sum(map(len, group))} answers in {stats['requests']} requests (~${est:.4f})", file=sys.stderr)
+        key = (os.environ[endpoint(model)["key"]] if is_llm(model)
+               else os.environ.get("TYPESAFE_API_KEY") or os.environ["TYPESAFE_AI_API_KEY"])
         async with httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=120) as client:
             sem = asyncio.Semaphore(CONCURRENCY)
 
             async def one(g: list[dict]) -> None:
-                res = await ask(client, sem, g[0]["spec"]["model"], g[0]["state"], {it["rid"]: it["aq"] for it in g})
-                tokens = res["usage"]["input_tokens"]
+                res = await ask(client, sem, model, g[0]["state"], {it["rid"]: it["aq"] for it in g})
+                tokens = res["tokens"]
                 write(db, "insert or replace into answers (key, model, answer, input_tokens) values (?, ?, ?, ?)",
                       [[it["key"], res["model"], json.dumps(res["answers"][it["rid"]]), tokens / len(g)] for it in g])
                 stats["tokens"] += tokens
+                stats["cost"] += res["cost"]
                 stats["asked"] += len(g)
                 for it in g:
                     have[it["key"]] = res["answers"][it["rid"]]
@@ -515,7 +670,6 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         if failed:
             raise RuntimeError(f"{len(failed)}/{len(group)} requests failed; {stats['asked']} answers saved, "
                                f"re-run to retry only the rest. First error: {failed[0]}") from failed[0]
-    stats["cost"] = stats["tokens"] * PRICE_PER_INPUT_TOKEN
     return have, stats
 
 
@@ -842,10 +996,14 @@ def cmd_compile(project: dict, args) -> None:
     its = results[name]["items"]
     if its:
         row_items = [it for it in its if it["id"] == its[0]["id"]]
-        payload = {"model": row_items[0]["spec"]["model"], "state": row_items[0]["state"],
-                   "questions": {it["qid"]: it["aq"] for it in row_items}}
-        print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once)")
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        model = row_items[0]["spec"]["model"]
+        if is_llm(model):
+            print(f"# {name}: prompt for row {its[0]['id']}, question {row_items[0]['qid']} (one request per question)")
+            print(llm_prompt(row_items[0]["aq"], row_items[0]["state"])[0])
+        else:
+            payload = {"model": model, "state": row_items[0]["state"], "questions": {it["qid"]: it["aq"] for it in row_items}}
+            print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once)")
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
     total = 0.0
     print()
     for n in project["order"]:
@@ -857,23 +1015,24 @@ def cmd_compile(project: dict, args) -> None:
         groups: dict[str, list[dict]] = {}
         for it in todo:
             groups.setdefault(it["id"], []).append(it)
-        est = estimate_tokens(list(groups.values()))
-        total += est
+        cost = estimate_cost(spec["model"], list(groups.values()))
+        est = cost / price_per_token(spec["model"])
+        total += cost
         bound = "≤ " if res["unknown"] else ""
         where = f", where keeps {bound}{len(res['rows'])}" if "where" in spec else ""
         print(f"# {n}: {res['input']} rows in{where}; {len(res['items'])} answers planned, {len(res['items']) - len(todo)} cached, "
-              f"{bound}{len(todo)} to ask, ~{est:,.0f} input tokens, ~${est * PRICE_PER_INPUT_TOKEN:.5f}")
+              f"{bound}{len(todo)} to ask, ~{est:,.0f} input tokens, ~${cost:.5f} ({spec['model']})")
         if res["unknown"]:
             print(f"#   {res['unknown']} rows kept because the answers their where-clause needs aren't cached yet (upper bound)")
     if len(project["nodes"]) > 1:
-        print(f"# total: ~{total:,.0f} input tokens, ~${total * PRICE_PER_INPUT_TOKEN:.5f}")
+        print(f"# total: ~${total:.5f}")
 
 
 def materialize(spec: dict, db, out_rows: list[dict]) -> None:
     """The judgment's table: its input columns plus its answers, like a dbt model's select *."""
     cols = list(dict.fromkeys(c for r in out_rows for c in r))
     typed = ", ".join(f'"{c}" {"real" if c.endswith(("_p", "_pyes")) else "text"}' for c in cols)
-    table = spec["judgment"]
+    table = spec["judgment"] + spec.get("_table_suffix", "")
     db.execute("begin immediate")
     try:
         db.execute(f'drop table if exists "{table}"')
@@ -896,7 +1055,7 @@ def cmd_run(project: dict, _args) -> None:
         res, spec = results[n], project["nodes"][n]
         materialize(spec, open_store(spec), res["rows"])
         if "union" in spec:
-            print(f"{n}: union of {len(spec['union'])} judgments → table \"{n}\" ({len(res['rows'])} rows)")
+            print(f"{n}: union of {len(spec['union'])} judgments → table \"{n}{spec.get('_table_suffix', '')}\" ({len(res['rows'])} rows)")
             continue
         where = f", where kept {len(res['rows'])}" if "where" in spec else ""
         print_stats(res["stats"], f"{n}: {res['input']} rows in{where}; answers")
@@ -1458,6 +1617,7 @@ def main() -> None:
     p.add_argument("--node", help="one judgment in a project (test, diff, review, compile)")
     p.add_argument("--against", help="diff: old spec/project path, or git:REF; review: queue rows it answers differently first")
     p.add_argument("--source", type=Path, help="run the root judgments on this CSV instead (e.g. a holdout set)")
+    p.add_argument("--model", help="use this engine for every judgment instead of the spec's (e.g. openrouter:<id>)")
     p.add_argument("--traffic", action="store_true", help="run the root judgments on rows logged by judge(..., shadow=...)")
     p.add_argument("--list", action="store_true", help="review: print the queue without prompting")
     p.add_argument("--limit", type=int, help="review: at most N items")
@@ -1468,6 +1628,11 @@ def main() -> None:
     global MAX_COST
     MAX_COST = args.max_cost
     project = load_project(args.path)
+    if args.model:  # another engine on the same specs: its tables get a suffix, the spec's own stay untouched
+        for spec in project["nodes"].values():
+            spec["_table_suffix"] = "__" + re.sub(r"\W+", "_", args.model).strip("_")
+            if "union" not in spec:
+                spec["model"] = args.model
     if args.source and args.traffic:
         sys.exit("--source or --traffic, not both")
     for n in roots(project):

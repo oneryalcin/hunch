@@ -275,6 +275,26 @@ Fisher p = 0.045 per turn, but turns cluster in 23 sessions: a session bootstrap
 
 **Reading the format:** Claude Code 2.1 has no `origin` field, so a human message is a user message that is not a tool result, meta, a sidechain, a compaction summary, or wholly harness-injected tags (IDE selection, `!` shell I/O, reminders); `promptSource: sdk` turned out to be people in the VS Code extension. An interruption is a reaction, not a request.
 
+## Findings, round 10: a second engine (2026-09-24)
+
+**Is hunch more than a Jev wrapper?** The same specs, unchanged, on an LLM: `model: deepseek:deepseek-flash` (DeepSeek V4.1 Flash) or `--model` on any command. The engine asks one request per question with the options numbered, and reads the probabilities of the first answer token (top-20 logprobs, renormalised over the options), so answers have Jev's shapes and every test, dial, diff and review works as before. The model string and an adapter version (`logprobs-v1`) are part of the cache key.
+
+| | Jev (jev-1.13.0) | DeepSeek V4.1 Flash |
+|---|---|---|
+| BANKING77 holdout, estimated accuracy | **95.8%** (88.7–97.9%) | 92.3% (85.8–93.5%) |
+| paired, reviewed gold | | fixed 4, broke 22, **p = 0.001** |
+| calibration error / auto-acted at 0.9 | 0.046 / 100% on 81% of rows | 0.032 / 97.7% on 91% |
+| SWE-agent patch passes tests (AUROC) | 0.831 | **0.866** (fixed 22, broke 17, p = 0.52) |
+| Claude Code `outcome` / `claims_done` (panel audits) | 90.0% / 88.3% | 88.3% / 88.3% (n.s.) |
+| cost of these four judgments | $0.068 | $0.20 (list price; cache hits and off-peak are cheaper) |
+| online latency, new text | ~600 ms | ~750 ms |
+
+DeepSeek's 13 BANKING77 disagreements that no one had reviewed (Jev agreed with the key there) went to the same blind panel: answer key right on 12, DeepSeek on 1 (`review_panel/deepseek/`, appended by `disputes.py deepseek`).
+
+- **Engine-neutral in practice.** No spec changed; the verdict per task came from hunch's own tests: Jev is significantly better on the 77-way intent task, the LLM is level or better (not significantly) on yes/no judgments over long text, at ~3× the cost. That is the kind of decision hunch exists for.
+- **Logprobs are fragile across providers.** OpenRouter lists logprobs for many providers that don't return them (Novita) or reason despite "reasoning off" (Wafer on GLM, which then ran out of room); Straitly and Z.ai return none. At temperature 0 DeepSeek's API masks every other token (-9999), so the engine reads at temperature 1: only the probabilities are used, never the sampled text. Pin a provider with `openrouter:<id>@<provider>`; the provider is part of the model string, so of the key. GLM-5.3-flash works pinned to Parasail but was not compared: the OpenRouter account ran out of credit (only you can top it up).
+- **Tables per engine.** `run --model X` writes `<judgment>__<engine>` tables; the spec's own tables stay as they were (the first LLM run overwrote them).
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

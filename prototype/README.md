@@ -16,6 +16,8 @@ uv run online_demo.py                                       # judge() from an ap
 uv run shadow_demo.py                                       # judge(live, shadow=candidate) + diff/review --traffic
 ```
 
+Engines: `model: jev-1.13.0` (TypeSafe), or an LLM through its answer-token logprobs: `deepseek:<id>` (DeepSeek API, `DEEPSEEK_API_KEY`) or `openrouter:<id>[@provider]` (`OPENROUTER_API_KEY`). `--model X` on any command runs the same specs on another engine (tables get a `__<engine>` suffix); `hunch diff SPEC --against SPEC --model X` compares engines row by row.
+
 Spec fields `act` and `gold` are hunch-only: never sent to the engine, not part of the cache key. `act` is a number, or `{yes: .., no: ..}` on yes/no questions. `tests:` per question: `min_accuracy`, `max_calibration_error`, `min_act_accuracy`, `min_auroc` (noul), `base_rate` (noul: score as if this share of rows were yes), `order_stability: {sample, permutations, max_flip_rate}` (choice).
 
 ## What it does

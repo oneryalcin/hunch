@@ -1,0 +1,15 @@
+[
+{"n": 1, "best": "fiat_currency_support", "candidates": {"exchange_rate": false, "fiat_currency_support": true}},
+{"n": 2, "best": "pin_blocked", "candidates": {"pin_blocked": true, "change_pin": false}},
+{"n": 3, "best": "supported_cards_and_currencies", "candidates": {"fiat_currency_support": false, "supported_cards_and_currencies": true}},
+{"n": 4, "best": "unable_to_verify_identity", "candidates": {"why_verify_identity": true, "unable_to_verify_identity": true}},
+{"n": 5, "best": "unable_to_verify_identity", "candidates": {"unable_to_verify_identity": true, "why_verify_identity": true}},
+{"n": 6, "best": "visa_or_mastercard", "candidates": {"visa_or_mastercard": true, "supported_cards_and_currencies": false}},
+{"n": 7, "best": "pending_card_payment", "candidates": {"pending_card_payment": true, "transfer_not_received_by_recipient": false}},
+{"n": 8, "best": "request_refund", "candidates": {"Refund_not_showing_up": false, "request_refund": true}},
+{"n": 9, "best": "transfer_timing", "candidates": {"transfer_not_received_by_recipient": false, "transfer_timing": true}},
+{"n": 10, "best": "transfer_timing", "candidates": {"transfer_not_received_by_recipient": false, "transfer_timing": true}},
+{"n": 11, "best": "verify_top_up", "candidates": {"why_verify_identity": false, "verify_top_up": true}},
+{"n": 12, "best": "exchange_rate", "candidates": {"exchange_charge": true, "exchange_rate": true}},
+{"n": 13, "best": "activate_my_card", "candidates": {"get_physical_card": false, "activate_my_card": true}}
+]

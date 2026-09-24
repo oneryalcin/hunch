@@ -43,7 +43,7 @@ The reviewers are Claude models, the same family as the model that ran the analy
 
 ## Round 2: the BANKING77 tree's own disputes (Phase 2)
 
-An adversarial review of Phase 2 pointed out that the tree's accuracy estimate reused reviews made for the *flat* model: the tree disagreed with the answer key on 24 rows that no one had reviewed (flat had agreed with the key there), and the estimator extrapolated from rows that were not a random sample. Same protocol, same three reviewers, just those 24 rows (`tree/`, appended by `tree_disputes.py`):
+An adversarial review of Phase 2 pointed out that the tree's accuracy estimate reused reviews made for the *flat* model: the tree disagreed with the answer key on 24 rows that no one had reviewed (flat had agreed with the key there), and the estimator extrapolated from rows that were not a random sample. Same protocol, same three reviewers, just those 24 rows (`tree/`, appended by `disputes.py tree`):
 
 - Answer key right, tree wrong: 19. Both acceptable: 5. Tree right, key wrong: 0. Unanimous on 19 of 24.
 - Tree estimate with all 69 of its disagreements reviewed: **87.5% (95% CI 80.0–89.8%)**, not the 89.1% first reported.
@@ -59,3 +59,7 @@ An adversarial review of Phase 2 pointed out that the tree's accuracy estimate r
 | claims_done | 53/60, 88% (78–94%) | kappa 0.86, unanimous 54/60 |
 
 Jev's `outcome` errors: failed → worked ×2, redirected → worked ×2, redirected → unclear, unclear → worked. `claims_done`: yes → no ×5, no → yes ×2. The majority labels are the judgments' reviews (`kind=audit`, a random sample), so `hunch test examples/claude_code` reports the same estimates.
+
+## Round 4: DeepSeek's own BANKING77 disputes
+
+The same spec on DeepSeek V4.1 Flash disagreed with the answer key on 13 rows no one had reviewed (Jev agreed with the key there). Same blind protocol and reviewers (`deepseek/`: `build.py` → packets; appended by `disputes.py deepseek`): answer key right 12, DeepSeek right 1; unanimous on 10 of 13. DeepSeek's estimate with all 53 of its disagreements reviewed: 92.3% (95% CI 85.8–93.5%), vs Jev 95.8%.
