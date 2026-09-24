@@ -26,6 +26,7 @@ Companies now classify tickets, transactions, companies, documents, leads, and L
 | [03-opportunity-scan.md](docs/03-opportunity-scan.md) | Which domains are "pre-2016 dbt"; ranked candidates; why hunch |
 | [04-design.md](docs/04-design.md) | Clean-slate rationale, architecture, spec sketch, tests, open questions |
 | [05-licensing.md](docs/05-licensing.md) | Split-by-layer license model (Apache 2.0 core + ELv2 server) |
+| [06-roadmap.md](docs/06-roadmap.md) | Draft roadmap, ordered by risk: trust the numbers, the graph, engines and scale, package, server |
 
 ## Decisions so far
 
@@ -36,6 +37,7 @@ Companies now classify tickets, transactions, companies, documents, leads, and L
 | 2026-09-24 | dbt interop, not dependency | Read `manifest.json`, write tables back, emit dbt source YAML |
 | 2026-09-24 | License split by layer: spec+compiler+CLI Apache 2.0; server ELv2 | Spec adoption needs permissive; protect what a cloud would host (05-licensing) |
 | 2026-09-24 | Engine pluggable, Jev first | Avoid single-vendor dependency |
+| 2026-09-24 | First user: AI engineer (evals over agent and LLM traces), then analytics engineers, then ops | Strongest evidence so far (SWE-agent: 39% of claimed fixes fail) and the most acute pain (06-roadmap) |
 
 ## Status
 
