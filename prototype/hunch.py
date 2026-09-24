@@ -414,6 +414,9 @@ def open_store(spec: dict) -> sqlite3.Connection:
     path = store_path(spec["_dir"])
     if path in _conns:
         return _conns[path]
+    if not path.exists():  # silently starting empty is how a spec outside the workspace re-pays for cached answers
+        print(f"new answer store: {path} (no store in this folder or above; HUNCH_STORE=... to share one)",
+              file=sys.stderr)
     path.parent.mkdir(exist_ok=True)
     db = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
     for _ in range(100):  # switching to WAL needs a moment alone with the file; it persists once set
@@ -1172,10 +1175,16 @@ def cmd_diff(project: dict, args) -> None:
             spec["source"] = source_path(project["nodes"][twin]).resolve()
     new_r, old_r = execute(project), execute(old)
     print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
+    def twin_of(n: str) -> str | None:  # same name, else the only judgment on the other side (a renamed copy)
+        return n if n in old["nodes"] else (old["order"][0] if len(old["nodes"]) == 1 else None)
     if args.node:
-        pairs = [(args.node, args.node if args.node in old["nodes"] else (old["order"][0] if len(old["nodes"]) == 1 else None))]
+        pairs = [(args.node, twin_of(args.node))]
+    elif len(project["nodes"]) == 1:
+        pairs = [(project["order"][0], twin_of(project["order"][0]))]
     else:
         pairs = [(n, n) for n in project["order"] if n in old["nodes"]]
+        if not pairs:
+            sys.exit(f"no judgment names in common: {project['order']} vs {old['order']}; pick one with --node")
     for n, o in pairs:
         if o is None:
             sys.exit(f"--against has no judgment matching {n!r}; it has {old['order']}")

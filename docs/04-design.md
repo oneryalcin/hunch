@@ -227,6 +227,20 @@ An independent reviewer (Fable, no shared context, `--max-cost 0`) found real bu
 - **agent_eval, corrected:** with `fix_correct` on its own confidence (not chained), auto-reject at 0.80 handles 23.3% of claimed runs at 3.4% error (0.90: 9.3% at 0%). *First reported as 18.8% at 1.4%, from the wrongly chained confidence.* Verified-before-claim runs pass 28.9% vs 17.8% (population mix; Fisher p = 0.079, suggestive; `verified` has no gold).
 - **Still open from the review:** a weighted version of the stratified estimate; routing accuracy for `group` needs gold derived from `gold_intent` (the misroute count is the proxy); cleanup of `_stats` done, `compile`'s upper bound for conditional graphs not.
 
+## Findings, round 7: does the agent's claim sway the judge? (2026-09-24)
+
+`patch_only.yml` = `patch_eval`'s `passes_tests` with `final_messages` removed from the state; same instructions, one variable changed. 200 SWE-agent runs, $0.008. The original was also re-asked once (by accident, below), which gives the noise floor.
+
+| Δ p(passes), with messages − without | mean (95% CI) | re-ask noise |
+|---|---|---|
+| agent claims a fix, patch fails (n=66) | −0.027 (±0.028) | +0.005 |
+| agent claims a fix, patch passes (n=94) | −0.011 (±0.020) | −0.003 |
+| no claim, patch fails (n=34) | −0.067 (±0.049) | +0.003 |
+
+- **No claim contagion.** The messages matter (mean \|Δp\| 0.084 vs 0.013 for re-asking), but "I fixed it" does not push Jev toward "passes"; "I couldn't" pushes it toward "fails", correctly (34 of 40 such patches fail). Ranking is set by the patch: AUROC 0.831 with messages, 0.828 without, 0.836 re-asked. Caveats: one dataset, claim labels are Jev's (97% vs the panel), small no-claim group.
+- **Re-asking noise is small here:** mean \|Δp\| 0.013, flips concentrated in the 0.4–0.6 band (accuracy 73.5% vs 74.5% between two runs of one spec).
+- **Two silent failures, fixed.** (1) A spec outside the workspace got a fresh empty store, and `diff` gave the old spec the same one, so 400 cached answers were re-asked ($0.012; `--max-cost` is per judgment and didn't stop it). Creating a store now prints where and why. (2) `diff` paired judgments by name only, so `patch_only` vs `patch_eval` compared nothing and printed nothing; a one-judgment project now pairs with the other side's only judgment, and no names in common is an error.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

@@ -38,7 +38,7 @@ A folder of specs is a project. A judgment can read another's output with `sourc
 
 - `examples/tickets/`: 40 hand-written support tickets. Smoke test only.
 - `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
-- `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it?
+- `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it? `patch_only.yml` is the same question without the agent's messages (an ablation).
 
 ## Results (jev-1.13.0, 2026-09-24)
 
@@ -75,6 +75,7 @@ Caveat: only disputes were reviewed (rows where the model disagreed). Rows where
 - `resolved` (does the patch pass the hidden tests?): **AUROC 0.831**, accuracy 73.5%. Calibration error 0.114, partly an artifact of the 50/50 sample (real pass rate ≈17%).
 - Asymmetric: when p(resolved) < 0.2, **52 of 55** actually failed. Yes/no questions need separate yes and no thresholds.
 - Overclaiming: agents claimed a fix in 160/200 runs; **66 of those (41%) failed** the tests. Jev put 23 of the 66 below p=0.2. `claims_fixed` was checked by a blind 3-reviewer panel: Jev matches the reviewer majority on 29/30 decided rows (see `review_panel/`).
+- Does the agent's claim sway the judge? No: without `final_messages` AUROC is 0.828 (vs 0.831), and a claim doesn't raise p(passes) (`hunch diff examples/swe_agent/patch_only.yml --against examples/swe_agent/patch_eval.yml`; docs/04-design.md round 7).
 - Bug found by the panel: `prepare.py` clipped the end of long final messages (where the claim is); fixed to keep the tail, 17 rows changed, numbers above are after the fix.
 
 ### Phase 1 (trust the numbers)
@@ -101,4 +102,4 @@ Three context-free Claude subagents, blind protocol (`review_panel/README.md`): 
 - agent_eval on 200 SWE-agent runs: 149 claim a fix; auto-reject at 0.80 handles 23.3% of claimed runs at 3.4% error (0.90: 9.3% at 0%); verified-before-claim runs pass 28.9% vs 17.8% (suggestive, p = 0.079).
 - Adversarial review of Phase 2 (Fable): 14 findings, all verified; fixes and corrections in `docs/04-design.md` round 6.
 
-Total API spend for everything: **about $0.47**, of which ~$0.07 was accidental re-asking in Phase 2 (per-folder stores; see docs/04-design.md round 6).
+Total API spend for everything: **about $0.49**, of which ~$0.08 was accidental re-asking in Phase 2 (per-folder stores, a spec outside the workspace; see docs/04-design.md rounds 6–7).

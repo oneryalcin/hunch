@@ -16,7 +16,7 @@ These decide between options at every phase. They come from why dbt and dlt won:
 
 ## Where we are
 
-Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree) and agent-run evals (SWE-agent). Every Phase 2 claim was checked by an independent adversarial review. Total API spend so far: about $0.47.
+Proven in the prototype (see `prototype/README.md`), updated 2026-09-24 after Phase 2: content-addressed store shared by batch and online across a workspace; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates with confidence intervals; backtest diff with a significance test; review queue with gold correction; judgment graphs (`ref`, `where`, `union`, chained confidence for refinements, sampling weights); two recipes built from general pieces. Validated on intent classification (BANKING77, flat and tree) and agent-run evals (SWE-agent). Every Phase 2 claim was checked by an independent adversarial review. Total API spend so far: about $0.49.
 
 **Not proven yet:** a second engine, scale beyond ~1k rows, reading real traces directly, and whether anyone besides us wants this (no external user yet).
 
@@ -61,7 +61,7 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 
 | Item | Why | Done when |
 |---|---|---|
-| Ablation: does the agent's own claim sway `fix_correct`? | "Adversarial text can move Jev"; the state includes the agent saying it fixed it | Same question without `final_messages`, paired diff + AUROC on the 149 claimed runs (~$0.004) |
+| ~~Ablation: does the agent's own claim sway `fix_correct`?~~ DONE | "Adversarial text can move Jev"; the state includes the agent saying it fixed it | **No contagion** (04 round 7): the messages move answers 6× more than re-asking does, but a claim doesn't raise p(passes) and AUROC is unchanged (0.831 vs 0.828). Done as a spec copy + `diff` (`examples/swe_agent/patch_only.yml`), $0.008 |
 | "None of these" as a primitive | Declining should be a choice, not low confidence; agent_eval hand-built `unclear` | `choice` gets an optional none-option; lint suggests it when state can be incomplete |
 | Multi-label questions | Pydantic's `list[Literal]` fans out to one yes/no per option | `type: multi` expands to one noul per option, tested and diffed per option |
 | State-size lint | 32k tokens for state + longest question; past it the request fails | `lint`/`compile` warn at ~25k estimated tokens per row, name the largest column |
@@ -76,7 +76,7 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 | Shadow mode | OpenServ's decision nodes have a "Shadow" tab; the safe way to change a live judgment is to run the candidate beside it first | `judge(..., shadow="candidate.yml")` answers with the live spec and records the candidate's answer; `hunch shadow report` shows disagreement rate, which rows, and (with gold or reviews) which side was right. Same cache, so shadowing a spec already backtested costs nothing extra |
 | `hunch suggest`, gated by `diff` | SERV's pitch is clearer instructions make Jev better; our own biggest gain was option descriptions (82% → 88%). Rewrites are only worth keeping if measured | `suggest` drafts question/option rewrites (from example rows and confusions); each is kept only if `diff` on gold shows a significant gain; the report says which were rejected |
 | Runtime adapters | Decision nodes now live inside runtimes (Pydantic AI output types, SERV graphs); hunch should test the same definition that runs | Import a Pydantic AI output type as a spec (with Phase 4's Pydantic API); import SERV decision nodes if they expose definitions; export a hunch spec back where possible |
-| Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised: a `test` option that re-asks with a named column removed and reports how much answers move |
+| Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised. It worked with no new code (copy the spec, drop the column, `diff`), but `diff` reports label flips and accuracy, not *how far and which way* probabilities moved, or the re-ask noise floor; those came from a throwaway script. Add them to `diff` when a second ablation needs them |
 | Watch list | Measurement features may arrive inside runtimes | Track OpenServ Graph Sharding / Shadow Agents / Benchmark Tooling and Pydantic's evals library; re-check each quarter whether they add gold-based measurement |
 
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
