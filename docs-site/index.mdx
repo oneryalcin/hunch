@@ -1,0 +1,60 @@
+---
+title: "hunch"
+sidebarTitle: "Overview"
+description: "Specs, tests and reviews for the judgments your software makes with a model."
+---
+
+Your software makes small judgments with a model: which team gets this ticket, did the agent's fix work, is this review positive. Each one is a hunch. hunch writes them down as specs, runs them over your rows, and tells you how often they are right.
+
+## The idea in one paragraph
+
+dbt turned SQL scattered across dashboards into models: files in git, tested, reviewed, rebuilt only when something changed. hunch does the same for model judgments. A judgment is a YAML spec (the question, the options, which columns the model sees). `hunch run` answers it for every row and caches each answer by its exact input, so re-runs are free and only changed questions are asked again. `hunch test` measures accuracy against an answer key or your reviews, with a confidence interval. `hunch diff` shows which rows a spec change flips, before you ship it.
+
+```yaml ticket_triage.yml
+judgment: ticket_triage
+source: tickets.csv
+key: id
+state: [subject, body]              # what the model sees
+questions:
+  department:
+    type: choice
+    instructions: Which team should handle this support ticket?
+    criteria:
+      billing: Problems with money already charged or owed
+      technical: Something is broken, slow, or misbehaving
+      sales: Buying more or buying differently
+    act: 0.80                       # below this confidence, a person reviews it
+    gold: gold_department           # the answer key, if you have one
+tests:
+  department:
+    min_accuracy: 0.90
+```
+
+## Is it for you?
+
+hunch fits when you ask the same question of many rows and need to know how often the answer is right:
+
+- **Evaluating agents and LLM apps.** Read agent traces (Claude Code, Cursor, OpenCode, OpenTelemetry) and judge each turn: did it work, did the agent claim success, was the claim true.
+- **Classifying and routing.** Tickets, intents, documents, reviews: one spec per decision, tested like code.
+- **Changing a prompt safely.** Every change gets a row-by-row diff and a paired significance test instead of a vibe check.
+
+It is not a chatbot framework, a prompt playground, or a place to generate text. Answers are typed: a choice, a yes/no with a probability, or a score.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="play" href="/quickstart">
+    Five minutes: run, test and review 40 sample tickets for about $0.001.
+  </Card>
+  <Card title="Concepts" icon="lightbulb" href="/concepts">
+    Spec, answer, store, gold, act and review, in ten minutes.
+  </Card>
+  <Card title="Judge agent traces" icon="robot" href="/guides/agent-traces">
+    Point hunch at your coding agent's sessions and measure how its turns went.
+  </Card>
+  <Card title="Spec reference" icon="book" href="/reference/spec">
+    Every key a spec can have.
+  </Card>
+</CardGroup>
+
+## Status
+
+v0.1, used on real data (a 100,000-row run, agent traces, a public intent benchmark), not yet used by anyone outside the project. The CLI and library are Apache-2.0; the optional server is under the Elastic License 2.0. Engines: TypeSafe's Jev (what the recipes use), or any LLM that returns token probabilities. See [results](/results) for what has been measured, including what does not work yet.

@@ -1,0 +1,125 @@
+---
+title: "Quickstart"
+description: "Run, test, change and review a judgment over 40 sample support tickets in five minutes, for about $0.001."
+---
+
+You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key (the recipe's engine is Jev). The whole quickstart asks about 160 questions and costs about $0.0015.
+
+<Note>
+The repository is private until v0.2. If `uv tool install` fails with a 404, ask for access.
+</Note>
+
+<Steps>
+  <Step title="Install">
+    ```sh
+    uv tool install git+https://github.com/oneryalcin/hunch
+    export TYPESAFE_API_KEY=...
+    ```
+  </Step>
+
+  <Step title="Get a project">
+    `hunch init` copies a recipe: a spec, sample rows and a README.
+
+    ```sh
+    hunch init tickets my-tickets
+    cd my-tickets
+    ```
+
+    `ticket_triage.yml` asks three questions of every ticket in `tickets.csv`: which team should handle it (a choice, with an answer key in `gold_department`), is it urgent (yes/no), and how frustrated the customer is (a score). Open it; it is short.
+  </Step>
+
+  <Step title="See what it will cost">
+    ```sh
+    hunch compile .
+    ```
+
+    ```
+    # ticket_triage: 40 rows in; 120 answers planned, 0 cached, 120 to ask, ~18,620 input tokens, ~$0.00078 (jev-1.13.0)
+    ```
+
+    `compile` prints the exact request for the first row and the cost. Nothing is sent.
+  </Step>
+
+  <Step title="Run it">
+    ```sh
+    hunch run . --max-cost 0.01
+    ```
+
+    ```
+    ticket_triage: 40 rows in; answers: 0 cached, 120 asked in 40 requests, 19,101 input tokens, $0.00080
+      department: 0 rows below act=0.8 → review queue
+    materialized 1 table(s) in .hunch/store.sqlite
+    ```
+
+    Every answer is now in `.hunch/store.sqlite`, cached by its exact input, and the results are in a `ticket_triage` table. Run it again: `120 cached, 0 asked, $0.00000`.
+  </Step>
+
+  <Step title="Test it">
+    ```sh
+    hunch test .
+    ```
+
+    Trimmed to `department`:
+
+    ```
+    department (choice, 40 rows)
+      gold: 40 rows (40 from source, 0 from review)
+      PASS accuracy 100.0% (min 90%)
+      PASS calibration error 0.003 (max 1)
+               dial   automated   wrong among automated
+           …
+           0.80      100.0%                    0.0%  ← act
+    ```
+
+    `department` is checked against the answer key and the `min_accuracy: 0.90` in the spec. The dial shows how many rows each confidence threshold would automate and how many of those would be wrong. `urgent` and `frustration` have no answer key yet, so there is nothing to score. The [review](/guides/review) step builds one.
+  </Step>
+
+  <Step title="Change a question and see what it changes">
+    Put the project in git, then make `urgent` stricter:
+
+    ```sh
+    git init -q && echo .hunch/ > .gitignore && git add . && git commit -qm tickets
+    ```
+
+    ```yaml ticket_triage.yml
+      urgent:
+        type: noul
+        instructions: Does the customer say their business is blocked right now (an outage, a deadline today, money lost)?
+    ```
+
+    ```sh
+    hunch run . --max-cost 0.01              # 80 cached, 40 asked: only urgent changed
+    hunch diff . --against git:HEAD --max-cost 0
+    ```
+
+    ```
+    department: unchanged (same keys, 0 calls)
+
+    urgent: 2/40 rows flip (1 within noise band)
+      probabilities moved: mean |Δ| 0.106, mean Δ p(yes) -0.104
+        #  40    yes 0.92 → no 0.95          Cancel and refund | The product doesn't…
+        #  11     no 0.51 → yes 0.51  ~noise SSO broken | Okta login loops back to t…
+
+    frustration: unchanged (same keys, 0 calls)
+    ```
+
+    The diff is free: both versions' answers are in the store. It names the rows that flipped, marks flips too small to trust as noise, and shows the average move in probability, which catches a change that shifts every answer without flipping many.
+  </Step>
+
+  <Step title="Review">
+    ```sh
+    hunch review . --limit 5
+    ```
+
+    Review shows rows one at a time: first where the model disagrees with the answer key, then random spot checks, then rows the model was unsure of. Pick the right answer by its number; on spot checks and unsure rows, Enter agrees with the marked answer. Your verdicts go to `ticket_triage.reviews.csv` and become gold for `test`. See [Review](/guides/review).
+  </Step>
+</Steps>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Concepts" icon="lightbulb" href="/concepts">What a spec, answer, store, gold and act are.</Card>
+  <Card title="Write your own spec" icon="pen" href="/guides/write-a-spec">From your rows and your question.</Card>
+  <Card title="Judge agent traces" icon="robot" href="/guides/agent-traces">Your coding agent's sessions as rows.</Card>
+  <Card title="Test in CI" icon="circle-check" href="/guides/test-in-ci">Fail the build when accuracy drops.</Card>
+</CardGroup>

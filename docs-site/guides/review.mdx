@@ -1,0 +1,111 @@
+---
+title: "Review"
+description: "Give hunch the right answers it needs: which rows it asks you about, how to judge them, and where your verdicts go."
+---
+
+Tests need gold: rows where the right answer is known. An answer key in your data is a start, but answer keys have errors, and most real data has none. `hunch review` shows you the rows where a human verdict tells hunch the most, one at a time, and saves each verdict as gold.
+
+```bash
+hunch review intent.yml                      # one judgment
+hunch review evals/ --node claims            # one judgment in a project
+hunch review intent.yml --list --limit 20    # print the queue, don't prompt
+```
+
+## What it asks you about
+
+The queue has four kinds of row, in this order:
+
+| Kind | On screen | Which rows | Why |
+| --- | --- | --- | --- |
+| `shadow` | the two specs disagree | With `--against OTHER`: rows where the other spec answers differently | Only these decide which spec is better, so they come first |
+| `disputed` | model ≠ answer key | The model disagrees with the source's gold column. All of them, most confident first | Either the model is wrong or the answer key is |
+| `audit` | spot check | A fixed random sample of rows: where the model agrees with the key, or any row if there is no key. Topped up to `--audit` rows per question (default 30) | Without random rows, reviewing only disagreements can only push accuracy up. These make the estimate honest |
+| `uncertain` | model unsure | No gold, and the answer is below the question's `act`. Least confident first | A verdict here turns an uncertain row into gold |
+
+Rows that already have a verdict for their current text are skipped. The random sample is fixed (a hash of the row id), so it stays the same across sessions.
+
+## The screen
+
+```text
+─── 1 of 3 · intent · model ≠ answer key · #281 ────────────────────────────────
+
+TEXT
+  my card was not in the mail again can you advise?
+
+  What is this bank customer asking about?
+   1  card_arrival                         ████████████████████ 1.00  ← model
+   2  top_up_failed                                             0.00
+   3  declined_transfer                                         0.00
+   4  beneficiary_not_allowed                                   0.00
+   5  direct_debit_payment_not_recognised                       0.00
+   6  card_delivery_estimate                                    0.00  ← answer key
+      … 71 more; type an option's name to pick it
+1-6 pick · b both acceptable · c needs more context · a ambiguous · s skip · q quit
+>
+```
+
+Each state column is shown in full up to 600 characters, then the question, then the model's top five options with their probabilities. Any answer that matters for this row is added and marked: `← model`, `← answer key`, `← --against`, `← this spec`.
+
+## Keys
+
+| Key | Does | Saved as |
+| --- | --- | --- |
+| Enter | Agree with the marked answer (spot checks and model-unsure rows only) | `confirmed` (spot check) or `labeled` |
+| `1`–`N` | Pick that option | `model_right`, `key_right`, `against_right`, `spec_right`, `confirmed` or `labeled`, depending on whose answer you picked |
+| an option's name | Pick an option not on screen | as above |
+| `b` | Both marked answers are acceptable (disputed and shadow rows) | `both_ok`, with both labels |
+| `c` | You could only decide by knowing more than the screen shows | `needs_context`; the row is left out of scoring |
+| `a` | Genuinely ambiguous | `ambiguous`; the row is left out of scoring |
+| `s` | Skip for now | nothing |
+| `q` | Stop. Everything so far is already saved | nothing |
+
+On disputed and shadow rows, Enter does nothing: pick a number, so the verdict is a choice, not a default.
+
+## Judge from the text shown
+
+Grade the row as a stranger would, from what is on screen. That is exactly what the model saw, so it is the only fair test of the model.
+
+If you know the answer only because you know more (you were in that session, you know what happened next), press `c`. That is missing context, not a model error. `hunch test` then reports it:
+
+```text
+  context: 1 of 30 random spot checks (3%) needed more than the state shows to decide; give the state more (earlier or later turns, what happened next)
+```
+
+A high share tells you to give the spec more `state`, not to blame the model.
+
+## Useful flags
+
+| Flag | Use |
+| --- | --- |
+| `--audit N` | How many random spot checks per question (default 30). About 30 gives a usable confidence interval |
+| `--limit N` | Stop after N rows. Short sessions are fine; the queue picks up where you stopped |
+| `--against PATH` | Compare with another spec: rows where they differ come first, as `shadow` |
+| `--traffic` | Review rows logged in production by `judge(..., shadow=...)` |
+| `--list` | Print the queue without prompting |
+| `--reviewer NAME` | Name saved with each verdict (default: your login name) |
+
+## Where verdicts go
+
+Verdicts are appended to `<judgment>.reviews.csv` next to the spec, one line each:
+
+```text
+qid,row_id,state_hash,verdict,label,reviewer,at,kind
+intent,281,989b66d8332b43f4,model_right,card_arrival,oner,2026-09-25T09:45:17+00:00,disputed
+intent,377,5d6f3f01135e8daa,key_right,card_not_working,oner,2026-09-25T09:45:17+00:00,disputed
+intent,537,ba84812c72c748ed,both_ok,pin_blocked|card_swallowed,oner,2026-09-25T09:45:17+00:00,disputed
+```
+
+- **Commit this file.** It is your gold. The answer store is a cache and can be rebuilt; your verdicts can't.
+- **Verdicts are tied to the row's text.** `state_hash` is a hash of the state the model saw. If the row's text changes (new data, a different `redact` or `clip`), the old verdict no longer applies and the row comes back to the queue. Changing the question does not drop verdicts: gold is about the row.
+- **The last verdict for a row wins.**
+- **Share verdicts between specs** that ask the same question of the same rows with the `reviews:` key. For example, a second version of a spec can point at the first one's file:
+
+```yaml
+reviews: ../banking77/intent.reviews.csv
+```
+
+`diff` always uses the new spec's verdicts for both sides.
+
+## Reviewing in a browser
+
+The [server](/guides/server) has the same queue at `/review`, with buttons for each verdict. Long texts, like whole agent replies, are easier to read there.

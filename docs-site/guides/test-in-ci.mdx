@@ -1,0 +1,92 @@
+---
+title: "Test in CI"
+description: "Set pass/fail thresholds for a judgment and fail the build when a spec change makes it worse."
+---
+
+`hunch test` checks each question against thresholds you set in the spec, prints `PASS` or `FAIL` per check, and exits 1 if any check fails. That is all CI needs.
+
+## Set thresholds
+
+Add a `tests:` block to the spec, keyed by question:
+
+```yaml
+questions:
+  intent:
+    type: choice
+    instructions: What is this bank customer asking about?
+    criteria: { ... }
+    act: 0.90
+    gold: gold_intent
+
+tests:
+  intent:
+    min_accuracy: 0.85
+    max_calibration_error: 0.05
+    min_act_accuracy: 0.97
+    order_stability: {sample: 150, permutations: 2, max_flip_rate: 0.05}
+```
+
+| Test | Passes when | Applies to |
+| --- | --- | --- |
+| `min_accuracy` | The estimated accuracy (or plain accuracy, when there is no estimate yet) is at least this. For a `multi` question, key it by the question's name: it checks exact-set accuracy | All |
+| `max_calibration_error` | The gap between stated confidence and observed accuracy is at most this | `choice`, `noul`, `score` |
+| `min_act_accuracy` | Accuracy on rows at or above the question's `act` (what your code does unattended) is at least this. Needs `act` | All with `act` |
+| `min_auroc` | p(yes) separates yes rows from no rows at least this well (0.5 = coin toss) | `noul` |
+| `order_stability` | Asking `sample` rows (default 100) again with the options shuffled `permutations` times (default 2) flips at most `max_flip_rate` of answers (default 1, no limit) | `choice` |
+
+A question with no `tests:` entry still gets its accuracy, calibration and dial printed, and nothing can fail. The accuracy among auto-acted rows and order stability are only computed when `min_act_accuracy` or `order_stability` asks for them. An unknown test name is a lint warning, so typos don't pass silently.
+
+<Note>
+The thresholds compare the point estimate, not the lower end of the confidence interval. With 30 reviewed rows the interval is wide (±15 points), so set `min_accuracy` a little below what you measured, and add reviews before you trust a close call.
+</Note>
+
+## What CI needs
+
+1. **Gold.** Your answer key column and your `*.reviews.csv` files. Commit them.
+2. **Answers.** `test` asks the engine for any answer the store doesn't have. In CI you want either no new answers (free, fast) or new answers under a cost cap:
+   - **Cache the store between runs.** Answers are content-addressed, so a restored store is always safe to reuse. Only rows or questions that changed are asked again.
+   - **Always pass `--max-cost`.** If one judgment's missing answers would cost more than that, `test` stops before asking and exits 1.
+3. **An API key**, if anything may be asked: `TYPESAFE_API_KEY` for Jev, or the key for your `--model` engine (see [Environment](/reference/environment)).
+
+## GitHub Actions
+
+```yaml .github/workflows/judgments.yml
+name: judgments
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Restore the answer store
+        uses: actions/cache@v4
+        with:
+          path: .hunch/store.sqlite
+          key: hunch-store-${{ github.run_id }}
+          restore-keys: hunch-store-
+      - name: Install hunch
+        run: uv tool install git+https://github.com/oneryalcin/hunch
+      - name: Test
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: hunch test evals/ --max-cost 0.50
+```
+
+- The cache key changes every run, and `restore-keys` restores the newest store, so answers asked in one run are there for the next.
+- hunch uses the nearest `.hunch/store.sqlite` in the spec's folder or above; with none, it creates one at the repository root. Cache that path, or set `HUNCH_STORE` to choose it.
+- hunch is not on PyPI yet, and the repository is private for now: installing from GitHub needs access to it.
+- To also see what a spec change does, add a step: `hunch diff evals/ --against git:origin/main --max-cost 0.50`. `diff` reports; it does not fail the build.
+
+<Warning>
+`test` exits 1 for a failed check and also when `--max-cost` stops it (for example, `order_stability` needs answers the store lacks). The log's last line tells you which.
+</Warning>
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Every check passed |
+| 1 | A check failed, or the command stopped (above `--max-cost`, unknown judgment) |
+| 2 | A lint error in a spec |

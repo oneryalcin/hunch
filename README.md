@@ -2,7 +2,7 @@
 
 **dbt for judgments.** Declarative, tested, versioned semantic decisions — powered by System One models like Jev.
 
-> Status (2026-09-24): v0.1 package, CLI and a local server, tested on real data; no outside users yet. See [Status](#status) and `docs/`.
+> Status (2026-09-25): v0.1 package, CLI and a local server, tested on real data; no outside users yet. **User docs: [`docs-site/`](docs-site/)** (quickstart, guides, reference; `cd docs-site && npx mint dev` to preview). Design notes: `docs/`.
 
 ## The one-paragraph pitch
 
@@ -94,6 +94,8 @@ Plus a Python library (`hunch.judge(...)`, Pydantic classes as specs). All three
 
 ## Docs
 
+Using hunch: [`docs-site/`](docs-site/) (start with `quickstart.mdx`). The notes below are for working on hunch: research, design and decisions.
+
 | Doc | What |
 |---|---|
 | [01-jev.md](docs/01-jev.md) | What Jev / System One models are, economics, limits |
@@ -140,6 +142,6 @@ Validated on BANKING77 (intent, flat and tree), SWE-agent runs, real Claude Code
 
 ## License
 
-Everything in this repository is licensed under the [Apache License 2.0](LICENSE), except third-party data listed in [NOTICE](NOTICE).
+The repository is licensed under the [Apache License 2.0](LICENSE), except [`server/`](server/LICENSE) (below) and third-party data listed in [NOTICE](NOTICE).
 
 Split by layer (see [docs/05-licensing.md](docs/05-licensing.md)): the spec, engine, CLI, library and adapters are Apache 2.0. [`server/`](server/README.md) (online serving, the review UI, runs and drift) is under the Elastic License 2.0 and carries its own [`LICENSE`](server/LICENSE).

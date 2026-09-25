@@ -1,0 +1,41 @@
+id,subject,body,gold_department
+1,Charged twice,I see two identical charges for my March invoice. Please refund one.,billing
+2,API 500s,Every call to /v2/orders has returned a 500 since 9am. Our checkout is down.,technical
+3,Enterprise pricing,We have 400 seats and want to know about volume discounts.,sales
+4,Card declined,My card keeps getting declined when I try to pay the renewal. It works everywhere else.,billing
+5,Webhook not firing,Order.created webhooks stopped arriving after we rotated our signing secret.,technical
+6,Upgrade question,What's the difference between Pro and Business? Thinking of moving up.,sales
+7,Refund request,We cancelled within the trial period but still got billed $299.,billing
+8,Export crashes,Clicking Export to CSV freezes the browser tab on large reports.,technical
+9,Demo request,Could someone walk our finance team through the product next week?,sales
+10,VAT on invoice,Our invoice is missing our VAT number so accounting can't process it.,billing
+11,SSO broken,Okta login loops back to the sign-in page for all our users.,technical
+12,Nonprofit discount,Do you offer discounts for registered charities?,sales
+13,Upgrade failed and charged,I tried to upgrade to Pro but got an error. The upgrade didn't apply but my card was charged anyway.,billing
+14,Slow dashboard,The analytics dashboard takes over 40 seconds to load since last week's release.,technical
+15,Add seats,We need 15 more seats for the new team. How do we buy them and what's the cost?,sales
+16,Wrong currency,We were invoiced in USD but our contract says EUR.,billing
+17,Rate limits,We keep hitting 429s at 50 req/s. Is that the documented limit or a bug?,technical
+18,Competitor switch,We're currently on a competitor and our contract ends in June. What would migration look like commercially?,sales
+19,Receipt needed,Can you resend receipts for the last 6 months? Our auditor needs them.,billing
+20,Data missing,Yesterday's orders are missing from the reports but they are in our database.,technical
+21,Annual plan,If we switch to annual billing do we get a discount?,sales
+22,Payment method update,How do I change the card on file? The old one expired.,billing
+23,Mobile app crash,The iOS app crashes on launch after updating to 5.2.,technical
+24,Partnership,We're an agency and would like to resell your product to our clients.,sales
+25,Double subscription,It looks like we have two workspaces each with a paid subscription. We only need one.,billing
+26,CSV import error,Import fails with 'invalid encoding' on files exported from Excel.,technical
+27,Pilot program,Can we run a 30-day pilot with 20 users before committing?,sales
+28,Prorated charge,Why was I charged $83 mid-month? I didn't change anything.,billing
+29,2FA codes,Users aren't receiving 2FA SMS codes in Germany.,technical
+30,Custom contract,Our legal team needs custom terms and a DPA before we can sign.,sales
+31,Downgrade refund,I downgraded from Business to Pro. Will I get credit for the unused time?,billing
+32,Timezone bug,Scheduled reports go out at the wrong hour since daylight saving changed.,technical
+33,Feature for purchase,Is the audit log feature available on our plan or do we need to upgrade?,sales
+34,Tax exemption,We're tax exempt. How do I upload our certificate so we stop being charged sales tax?,billing
+35,Integration broken,The Salesforce sync stopped updating contacts two days ago.,technical
+36,Budget approval,I need a formal quote for 50 seats to get budget approval.,sales
+37,Invoice address,Please change the billing address on future invoices to our new office.,billing
+38,Permissions,Admins can't see the billing tab even though they have the owner role.,technical
+39,Expansion,We're rolling out to three more regions next quarter; can we talk about an enterprise agreement?,sales
+40,Cancel and refund,The product doesn't work for us. Cancel immediately and refund this month please.,billing

@@ -356,6 +356,43 @@ Server, from the same review: a verdict must match a row and kind the queue actu
 
 **Decisions from the data.** Cursor-based incremental runs are not worth building yet: a fully cached 100k run takes 4 s, so hashing every row is cheap. Throughput is latency × concurrency, not a rate limit; `HUNCH_CONCURRENCY` sets it. A 1M-row run would take ~5 hours at 57/s and cost ~$16.
 
+## Findings, round 15: the first real user, and what writing the docs found (2026-09-25)
+
+**First real user: the maintainer's own Claude Code sessions.** 533 turns (personal, games and scratch projects; work repos excluded), `outcome` and `claims` as in `examples/claude_code` plus `redact: [secrets, emails, home, <IPv4>]`; $0.038 for both, 18 s. The developer who wrote the sessions reviewed 43 `outcome` turns: 28 random spot checks and 15 below `act`. Only aggregates are recorded here.
+
+| | |
+|---|---|
+| `outcome` estimated accuracy | 92.9% (95% CI 77.4–98.0%), 26 of 28 random turns |
+| context gap (`needs_context`) | 1 of 30 random turns: request, final reply and next message are almost always enough |
+| confidence ≥ 0.6 | 23 of 23 reviewed answers right; calibration error 0.208, all from underconfidence |
+| mistakes | 4, all `unclear` read as `failed` (3) or `worked` (1), confidence 0.43–0.57; one was another agent session's message taken as the developer's |
+| claims × outcome (unreviewed `claims`) | agent said done: failed or redirected next in 7 of 227 turns (3%); did not say so: 26 of 306 (8%) |
+
+**What it changed.**
+- *Judge from the text shown.* A reviewer who remembers the session can decide rows the model cannot: that is missing context, not a model error. Review now says so, and `c` records `needs_context`, which leaves the estimate and is reported by `test` as the context gap rate.
+- *Messages from other agent sessions are not the developer's* (`<cross-session-message>` and its plain-text form): the trace reader skips them. Trace Commons rows unchanged.
+- *The review screen was unusable* (one long line per field, jargon, three of four options, different keys per kind): rewritten with the standard library; one key scheme for every row.
+- *A spot check without an answer key saved "-" as gold* (CLI and server): it now confirms the model's answer.
+- Proposed next version of `outcome`: a follow-up question is not a failure; `act` 0.60. Not yet diffed.
+
+**Writing the docs found eleven bugs.** Every example in the docs was run; that, and an adversarial review of the pages against the code (Fable, `--max-cost 0`), found:
+
+| | was | now |
+|---|---|---|
+| gold on `score` questions | never matched (answers are `2:Frustrated`, gold `2`): 0% accuracy with a perfect key; calibration skipped | compared by level; gold may be `2`, `Frustrated` or `2:Frustrated`; calibration computed |
+| `run --node X` | ignored: ran every judgment | runs X and the judgments it reads from |
+| `diff --model` without `--against` | crashed | compares the same specs on their own engine |
+| a spec missing `key`, `state` or `model`; a bad `view` | `KeyError` in lint or at run time | one lint error |
+| bad YAML, a missing path | a stack trace | one line naming the file and position |
+| missing API key | `KeyError` naming the fallback variable | stops before sending, naming `TYPESAFE_API_KEY` |
+| escalated answers served from the store | reported `cached: False` | `True` |
+| `suggest`'s writer | uncapped by `--max-cost`; a missing key counted as a bad rewrite | capped at its worst case; a missing key stops it |
+| `IntEnum` levels | described only by `__doc__` set after the class (docstrings in the class body are not attached) | also `options` by member name |
+| server review page | dropped `audit` after a verdict; a double-wrapped missing-column error | fixed |
+| `materialized … in .hunch/store.sqlite` | printed even with `HUNCH_STORE` elsewhere | the real path |
+
+Output of `test`, `diff`, `compile` and `review --list` on every example is byte-identical before and after these fixes. Not changed, documented instead: the results table keeps the raw row (redaction applies to what is hashed, sent and logged); `test` exits 1 both for a failed check and for a cost refusal; `spec_hash` includes `act`, `gold` and `tests`, so `freeze` refuses a threshold-only change.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
@@ -369,4 +406,4 @@ Decisions for the real build:
 ### Resolved open questions
 
 - Order stability costs N× calls → run on a deterministic sample (stable across runs, so cached). 150 rows × 2 permutations = $0.03.
-- Score calibration still open (ordinal); noul calibration implemented, untested on real gold.
+- Score calibration: confidence against whether the level was right, like choice (round 15). noul calibration implemented.

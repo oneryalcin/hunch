@@ -1,0 +1,36 @@
+---
+title: "Environment variables"
+description: "Every environment variable hunch and hunch-server read, with its default and effect."
+---
+
+## API keys
+
+Only the key for the engine a spec uses is needed, and only when an answer is not already in the store. A fully cached run needs no key.
+
+| Variable | Used by | Effect |
+|---|---|---|
+| `TYPESAFE_API_KEY` | `model: jev-…` | The TypeSafe key for Jev. |
+| `TYPESAFE_AI_API_KEY` | `model: jev-…` | Read if `TYPESAFE_API_KEY` is not set. |
+| `DEEPSEEK_API_KEY` | `model: deepseek:<id>`, and `hunch suggest` with the default writer | The DeepSeek API key. |
+| `OPENROUTER_API_KEY` | `model: openrouter:<id>` | The OpenRouter API key. |
+
+A missing key stops the command before anything is sent (for `suggest`, before the writer is called), naming the variable to set: `ticket_triage: set TYPESAFE_API_KEY to ask jev-1.13.0 (40 requests to send)`. Cached answers never need a key.
+
+## hunch
+
+| Variable | Default | Effect |
+|---|---|---|
+| `HUNCH_STORE` | unset | Path of the SQLite store to use. When unset, hunch uses the nearest `.hunch/store.sqlite` in the spec's folder or above, or creates one at the git repository root. See [Store](/reference/store#where-it-lives). |
+| `HUNCH_MAX_COST` | unset (no cap) | Refuse to ask if one judgment's missing answers would cost more than this many US dollars, estimated before asking. `--max-cost` overrides it on the CLI. Read once when `hunch` is imported. |
+| `HUNCH_CONCURRENCY` | `16` | Requests in flight at once for each judgment. The 100,000-row test ran at 32 with no rate-limit errors. Read once at import. |
+| `NO_COLOR` | unset | Any value turns off bold and dim text on the `hunch review` screen. Output is also plain when it is not a terminal. |
+
+## hunch-server
+
+| Variable | Default | Effect |
+|---|---|---|
+| `HUNCH_PROJECTS` | the current folder | The folder every request `path` is relative to. Paths that resolve outside it are refused. |
+| `HUNCH_SERVER_TOKEN` | unset (open server) | The token every request must carry. See [authentication](/reference/server-api#authentication). |
+| `HUNCH_SERVER_MAX_COST` | `0.01` | The cost cap for answers the server asks for, per judgment per request, in US dollars. It replaces `HUNCH_MAX_COST` inside the server. |
+
+The server also reads `HUNCH_STORE`, `HUNCH_CONCURRENCY` and the API keys, like the CLI.

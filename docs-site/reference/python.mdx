@@ -1,0 +1,161 @@
+---
+title: "Python API"
+description: "Every function the hunch package exports, with its exact signature and what it returns."
+---
+
+```python
+import hunch
+```
+
+The CLI is a thin shell over these functions. Everything here reads and writes the same specs and the same [store](/reference/store) as the CLI, so a row judged from Python is a cache hit for the next `hunch run`, and the other way round.
+
+## Projects
+
+A *project* is what every function below works on: one or more judgments in dependency order. You can get one from a spec file, a folder of specs, a spec dict, or a list of spec dicts.
+
+### `load`
+
+```python
+hunch.load(obj, base: str | Path = ".") -> dict
+```
+
+Returns a project.
+
+| `obj` | Meaning |
+|---|---|
+| `"triage.yml"` or a `Path` | One spec file: a one-judgment project. |
+| `"specs/"` | A folder: every `*.yml` in it, ordered by their `ref()` dependencies. |
+| a `dict` | One spec in its dict form, for example from [`spec_from_model`](#spec_from_model). |
+| a `list` of dicts | A graph built in Python. Generate repetitive specs instead of copying files. |
+
+`base` is the folder that relative `source` paths in a dict spec resolve against. It is ignored for paths.
+
+### `run`
+
+```python
+hunch.run(obj, base: str | Path = ".") -> dict
+```
+
+Same as `hunch run`: asks only the answers the store lacks, then materializes each judgment's table. Takes the same `obj` as `load` and returns the project. It prints the same progress and cost lines as the CLI.
+
+### `results`
+
+```python
+hunch.results(obj, base: str | Path = ".", judgment: str | None = None) -> list[dict]
+```
+
+The materialized table of a judgment from its last complete run, one dict per row. Without `judgment`, the last judgment in dependency order. Columns are described in [Store](/reference/store#judgment-tables).
+
+```python
+rows = hunch.results("prototype/examples/features/triage.yml")
+len(rows)          # 6
+sorted(rows[0])[:4]  # ['_hunch_run_id', '_path_p', 'body', 'dept']
+```
+
+## Judging one row
+
+### `judge`
+
+```python
+hunch.judge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
+            shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None
+```
+
+Judges one row inside an app. The whole project runs on that row with the same cache keys as a batch run. A row the batch already judged costs nothing, and a row judged here is free for the next batch.
+
+| Argument | Meaning |
+|---|---|
+| `path` | A spec file or a folder of specs. Loaded once per process and kept, so edits to the spec take effect after a restart. |
+| `row` | The row as a dict. Use it when a column is called `node`, `shadow` or `log`. |
+| `**fields` | The row as keyword arguments. Merged over `row`. |
+| `node` | Return only this judgment's answers. |
+| `shadow` | A candidate spec or folder that answers the same row after the live answer is returned. See [Shadow mode](/guides/shadow). |
+| `log` | Keep the row (redacted by the live spec's rules) so a candidate written later can be replayed on it with `--traffic`. `shadow` implies `log`. |
+
+It returns, for each question, a dict:
+
+| Key | Meaning |
+|---|---|
+| `label` | The answer: a choice option, `yes`/`no`, or `"<level>:<description>"` for a score. |
+| `p` | The probability of that label. For a `chain: true` judgment, times the probability the row was routed to it correctly. |
+| `margin` | Distance from the decision boundary: `abs(p - 0.5) * 2` for yes/no, top minus runner-up for a choice. This is what Pydantic AI calls `confidence`. |
+| `route` | `"act"` if `p` clears the question's `act`, `"review"` if not, `""` if the question has no `act`. |
+| `cached` | `True` if the answer came from the store. |
+
+The shape depends on the project:
+
+- One judgment, or `node` given: `{question: answer}`.
+- Several judgments: `{judgment: {question: answer}}`. A judgment whose `where` excluded this row is `None`. A `union` judgment is left out.
+- A `type: multi` question appears as one yes/no answer per option, named `<question>__<option>`.
+
+```python
+hunch.judge("prototype/examples/banking77/intent.yml",
+            text="I still have not received my new card, I ordered over a week ago.")
+# {'intent': {'label': 'card_arrival', 'p': 1.0, 'margin': 1.0, 'route': 'act', 'cached': True}}
+```
+
+`judge` runs its own event loop with `asyncio.run`, so it cannot be called from inside a running loop. Use `ajudge` there.
+
+With `shadow`, the candidate runs in a separate thread after `judge` returns. The thread is not a daemon, so a script waits for it at exit and the candidate's answers are recorded.
+
+### `ajudge`
+
+```python
+await hunch.ajudge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
+                   shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None
+```
+
+The async form of `judge`, for FastAPI, Starlette and other event-loop code. Same arguments, same return value. A `shadow` candidate runs as a background task in the current event loop. It never delays the live answer and a failure in it is printed to stderr, never raised.
+
+### Costs and errors
+
+Both functions ask the engine for any answer the store lacks. Two things stop that:
+
+- A cost cap. `HUNCH_MAX_COST` (read when `hunch` is imported), or `hunch.core.MAX_COST = 0.0` at runtime. If one judgment's missing answers would cost more, nothing is asked and `SystemExit` is raised with a message such as `intent: would ask 1 answers in 1 requests (~$0.0001), above --max-cost $0.0; nothing asked`.
+- A missing input column raises `KeyError`, for example `"triage: state needs ['body']"`.
+
+Spec errors also raise `SystemExit`: the engine reports them by exiting. Catch `SystemExit` around `judge` in long-running code.
+
+## Pydantic classes as specs
+
+See [Pydantic](/guides/pydantic) for the type mapping.
+
+### `spec_from_model`
+
+```python
+hunch.spec_from_model(cls, *, judgment: str | None = None, model: str = "jev-1.13.0",
+                      source: str | None = None, key: str = "id", state: list[str] | None = None,
+                      description: str | None = None, **spec) -> dict
+```
+
+A spec dict whose questions are the class's fields. `cls` may also be a bare output type such as `Literal["spam", "ham"]` or `bool`. That becomes one question named `output`, asked with `description`. `judgment` defaults to the class name in snake case. Any other spec key (`tests`, `redact`, `where`, …) can be passed through `**spec`.
+
+### `judge_model`
+
+```python
+hunch.judge_model(cls, spec: dict, base: str | Path = ".", **fields)
+```
+
+Judges one row with a spec built by `spec_from_model` and returns an instance of `cls`. For a bare output type it returns the value itself.
+
+### `to_model`
+
+```python
+hunch.to_model(cls, answers: dict[str, dict])
+```
+
+Builds an instance of `cls` from answers shaped `{question: {"label": ...}}`, converting each label to the type the field declares: `bool`, the `Literal` or `Enum` value, a list for `list[...]`, the `IntEnum` level, `None` for "none of these".
+
+## Also exported
+
+| Name | Signature | Use |
+|---|---|---|
+| `load_project` | `(path: Path, texts: dict[str, str] \| None = None) -> dict` | Load a spec file or folder. `load` calls it for paths. |
+| `load_spec` | `(path: Path, text: str \| None = None) -> dict` | Parse one spec file. |
+| `lint` | `(project: dict) -> tuple[list[str], list[str]]` | `(errors, warnings)` for a project, the same checks as `hunch lint`. |
+| `execute` | `(project: dict, **kw) -> dict[str, dict]` | Run a project and return every judgment's rows, answers and cost stats without materializing tables. |
+| `decide` | `(a: dict) -> tuple[str, float, float]` | `(label, confidence, margin)` for one raw answer from the store. |
+| `spec_yaml` | `(spec: dict) -> str` | A spec dict as YAML, for saving a generated spec as a file. |
+| `table_name` | `(spec: dict) -> str` | The judgment's table in the store, including the `__<engine>` suffix under `--model`. |
+
+`hunch.core` is the engine itself. Its internals (review queue, estimators, the store helpers) are importable, but they are not a stable API.
