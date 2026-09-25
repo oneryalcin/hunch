@@ -12,7 +12,7 @@ import json
 import os
 import sqlite3
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -60,7 +60,7 @@ def load(rel: str) -> dict:
     try:
         project = core.load_project(project_path(rel))
     except SystemExit as e:  # the engine reports spec errors by exiting; a server must not
-        raise Refused(422, str(e))
+        raise Refused(422, str(e)) from None
     if not project["order"]:
         raise Refused(422, f"{rel!r} is not a spec or a folder of specs")
     return project
@@ -70,7 +70,7 @@ def audit_of(value) -> int:
     try:
         return int(value or 30)
     except ValueError:
-        raise Refused(400, f"audit must be a whole number, got {value!r}")
+        raise Refused(400, f"audit must be a whole number, got {value!r}") from None
 
 
 def guarded(fn):
@@ -120,7 +120,7 @@ async def api_judge(request: Request):
     try:
         body = await request.json()
     except ValueError:
-        raise Refused(400, "body must be JSON")
+        raise Refused(400, "body must be JSON") from None
     if not isinstance(body, dict) or not isinstance(body.get("row", {}), dict):
         raise Refused(400, 'expected {"path": ..., "row": {column: value}}')
     path = project_path(body.get("path"))
@@ -130,9 +130,9 @@ async def api_judge(request: Request):
     try:
         out = await core.ajudge(path, body.get("row") or {}, node=body.get("node"), shadow=shadow, log=bool(body.get("log")))
     except SystemExit as e:  # spec errors and the cost cap report by exiting
-        raise Refused(422, str(e))
+        raise Refused(422, str(e)) from None
     except KeyError as e:
-        raise Refused(422, e.args[0] if e.args and isinstance(e.args[0], str) else f"row is missing {e}")
+        raise Refused(422, e.args[0] if e.args and isinstance(e.args[0], str) else f"row is missing {e}") from None
     return JSONResponse(out)
 
 
@@ -231,7 +231,7 @@ def node_of(project: dict, name: str | None) -> str:
     try:
         return core.pick(project, name)
     except SystemExit as e:
-        raise Refused(400, str(e))
+        raise Refused(400, str(e)) from None
 
 
 @guarded
@@ -259,7 +259,7 @@ async def review_page(request: Request):
         hidden = {"path": rel, "node": node, "qid": it["qid"], "row_id": it["id"], "state_hash": it["shash"],
                   "kind": kind, "token": token, "reviewer": reviewer, "audit": audit}
         buttons = "".join(
-            f"<form method='post' action='/review' style='display:inline'>"
+            "<form method='post' action='/review' style='display:inline'>"
             + "".join(f"<input type='hidden' name='{k}' value='{html.escape(str(v))}'>" for k, v in hidden.items())
             + f"<input type='hidden' name='verdict' value='{v}'><input type='hidden' name='label' value='{html.escape(lab)}'>"
             f"<button>{html.escape(text)}</button></form>" for v, lab, text in choices)
@@ -294,7 +294,7 @@ async def review_post(request: Request):
     core.append_review(spec, {"qid": form["qid"], "row_id": form["row_id"], "state_hash": form["state_hash"],
                               "kind": form["kind"], "verdict": form["verdict"], "label": form.get("label", ""),
                               "reviewer": request.headers.get("x-reviewer") or form.get("reviewer") or "server",
-                              "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+                              "at": datetime.now(UTC).isoformat(timespec="seconds")})
     q = urlencode({"path": rel, "node": node, **{k: form[k] for k in ("token", "reviewer", "audit") if form.get(k)}})
     return RedirectResponse(f"/review?{q}", status_code=303)
 

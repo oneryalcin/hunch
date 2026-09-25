@@ -15,7 +15,15 @@ Library first; the `hunch` CLI is a thin shell over the same functions.
 from pathlib import Path
 
 from hunch.core import (  # noqa: F401  (the public surface)
-    ajudge, decide, execute, judge, lint, load_project, load_spec, spec_yaml, table_name,
+    ajudge,
+    decide,
+    execute,
+    judge,
+    lint,
+    load_project,
+    load_spec,
+    spec_yaml,
+    table_name,
 )
 from hunch.models import spec_from_model, to_model  # noqa: F401
 
@@ -39,6 +47,7 @@ def load(obj, base: str | Path = ".") -> dict:
 def run(obj, base: str | Path = ".") -> dict:
     """Run every judgment (asks only what the store lacks) and materialize its table; returns the results."""
     import argparse
+
     from hunch.core import cmd_run
     project = load(obj, base)
     cmd_run(project, argparse.Namespace())
@@ -59,6 +68,7 @@ def results(obj, base: str | Path = ".", judgment: str | None = None) -> list[di
 def judge_model(cls, spec: dict, base: str | Path = ".", **fields):
     """Judge one row with a spec built from a Pydantic class; returns an instance of that class."""
     import asyncio
+
     from hunch.core import aexecute
     project = load(spec, base)
     res = asyncio.run(aexecute(project, rows_in=[fields]))[project["order"][0]]

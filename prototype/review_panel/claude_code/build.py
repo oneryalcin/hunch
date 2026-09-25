@@ -3,7 +3,9 @@
 # requires-python = ">=3.12"
 # dependencies = ["httpx", "pyyaml"]
 # ///
-import hashlib, json, sys
+import hashlib
+import json
+import sys
 from pathlib import Path
 
 R = Path(__file__).parent

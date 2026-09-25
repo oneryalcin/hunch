@@ -17,6 +17,8 @@ jobs:
           node-version: 22
       - name: Lock files carry no personal uv settings (exempt-package lists name other projects)
         run: "! grep -n 'exclude-newer-package' uv.lock server/uv.lock"
+      - name: Lint (ruff, pinned; config in pyproject.toml)
+        run: uvx ruff@0.16.8 check .
       - name: Every spec key, CLI flag and environment variable is documented
         run: uv run docs-site/check.py
       - name: The quickstart's recipe is a valid spec

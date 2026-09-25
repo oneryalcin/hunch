@@ -8,7 +8,7 @@ import csv
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -18,7 +18,7 @@ import hunch.core as hunch  # noqa: E402  (engine internals: items, store, revie
 EX = HERE.parent.parent / "examples" / "claude_code"
 ids = json.load(open(HERE / "key/map.json"))
 answers = {r: {str(a["n"]): a for a in json.load(open(HERE / f"answers/{r}.json"))} for r in ["opus", "sonnet_a", "sonnet_b"]}
-now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+now = datetime.now(UTC).isoformat(timespec="seconds")
 for judgment, qid in [("outcome", "outcome"), ("claims", "claims_done")]:
     spec = hunch.load_spec(EX / f"{judgment}.yml")
     rows = {r["id"]: r for r in hunch.rows(spec)}

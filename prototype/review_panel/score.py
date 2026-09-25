@@ -1,6 +1,7 @@
 """Score blind reviews: neutral estimate of Jev and answer-key accuracy on the BANKING77 holdout,
 reviewer agreement, and a check of the unverified claims_fixed column."""
-import csv, json, math
+import json
+import math
 from collections import Counter
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def wilson(k, n, z=1.96):
 
 
 def fleiss_binary(votes):  # votes: list of lists of bools (one list per item)
-    n = len(votes[0]); N = len(votes)
+    n, N = len(votes[0]), len(votes)
     P = [(sum(v) * (sum(v) - 1) + (n - sum(v)) * (n - sum(v) - 1)) / (n * (n - 1)) for v in votes]
     pbar = sum(P) / N
     p1 = sum(sum(v) for v in votes) / (N * n)
@@ -48,7 +49,7 @@ for r in rows:
 dis = [r for r in rows if r["kind"] == "disagree"]
 agr = [r for r in rows if r["kind"] == "agree"]
 v = Counter(("jev only" if r["j"] and not r["g"] else "key only" if r["g"] and not r["j"] else "both ok" if r["j"] else "neither") for r in dis)
-print(f"BANKING77 holdout (v3), 3 blind reviewers, majority vote")
+print("BANKING77 holdout (v3), 3 blind reviewers, majority vote")
 print(f"  {len(dis)} disagreements (Jev ≠ answer key):")
 for k in ["jev only", "key only", "both ok", "neither"]:
     print(f"    {k:<9} {v[k]:>3}")
@@ -87,7 +88,7 @@ for r in srows:
 unan = sum(len(set(r["votes"])) == 1 for r in srows)
 agree = [r for r in srows if r["maj"] in ("yes", "no")]
 jev_ok = sum(r["jev"] == r["maj"] for r in agree)
-print(f"\nSWE claims_fixed, 40 random traces, 3 blind reviewers")
+print("\nSWE claims_fixed, 40 random traces, 3 blind reviewers")
 print(f"  reviewers unanimous on {unan}/40; majority label: {Counter(r['maj'] for r in srows)}")
 print(f"  Jev matches reviewer majority on {jev_ok}/{len(agree)} ({jev_ok/len(agree):.0%})")
 for r in agree:

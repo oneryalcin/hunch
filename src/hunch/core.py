@@ -40,7 +40,7 @@ import textwrap
 import threading
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -582,7 +582,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
     errors, warnings, columns = [], [], {}
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
-        tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: E731
+        tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
         if "union" in spec:
             branches = [project["nodes"][u] for u in ups]
             for b in branches:
@@ -1738,7 +1738,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         tw = sum(weights.values())
         yes = sum(weights[it["id"]] for it in gold_its if "yes" in it["gold"]) / tw if q["type"] == "noul" else None
         note = " [weighted to the population]"
-        print(f"  weighted to the population (source sampling weights)"
+        print("  weighted to the population (source sampling weights)"
               + (f": {yes:.0%} yes among these rows, {sum('yes' in it['gold'] for it in gold_its) / len(gold_its):.0%} in the sample" if yes is not None else ""))
     w = (lambda it: weights[it["id"]]) if weights else (lambda it: 1.0)
 
@@ -1791,7 +1791,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     if it_spec_chain(its):
         own = [(decide(answers[it["key"]])[1], hit(it, answers[it["key"]])) for it in gold_its]
         chn = [(conf_of(it, answers[it["key"]]), h) for it, (_, h) in zip(gold_its, own)]
-        sep = lambda xs: auroc([c for c, h in xs if h], [c for c, h in xs if not h]) if 0 < sum(h for _, h in xs) < len(xs) else float("nan")  # noqa: E731
+        sep = lambda xs: auroc([c for c, h in xs if h], [c for c, h in xs if not h]) if 0 < sum(h for _, h in xs) < len(xs) else float("nan")
         print(f"       confidence is chained (× P(routed here correctly)); it separates right from wrong answers "
               f"with AUROC {sep(chn):.3f}, own confidence alone {sep(own):.3f}")
     scored = [(answers[it["key"]], hit(it, answers[it["key"]]), w(it), it.get("path_p", 1.0)) for it in gold_its]
@@ -2005,7 +2005,7 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     spec = project["nodes"][project["order"][0]]
     path = results_path(project)
     path.parent.mkdir(parents=True, exist_ok=True)
-    doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(UTC).isoformat(timespec="seconds"),
            "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed, "sample": SAMPLE,
            "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
@@ -2311,7 +2311,7 @@ def cmd_review(project: dict, args) -> None:
                     label = gold_str(it["raw_gold"])
             append_review(spec, {"qid": it["qid"], "row_id": it["id"], "state_hash": it["shash"], "kind": kind,
                                  "verdict": verdict, "label": label or "", "reviewer": reviewer,
-                                 "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+                                 "at": datetime.now(UTC).isoformat(timespec="seconds")})
             done += 1
             break
     print(f"\n{done} answers saved to {reviews_path(spec).name}")
@@ -2462,8 +2462,8 @@ def cmd_suggest(project: dict, args) -> None:
               f"(${cstats['cost']:.4f})")
     print(f"  writer cost ${writer_cost:.4f}")
     if kept:
-        print(f"  before adopting: `hunch diff <rewrite> --against <spec> --source <holdout>`: on BANKING77 a kept "
-              f"rewrite's +5.1% was +2.4% (n.s.) on the holdout")
+        print("  before adopting: `hunch diff <rewrite> --against <spec> --source <holdout>`: on BANKING77 a kept "
+              "rewrite's +5.1% was +2.4% (n.s.) on the holdout")
 
 
 # ---------- online ----------
