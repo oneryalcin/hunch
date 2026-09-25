@@ -1,11 +1,28 @@
 [project]
-name = "hunch"
-version = "0.1.0"
-description = "Judgments as code: specs, a content-addressed answer store, tests against gold, diffs, review, shadow mode"
+name = "hunch-ai"  # the PyPI name `hunch` is a placeholder someone else holds; import and command stay `hunch`
+dynamic = ["version"]  # from src/hunch/__init__.py, so the package and the release tag can't disagree
+description = "Write the questions your code asks a model as specs, then test, diff and review the answers like code"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
 dependencies = ["httpx>=0.27", "pyyaml>=6"]
+keywords = ["llm", "evals", "classification", "judgments", "agents", "testing", "calibration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Documentation = "https://fuguai.mintlify.site"
+Source = "https://github.com/oneryalcin/hunch"
+Issues = "https://github.com/oneryalcin/hunch/issues"
 
 [project.optional-dependencies]
 pydantic = ["pydantic>=2"]
@@ -17,5 +34,11 @@ hunch = "hunch.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/hunch/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/hunch"]
+
+[tool.hatch.build.targets.sdist]  # the library only: not the prototype, docs site, server or anything local
+include = ["/src/hunch", "/README.md", "/LICENSE", "/NOTICE", "/pyproject.toml"]

@@ -72,7 +72,7 @@ jobs:
           key: hunch-store-${{ github.run_id }}
           restore-keys: hunch-store-
       - name: Install hunch
-        run: uv tool install git+https://github.com/oneryalcin/hunch
+        run: uv tool install hunch-ai
       - name: Test
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
