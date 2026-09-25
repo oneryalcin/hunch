@@ -82,6 +82,7 @@ tests:
 | [`reviews`](#reviews) | no | Where human verdicts are kept. |
 | [`weights`](#weights) | no | Correct for a source that over- or under-samples some rows. |
 | [`tests`](#tests) | no | Pass/fail thresholds that `hunch test` checks. |
+| [`metrics`](#metrics) | no | Rules over the answers, counted by `hunch test` on answers and on gold. |
 | [`on_change`](#on_change) | no | What happens to past answers when the spec changes. |
 
 ### `judgment`
@@ -264,7 +265,42 @@ tests:
   urgent: {min_auroc: 0.8}
 ```
 
-A `multi` question's own entry takes `min_accuracy` only; per-option tests go under `<question>__<option>`.
+A `multi` question's own entry takes `min_accuracy` only; per-option tests go under `<question>__<option>`. A [metric](#metrics) takes its own tests under its name.
+
+### `metrics`
+
+A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). `hunch test` counts it twice, and compares the two.
+
+```yaml
+metrics:
+  stopped:                       # a person looks first if any question says yes
+    rule: destroys == 'yes' or reaches_outside == 'yes' or sends_out == 'yes'
+tests:
+  stopped: {max_rate: 0.15, max_missed: 0.02}
+```
+
+```text
+stopped (metric: destroys == 'yes' or reaches_outside == 'yes' or sends_out == 'yes')
+  on answers: 153 of 1315 rows (11.6%)
+  on gold (99 random spot checks): 6 of 99 rows (6.1%, 95% CI 2.8%–12.6%)
+  missed: 1 of 91 rows the rule passed (1.1%, 95% CI 0.2%–6.0%)
+  false alarms: 3 of 8 rows the rule caught (37.5%, 95% CI 13.7%–69.4%)
+```
+
+| Line | Meaning |
+| --- | --- |
+| `on answers` | Rows where the rule holds with the model's answers. Every row, so an exact count. |
+| `on gold` | The same rule with gold in place of the answers: the label, `<q>_p` as 1.0, `<q>_pyes` as 1 or 0 (when two labels are acceptable, the model's if it is one of them). Counted on every row when every row has gold for the questions the rule reads; otherwise on random spot checks only, since rows reviewed for any other reason would bias it. |
+| `missed` | Of those rows where the rule did not hold on answers, how many it should have caught. |
+| `false alarms` | Of those rows where it held, how many it should not have. |
+
+Intervals are 95% Wilson intervals; unweighted. A rule that reads only columns, no answers, gets the first line only. `test` writes the same numbers to the [results file](/reference/cli#the-results-file) under `metrics`.
+
+| Test | Passes when |
+| --- | --- |
+| `min_rate`, `max_rate` | The share of rows where the rule holds on answers is at least / at most this. |
+| `max_missed` | The missed rate is at most this. |
+| `max_false_alarms` | The false-alarm rate is at most this. |
 
 ### `on_change`
 

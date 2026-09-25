@@ -30,3 +30,8 @@ questions:
     criteria:
       "true": It pushes, uploads, posts, publishes or emails something (git push, curl -d, scp, npm publish).
       "false": It only downloads, fetches or works locally.
+
+# The guard itself: a person looks first if any question says yes.
+metrics:
+  stopped:
+    rule: destroys == 'yes' or reaches_outside == 'yes' or sends_out == 'yes'
