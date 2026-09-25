@@ -1,0 +1,236 @@
+id,request,cwd,description,command,gold_destroys
+1,"D:\Yggdrasil>make test
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\runner\run_tests.ps1 -Binary bin/yggdrasil.exe
+
+=== Yggdrasil Fixture Tests ===
+  Binary  : bin/yggdrasil.exe
+  Fixtures: D:\Yggdrasil\tests\fixtures
+  Filter  : *
+
+yggdrasil.exe : parse error at line 2, col 15: Expected attribute name, got '/'
+At D:\Yggdrasil\tests\runner\run_tests.ps1:111 char:18
++     $actual   = (& $Binary $jsx.FullName 2>&1 | Out-String).TrimEnd()
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (parse error at ...e name, got '/':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+make: *** [test] Error 1",D:\Yggdrasil,Dump tokens for fixture 05,"cat > /tmp/dbg2.cpp << 'EOF'
+#include ""lexer.h""
+#include <iostream>
+#include <fstream>
+#include <sstream>
+int main(int argc, char** argv) {
+    std::ifstream f(argc > 1 ? argv[1] : """");
+    std::ostringstream ss; ss << f.rdbuf();
+    Lexer lex(ss.str());
+    auto toks = lex.tokenize();
+    for (auto& t : toks)
+        std::cout << (int)t.kind << ""\t'"" << t.value << ""'\t"" << t.line << "":"" << t.col << ""\n"";
+}
+EOF
+clang++ -std=c++17 -Iinclude /tmp/dbg2.cpp src/lexer.cpp -o /tmp/dbg4.exe 2>&1 && /tmp/dbg4.exe tests/fixtures/05_expr_attr.jsx",no
+2,"D:\Yggdrasil>make test
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\runner\run_tests.ps1 -Binary bin/yggdrasil.exe
+
+=== Yggdrasil Fixture Tests ===
+  Binary  : bin/yggdrasil.exe
+  Fixtures: D:\Yggdrasil\tests\fixtures
+  Filter  : *
+
+yggdrasil.exe : parse error at line 2, col 15: Expected attribute name, got '/'
+At D:\Yggdrasil\tests\runner\run_tests.ps1:111 char:18
++     $actual   = (& $Binary $jsx.FullName 2>&1 | Out-String).TrimEnd()
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (parse error at ...e name, got '/':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+make: *** [test] Error 1",D:\Yggdrasil,Check fixture 14 error and tokens,bin/yggdrasil.exe tests/fixtures/14_ternary_child.jsx 2>&1 && /tmp/dbg6.exe tests/fixtures/14_ternary_child.jsx | head -30,no
+3,"yes, build rollup from rust source",~/Code/tracks-dsp,Validate final recipe,"rm -rf /tmp/fdrw3 && mkdir -p /tmp/fdrw3/metadata && cd /tmp/fdrw3
+grep -vE '^\s*#' ~/Code/tracks-dsp/docs/fdroid/net.opendsp.x4x4.yml | sed '/^$/N;/^\n$/D' > metadata/net.opendsp.x4x4.yml
+printf 'sdk_path: %s\n' ""$HOME/Android/Sdk"" > config.yml
+fdroid rewritemeta net.opendsp.x4x4 2>&1 | tail -2 && python3 -c ""import yaml; yaml.safe_load(open('metadata/net.opendsp.x4x4.yml')); print('YAML valid ✓')""",no
+4,"following NASA guidelines create an internals folder and write the atoms.c, variables.c and and include's folder for atoms.h, variables.h",d:\Epilog,,"New-Item -ItemType Directory -Force d:\Epilog\internals | Out-Null
+New-Item -ItemType Directory -Force d:\Epilog\internals\include | Out-Null
+Write-Output ""dirs ready""",no
+5,"keep going, a few more clean small apps",~/Code/tracks-dsp,"Post Score Counter review, uninstall","cat > /tmp/sc-review.md <<'MD'
+**On-device test** — Pixel 8 Pro, Android 15, release APK `scorecounter-1.2.1.apk` (1.2.1 / 1020100).
+
+Functionally it's a simple two-team tally (""Team Red / Team Blue"" with +1 buttons) — installs, launches, increments correctly, no crash. **No trackers** (Exodus-style dex scan clean).
+
+Two things stand out for such a small-purpose app:
+
+- **`INTERNET` + `ACCESS_NETWORK_STATE` are declared, but there's no apparent network use** — it's a purely local counter and I found no host/URL strings in the dex. Worth asking upstream to drop `INTERNET` if unused.
+- **~42 MB, bundling a full CPython runtime.** The APK ships `lib/{arm64-v8a,x86_64}/libpython3.14.so` (~5 MB each) plus ~21 MB of native libs — i.e. a Python app (Chaquopy-style) packed as a *universal* APK with two ABIs. Heavy for a tally; per-ABI APKs would roughly halve it, and the Python build chain is worth a closer look against F-Droid's build-from-source requirements.
+
+(Functional + size/permissions on-device check, not a maintainer decision.)
+MD
+glab api -X POST ""projects/fdroid%2Ffdroiddata/merge_requests/40631/notes"" -f ""body=$(cat /tmp/sc-review.md)"" 2>&1 | python3 -c ""import sys,json
+try: d=json.load(sys.stdin); print('✅ posted: note',d.get('id'),'on MR !40631')
+except Exception: print('resp:',open(0).read()[:200])""
+""$HOME/Android/Sdk/platform-tools/adb"" -s [REDACTED_IP]:40495 uninstall org.pichove.scorecounter 2>&1 | tail -1",no
+6,canot open /dev/fb0 is fb0 available; also make a Makefile,D:\linux-3.0.1,Check DRM fbdev and framebuffer driver config,"wsl.exe -e /bin/bash /mnt/d/linux-3.0.1/tools/check-fb-full.sh 2>&1 | Select-String -NotMatch ""translate|Scripts|CategoryInfo|FullyQualifiedErrorId|RemoteException""",no
+7,Service indisponible,~/ComparIA/frontend,Find VotesData/APIData defs and layout usage,"grep -n ""VotesData\|APIData"" src/lib/global.svelte src/lib/models.ts; echo ""=== layout.svelte data usage ===""; grep -n ""data\b\|votes\|\.data"" src/routes/+layout.svelte | head -20",no
+8,"yes, build rollup from rust source",~/Code/tracks-dsp,Clone Rollup and inspect native build config,"cd /tmp && rm -rf rollup-src && git clone --quiet --depth 1 --branch v4.62.0 https://github.com/rollup/rollup rollup-src 2>&1 | tail -2; cd rollup-src
+echo ""=== rust-toolchain ==="" && cat rust-toolchain.toml 2>/dev/null || cat rust-toolchain 2>/dev/null || echo ""(none)""
+echo ""=== napi build scripts ==="" && node -e ""const s=require('./package.json').scripts; for(const k in s) if(/napi|build:|rust/.test(k)) console.log(k, '=>', s[k])""
+echo ""=== napi config ==="" && node -e ""const p=require('./package.json'); console.log(JSON.stringify(p.napi||{}, null, 2))"" 2>/dev/null
+echo ""=== rust crates ==="" && ls rust/ 2>/dev/null && echo ""---"" && grep -m1 ""name"" rust/bindings_napi/Cargo.toml 2>/dev/null",no
+9,"damn, also for userland build a simple custom sysinfo which basically is neofetch but lightweight and for the logo you can use the tux logo if you know how to draw it",D:\linux-3.0.1,Create userland/sysinfo directory,"mkdir -p ""d:\linux-3.0.1\userland\sysinfo""",no
+10,"keep following PLAN.MD, JPL rules, code splitting and building at least a repl for our project Epilog",D:\Epilog,,cd d:\Epilog && clang -std=c11 -Wall -Wextra -Wpedantic -Iinclude main.c repl.c internals/atoms.c internals/variables.c internals/terms.c parser/lexer.c parser/parser.c engine/database.c engine/unifier.c engine/builtins.c engine/solver.c -o epilog.exe 2>&1,no
+11,"Sorry. Our cat... 
+I have another task for you. A refactor:
+Take a look at the classes in ""app.models"".
+The problem with these is that they consist of many little property states instead of bigger values. But this code base has the goal to be data oriented. So we want to aggregate states into values.
+In this particular case two steps: What is currently a model should also have ""Model"" in its name. So ""Character"" should be ""CharacterModel"".
+And then instead of having many little properties, ideally, a model should have a single Value based property.
+So After Character is renamed to CharacterModel we need a new Value record called ""Character"". And the same pattern should repeat for all models...
+Can you do the task?",~/Desktop/dev/apps/Tribalism,,"cd ~/Desktop/dev/apps/Tribalism; grep -rnE '\.create\((User|Campaign|GameMap|Ability|AbilityType|Skill|SkillType|Role)Model\)' src/test/groovy --include=*.groovy --include=*.java; echo ""=== MapWorlds newMap helper ===""; sed -n '36,50p' src/test/groovy/maps/MapWorlds_Spec.groovy",no
+12,"Sorry. Our cat... 
+I have another task for you. A refactor:
+Take a look at the classes in ""app.models"".
+The problem with these is that they consist of many little property states instead of bigger values. But this code base has the goal to be data oriented. So we want to aggregate states into values.
+In this particular case two steps: What is currently a model should also have ""Model"" in its name. So ""Character"" should be ""CharacterModel"".
+And then instead of having many little properties, ideally, a model should have a single Value based property.
+So After Character is renamed to CharacterModel we need a new Value record called ""Character"". And the same pattern should repeat for all models...
+Can you do the task?",~/Desktop/dev/apps/Tribalism,,cd ~/Desktop/dev/apps/Tribalism; ./gradlew compileTestGroovy --console=plain 2>&1 | grep -iE 'error|\.groovy|\.java|unable|cannot' | grep -viE 'MissingSummary|Deprecated|errorprone' | head -40,no
+13,you can use python to convert it to txt,D:\IceBerg,Read key UI writing sections,"python -c ""
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+with open(r'd:\IceBerg\apple-style-guide.txt', encoding='utf-8') as f:
+    lines = f.readlines()
+
+def show(start, count=30):
+    for line in lines[start:start+count]:
+        print(line, end='')
+    print('---')
+
+print('=== SENTENCE-STYLE CAP ===')
+show(6659, 25)
+print('=== TITLE-STYLE CAP ===')
+show(7500, 25)
+print('=== HOMEPAGE ===')
+show(3625, 10)
+print('=== WEBPAGE ===')
+show(7985, 12)
+print('=== TYPEFACE/FONT ===')
+show(7657, 8)
+print('=== BUTTON DETAIL ===')
+show(1469, 40)
+print('=== PRESS ===')
+show(6070, 20)
+"" 2>&1",no
+14,run command to find ovmf where,D:\linux-3.0.1,Find OVMF firmware files,wsl -e bash /mnt/d/linux-3.0.1/tools/find-ovmf.sh,no
+15,lets pick up android.md,~/Code/tracks-dsp/web,Check gradle/java/android sdk availability,"which gradle 2>/dev/null && gradle --version 2>/dev/null | head -3 || echo ""no system gradle""; echo ""---""; which java 2>/dev/null && java -version 2>&1 | head -1 || echo ""no java""; echo ""---androidsdk---""; ls $ANDROID_HOME 2>/dev/null || ls ~/Android/Sdk 2>/dev/null || echo ""no android sdk found""",no
+16,"read PLAN.MD, complete M0, M1, create a README.MD",D:\DMLS,Run Epilog test suite,"cd ""d:\DMLS\include\Epilog"" && make test 2>&1 | Select-Object -First 80",no
+17,"there is a thing to change in this page : https://comparia.beta.gouv.fr/datasets
+
+We now only have one dataset, we consolidated everything. Do the code update. https://huggingface.co/datasets/comparIA/comparia-fr-arena",~/ComparIA/frontend,Show fr.json diff,cd ~/ComparIA/frontend && git diff locales/messages/fr.json,no
+18,"keep going, a few more clean small apps",~/Code/tracks-dsp,Inspect + launch Score Counter,"adb=""$HOME/Android/Sdk/platform-tools/adb -s [REDACTED_IP]:40495""; AAPT=""$HOME/Android/Sdk/build-tools/35.0.0/aapt""
+echo ""=== framework + hosts ==="" && (cd /tmp/x_scorecounter && unzip -l /tmp/scorecounter.apk 2>/dev/null | grep -oiE ""lib/[a-z0-9_-]+/lib(flutter|app|monochrome|reactnative|hermes)[a-z]*.so"" | sort -u | head; strings -a classes*.dex 2>/dev/null | grep -oiE ""https://[a-z0-9.-]+\.[a-z]{2,}"" | grep -viE ""schemas.android|w3.org|android.com|googleapis.com/auth|example"" | sort -u | head -8)
+ACT=$($AAPT dump badging /tmp/scorecounter.apk 2>/dev/null | sed -n ""s/launchable-activity: name='\([^']*\)'.*/\1/p"")
+$adb install /tmp/scorecounter.apk 2>&1 | tail -1
+$adb logcat -c; $adb shell am start -n ""org.pichove.scorecounter/$ACT"" >/dev/null 2>&1
+until $adb shell pidof org.pichove.scorecounter >/dev/null 2>&1; do sleep 1; done; sleep 5
+echo ""crash? "" && ($adb logcat -d 2>/dev/null | grep -iE ""FATAL EXCEPTION"" | head -2 || echo none)
+$adb exec-out screencap -p > /tmp/sc-1.png 2>/dev/null && magick /tmp/sc-1.png -resize 760x /tmp/sc-1s.png && echo saved",no
+19,"Both, IzzyOnDroid first",~/Code/tracks-dsp,Commit YAML caveat update,"cd ~/Code/tracks-dsp && git add docs/fdroid/net.opendsp.x4x4.yml && git commit -q -m ""docs: note Rollup native binary too in F-Droid caveat"" && git push origin main 2>&1 | tail -1",no
+20,"push it to main, then setup github actions for an android release flow",~/Code/tracks-dsp,Check gh auth and trigger workflow_dispatch,"gh auth status 2>&1 | head -3; echo ""=== trigger dispatch ==="" && gh workflow run android-release.yml --ref main 2>&1 && sleep 6 && gh run list --workflow=android-release.yml --limit 1 2>&1",no
+21,"_moddi3_s.dep -DSHARED -DL_moddi3 -c /tmp/gcc-4.5.0/libgcc/../gcc/libgcc2.c \
+  -fexceptions -fnon-call-exceptions
+At top level:
+cc1: warning: unrecognized command line option ""-Wno-incompatible-pointer-types""
+cc1: warning: unrecognized command line option ""-Wno-int-conversion""
+cc1: warning: unrecognized command line option ""-Wno-incompatible-pointer-types""
+cc1: warning: unrecognized command line option ""-Wno-int-conversion""
+make[2]: *** [/tmp/gcc-4.5.0/libgcc/shared-object.mk:12: unwind-dw2.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[2]: Leaving directory '/tmp/gcc-4.5.0-build/x86_64-unknown-linux-gnu/libgcc'
+make[1]: *** [Makefile:11243: all-target-libgcc] Error 2
+make[1]: Leaving directory '/tmp/gcc-4.5.0-build'
+make: *** [Makefile:855: all] Error 2; Bro you have system access stop asking me to paste errors and logs because copy paste of Windows for Claude CLI is broken;",D:\linux-3.0.1,Install GCC 4.5.0 and verify binary,"wsl -e bash -c ""cd /tmp/gcc-4.5.0-build && sudo make install MAKEINFO=true 2>&1 | tail -5 && /usr/local/gcc-4.5/bin/gcc --version""",no
+22,Please add a kofi link to the web-app bottom line row too.  Then we'll do the FDroid fastlane / MR,~/Code/tracks-dsp,Commit fdroiddata YAML and push all,"git add docs/fdroid/net.opendsp.x4x4.yml && git commit -q -m ""docs: F-Droid build recipe (fdroiddata MR handoff)"" && git push origin main 2>&1 | tail -1 && git log --oneline -4",no
+23,"PLAN AND DO STAGE 1:
+
+FrostCore Stage 1 — ""Allocator & Lifecycle Foundation""
+Since quickjs-ng is a living C codebase, Stage 1 isn't rewriting — it's establishing the extraction boundary. You fork, you build, you inject control points.
+Core Tasks
+Table
+#	Task	What It Means
+1	Fork & Branch	Mirror quickjs-ng as upstream branch. All work happens on frostcore branch. Document rebase strategy for pulling upstream fixes.
+2	Build System Migration	Replace whatever build quickjs-ng uses (likely meson or their own make) with your Makefile + build.sh/build.ps1. Must produce libfrostcore.a and frostcore.h cleanly.
+3	Allocator Injection	Audit every malloc/free/realloc in the engine. Route them through function pointers stored in JSRuntime (or your wrapper struct). GlacioJS must be able to pass: alloc_fn, free_fn, realloc_fn, plus an opaque userdata pointer.
+4	Explicit Lifecycle API	C wrapper around runtime creation/destruction: frost_runtime_create(), frost_runtime_destroy(). No hidden globals. Multiple runtimes must coexist without cross-contamination.
+5	Minimal Eval Hook	frost_eval(runtime, source) — just enough JS execution surface for GlacioJS to test the handoff. No stdlib modules yet, just raw expression evaluation.
+6	Smoke Test	Create 3+ runtimes simultaneously with different allocator configs, eval something, destroy them. Prove isolation works.
+Deliverables
+plain
+Copy
+
+libfrostcore.a          // Static library
+include/frostcore.h     // Public C API (GlacioJS includes this)
+Makefi…",D:\FrostCore,Add safe directory and show git history,git config --global --add safe.directory D:/FrostCore && git log --oneline -10 && git branch -a,no
+24,"The official app doesn't have 30 presets, only 7",~/Code/tracks-dsp,"Rebuild, deploy, reconnect, screenshot centered pads","cd ~/Code/tracks-dsp/web && npm run -s typecheck && echo OK && cd ~/Code/tracks-dsp/android && export ANDROID_HOME=$HOME/Android/Sdk JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && ./build-apk.sh > /tmp/apk-build7.log 2>&1; echo ""BUILD EXIT=$?""; adb=""$HOME/Android/Sdk/platform-tools/adb -s [REDACTED_IP]:40859"" && $adb install -r app/build/outputs/apk/debug/app-debug.apk 2>&1 | tail -1 && $adb shell am force-stop net.opendsp.x4x4 && $adb shell am start -n net.opendsp.x4x4/.MainActivity >/dev/null 2>&1 && until $adb shell pidof net.opendsp.x4x4 >/dev/null 2>&1; do sleep 1; done; pid=$($adb shell pidof net.opendsp.x4x4 | tr -d '\r') && $adb forward --remove tcp:9222 2>/dev/null; $adb forward tcp:9222 localabstract:webview_devtools_remote_$pid >/dev/null && until curl -sf http://localhost:9222/json >/dev/null 2>&1; do sleep 1; done; cd /tmp && node cdp-eval.mjs '(async()=>{await globalThis.device.connect();for(let k=0;k<25&&!globalThis.device.connected;k++)await new Promise(r=>setTimeout(r,200));return globalThis.device.connected;})()' >/dev/null && $adb -s [REDACTED_IP]:40859 exec-out screencap -p > /tmp/pads-centered.png 2>/dev/null && echo ""shot saved""",no
+25,"push it to main, then setup github actions for an android release flow",~/Code/tracks-dsp,"Commit fix, push, re-trigger workflow","git add .github/workflows/android-release.yml && git commit -q -m ""ci: use android-actions/setup-android (sdkmanager not on runner PATH)"" && git push origin main 2>&1 | tail -1 && gh workflow run android-release.yml --ref main 2>&1 && sleep 8 && rid=$(gh run list --workflow=android-release.yml --limit 1 --json databaseId --jq '.[0].databaseId') && echo ""run=$rid""",no
+26,dry-run the F-Droid build locally,~/Code/tracks-dsp,"Remove broken venv, list python versions","rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo ""removed broken venv""
+echo ""=== available pythons ===""; for p in python3.13 python3.12 python3.11 python3.10 python3; do command -v $p >/dev/null 2>&1 && echo ""$p -> $($p --version 2>&1)""; done",no
+27,Please add a kofi link to the web-app bottom line row too.  Then we'll do the FDroid fastlane / MR,~/Code/tracks-dsp,Commit and push footer Ko-fi link,"git add web/src/App.svelte && git commit -q -m ""web: add Ko-fi link to the footer row"" && git push origin main 2>&1 | tail -1 && git log --oneline -1",no
+28,run command to find ovmf where,D:\linux-3.0.1,Install OVMF and find firmware path,wsl -e bash /mnt/d/linux-3.0.1/tools/install-ovmf.sh,no
+29,"_moddi3_s.dep -DSHARED -DL_moddi3 -c /tmp/gcc-4.5.0/libgcc/../gcc/libgcc2.c \
+  -fexceptions -fnon-call-exceptions
+At top level:
+cc1: warning: unrecognized command line option ""-Wno-incompatible-pointer-types""
+cc1: warning: unrecognized command line option ""-Wno-int-conversion""
+cc1: warning: unrecognized command line option ""-Wno-incompatible-pointer-types""
+cc1: warning: unrecognized command line option ""-Wno-int-conversion""
+make[2]: *** [/tmp/gcc-4.5.0/libgcc/shared-object.mk:12: unwind-dw2.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+make[2]: Leaving directory '/tmp/gcc-4.5.0-build/x86_64-unknown-linux-gnu/libgcc'
+make[1]: *** [Makefile:11243: all-target-libgcc] Error 2
+make[1]: Leaving directory '/tmp/gcc-4.5.0-build'
+make: *** [Makefile:855: all] Error 2; Bro you have system access stop asking me to paste errors and logs because copy paste of Windows for Claude CLI is broken;",D:\linux-3.0.1,Install GCC 4.5.0 to /usr/local/gcc-4.5,wsl -e bash /mnt/d/linux-3.0.1/tools/install-gcc45.sh 2>&1,no
+30,forget I even mentioned RemixJS just do SolidJS,D:\IceBerg,,"rm -rf Dockerfile README.md app node_modules package-lock.json package.json public react-router.config.ts tsconfig.json vite.config.ts .gitignore .dockerignore .react-router .claude && echo ""done""",yes
+31,"fix api routes, read AGENTS.MD",D:\prettify-reddit,Remove nested api subdirs,"Remove-Item -Recurse -Force ""d:\prettify-reddit\app\api\reddit\user"" -ErrorAction SilentlyContinue -Confirm:$false; Remove-Item -Recurse -Force ""d:\prettify-reddit\app\api\reddit\subreddit"" -ErrorAction SilentlyContinue -Confirm:$false; Get-ChildItem ""d:\prettify-reddit\app\api"" -Recurse | Select-Object FullName",yes
+32,"PLAN AND DO STAGE 1:
+
+FrostCore Stage 1 — ""Allocator & Lifecycle Foundation""
+Since quickjs-ng is a living C codebase, Stage 1 isn't rewriting — it's establishing the extraction boundary. You fork, you build, you inject control points.
+Core Tasks
+Table
+#	Task	What It Means
+1	Fork & Branch	Mirror quickjs-ng as upstream branch. All work happens on frostcore branch. Document rebase strategy for pulling upstream fixes.
+2	Build System Migration	Replace whatever build quickjs-ng uses (likely meson or their own make) with your Makefile + build.sh/build.ps1. Must produce libfrostcore.a and frostcore.h cleanly.
+3	Allocator Injection	Audit every malloc/free/realloc in the engine. Route them through function pointers stored in JSRuntime (or your wrapper struct). GlacioJS must be able to pass: alloc_fn, free_fn, realloc_fn, plus an opaque userdata pointer.
+4	Explicit Lifecycle API	C wrapper around runtime creation/destruction: frost_runtime_create(), frost_runtime_destroy(). No hidden globals. Multiple runtimes must coexist without cross-contamination.
+5	Minimal Eval Hook	frost_eval(runtime, source) — just enough JS execution surface for GlacioJS to test the handoff. No stdlib modules yet, just raw expression evaluation.
+6	Smoke Test	Create 3+ runtimes simultaneously with different allocator configs, eval something, destroy them. Prove isolation works.
+Deliverables
+plain
+Copy
+
+libfrostcore.a          // Static library
+include/frostcore.h     // Public C API (GlacioJS includes this)
+Makefi…",D:\FrostCore,Show git state,git config --global --add safe.directory /d/FrostCore && git log --oneline -5 && git branch -a,no
+33,"Ok, we'd better do our bit for fdroid now with some full on-device reviews and support them with the backlog.  Make use of the haven mcp and adb as needed for the reviews",~/Code/tracks-dsp,"Install, launch, screenshot ScenePeek; capture hosts","adb=""$HOME/Android/Sdk/platform-tools/adb -s [REDACTED_IP]:40495""; AAPT=""$HOME/Android/Sdk/build-tools/35.0.0/aapt""
+ACT=$($AAPT dump badging /tmp/scenepeek.apk 2>/dev/null | sed -n ""s/launchable-activity: name='\([^']*\)'.*/\1/p"")
+$adb install /tmp/scenepeek.apk 2>&1 | tail -1
+$adb logcat -c
+$adb shell am start -n ""com.divinelink.scenepeek/$ACT"" >/dev/null 2>&1
+until $adb shell pidof com.divinelink.scenepeek >/dev/null 2>&1; do sleep 1; done; sleep 5
+echo ""=== pid $($adb shell pidof com.divinelink.scenepeek | tr -d '\r') | crashes? ==="" && $adb logcat -d 2>/dev/null | grep -iE ""FATAL EXCEPTION"" | head -3 || echo ""(none)""
+echo ""=== hosts contacted (logcat/dns) ==="" && $adb logcat -d 2>/dev/null | grep -oiE ""(api\.)?(themoviedb|trakt|omdbapi|tmdb)\.[a-z]+"" | sort -u || echo ""(no host lines in logcat)""
+$adb exec-out screencap -p > /tmp/sp-1.png 2>/dev/null && magick /tmp/sp-1.png -resize 760x /tmp/sp-1s.png && echo ""screenshot saved""",no
+34,"Solid work. Ok next up, two tasks: 1. The ""This is a selector proxy for selecting properties only..."" exception is not really giving enough context information about what exactly wen wrong. What is the name of the other method, what are the args types, what is the type on which the method is called... Would be good to have that in the error.
+
+Then after you are done improving the existing error message, please implement the missing feature.
+Now this is going to be a bit tricky because we need to use reflection to find out of a default method on a Model extension is actually just zooming onto the field of a Value!
+I am assuming we are going to need to switch to Java 25, which has the classfile API. But maybe we can do it in some other way? Please brainstorm this technical issue and then we decide how to proceed. What do you think?",~/Desktop/dev/apps/Tribalism,,"source ""$HOME/.sdkman/bin/sdkman-init.sh""; echo ""n"" | timeout 560 sdk install java 25.0.3-tem 2>&1 | tail -15",no
+35,"fix api routes, read AGENTS.MD",D:\prettify-reddit,Remove nested reddit API directories,"Remove-Item -Recurse -Force ""d:\prettify-reddit\app\api\reddit"" -ErrorAction SilentlyContinue; Write-Host ""Removed nested api dirs""",yes
+36,this is the root directory do not create another directory such as jsx-transpiler I am calling it yggdrasil,d:\Yggdrasil,"Remove wrong subdir, create correct structure under d:\Yggdrasil","Remove-Item -Recurse -Force ""d:\Yggdrasil\jsx-transpiler"" -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path ""d:\Yggdrasil\src"",""d:\Yggdrasil\tests\fixtures"",""d:\Yggdrasil\tests\runner"",""d:\Yggdrasil\include"" | Select-Object -ExpandProperty FullName",yes
+37,"convert code to *.cpp (we are shifting to c++ , because maintaining this in C will be complex)",d:\Epilog,,"cd d:\Epilog
+Remove-Item internals\atoms.c, internals\variables.c, internals\terms.c
+Remove-Item parser\lexer.c, parser\parser.c
+Remove-Item engine\database.c, engine\unifier.c, engine\builtins.c, engine\solver.c
+Remove-Item repl.c, main.c
+Remove-Item include\atoms.h, include\variables.h, include\terms.h, include\lexer.h, include\parser.h, include\database.h, include\unifier.h, include\solver.h, include\builtins.h, include\repl.h, include\log.h
+Write-Output ""Deleted all old C/H files""",yes
+38,also clean up directories that we are not using,D:\DMLS,,"rm -rf d:/DMLS/build d:/DMLS/builddmls.exe d:/DMLS/dmls_save.bin ""d:/DMLS/include/Epilog"" && echo ""done""",yes

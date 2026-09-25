@@ -31,11 +31,11 @@ Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spen
 
 ```bash
 hunch init --list               # the recipes, one line each
-hunch init tickets              # copies the recipe into ./tickets
+hunch init agent-commands       # copies the recipe into ./agent-commands
 hunch init agent-eval evals/    # copies into evals/
 ```
 
-The folder must not exist. Recipes: `agent-eval` (check a coding agent's work from its trace), `tickets` (40 sample support tickets, about $0.001).
+The folder must not exist. Recipes: `agent-commands` (a guard for 38 real coding-agent shell commands, the [quickstart](/quickstart), about $0.002), `agent-eval` (check a coding agent's work from its trace), `tickets` (40 made-up support tickets: a choice, a yes/no and a score).
 
 ### `hunch skill`
 

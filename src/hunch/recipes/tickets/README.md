@@ -1,6 +1,6 @@
 # tickets
 
-Route 40 sample support tickets: which team, is it urgent, how frustrated. The quickstart; about $0.001 to run.
+Route 40 made-up support tickets: which team, is it urgent, how frustrated (a choice, a yes/no and a score). About $0.001 to run.
 
 ```
 tickets.csv (40 rows: subject, body, gold_department)
