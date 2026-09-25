@@ -3,26 +3,36 @@ title: "Use a spec in your app"
 description: "Call the spec you tested from application code, one row at a time, with the same answers and cache as batch runs."
 ---
 
-You have tested a spec over thousands of rows. Now a single ticket arrives in your app. `judge()` answers it with the same spec and the same store as `hunch run`.
+You have tested a spec over hundreds of rows. Now your coding agent is about to run one more command, and your code has to decide before it does. `judge()` answers with the same spec and the same store as `hunch run`.
 
 ## One row
+
+The user changed their mind about a framework, and the agent's answer is to delete the project:
 
 ```python
 import hunch
 
-answers = hunch.judge("prototype/examples/banking77/intent.yml",
-                      text="I still have not received my new card, I ordered over a week ago.")
+answers = hunch.judge(
+    "src/hunch/recipes/agent_commands/command_guard.yml",
+    request="forget I even mentioned RemixJS just do SolidJS",
+    cwd="D:\\IceBerg",
+    description="",
+    command='rm -rf Dockerfile README.md app node_modules package-lock.json package.json public '
+            'react-router.config.ts tsconfig.json vite.config.ts .gitignore .dockerignore .react-router .claude && echo "done"',
+)
 ```
 
 ```python
-{'intent': {'label': 'card_arrival', 'p': 1.0, 'margin': 1.0, 'route': 'act', 'cached': True}}
+{'destroys': {'label': 'yes', 'p': 0.95, 'margin': 0.9, 'route': 'act', 'cached': False},
+ 'reaches_outside': {'label': 'no', 'p': 0.88, 'margin': 0.76, 'route': '', 'cached': False},
+ 'sends_out': {'label': 'no', 'p': 0.97, 'margin': 0.94, 'route': '', 'cached': False}}
 ```
 
-The row's columns are keyword arguments, and must include every column in the spec's `state`. This row was in the batch run, so the answer came from the store in a few milliseconds. A row the store has never seen makes one engine call, and its answer is then stored for every later caller, batch or app.
+The row's columns are keyword arguments, and must include every column in the spec's `state`. A row the store has never seen makes one engine call, and its answer is then stored for every later caller, batch or app: ask again and the same answers come back with `'cached': True`, in a few milliseconds.
 
 The cache works the other way too. Running `hunch run` over past rows warms it, so repeats of them in the app cost nothing.
 
-Code that compares a label with a name, like `== "card_arrival"`, breaks if the option is renamed. List those names in the spec's `exposures` and the rename fails lint instead: see [apps depend on answer names](/guides/change-a-spec#apps-depend-on-answer-names).
+Code that compares a label with a name, like `== "lost_or_stolen_card"`, breaks if the option is renamed. List those names in the spec's `exposures` and the rename fails lint instead: see [apps depend on answer names](/guides/change-a-spec#apps-depend-on-answer-names).
 
 ## Act on `route`, not on `label`
 
@@ -30,10 +40,9 @@ A label on its own doesn't tell your code whether to trust it. Give the question
 
 ```yaml
 questions:
-  intent:
-    type: choice
-    instructions: What is this bank customer asking about?
-    criteria: { ... }
+  destroys:
+    type: noul
+    instructions: Would running `command` delete, overwrite or reset files, data, branches or history in a way that would be hard to undo?
     act: 0.90
 ```
 
@@ -49,22 +58,22 @@ Because `act` lives in the spec rather than in your code, `hunch test` can check
 
 ## In async code
 
-Inside FastAPI or any event loop, use `ajudge`. `judge` starts its own loop and cannot run inside one.
+Inside FastAPI or any event loop, use `ajudge`. `judge` starts its own loop and cannot run inside one. Here the guard is a service an agent's hook calls before each command: it runs the command only when every answer is a confident no.
 
 ```python
 from fastapi import FastAPI
 import hunch
 
 app = FastAPI()
-SPEC = "prototype/examples/features/triage.yml"
+SPEC = "src/hunch/recipes/agent_commands/command_guard.yml"
 
 
-@app.post("/tickets")
-async def new_ticket(subject: str, body: str):
-    dept = (await hunch.ajudge(SPEC, subject=subject, body=body))["dept"]
-    if dept["route"] == "act":
-        return {"team": dept["label"]}
-    return {"team": "human-triage", "model_thought": dept["label"], "p": dept["p"]}
+@app.post("/before-command")
+async def before_command(request: str, cwd: str, description: str, command: str):
+    a = await hunch.ajudge(SPEC, request=request, cwd=cwd, description=description, command=command)
+    if all(x["label"] == "no" for x in a.values()) and a["destroys"]["route"] == "act":
+        return {"decision": "allow"}
+    return {"decision": "ask", "why": [q for q, x in a.items() if x["label"] == "yes"]}
 ```
 
 ## Sending uncertain answers to a second engine
@@ -72,15 +81,14 @@ async def new_ticket(subject: str, body: str):
 A `review` route doesn't have to mean a person. A question can hand its uncertain answers to another engine first:
 
 ```yaml
-dept:
-  type: choice
-  instructions: Which team should handle this support message?
-  criteria: { billing: ..., technical: ..., sales: ... }
-  act: 0.95
+destroys:
+  type: noul
+  instructions: Would running `command` delete, overwrite or reset files, data, branches or history in a way that would be hard to undo?
+  act: 0.90
   escalate: {model: "deepseek:deepseek-flash"}
 ```
 
-When the first answer is below `act`, the same question goes to the `escalate` model. Its answer replaces the first only if it clears `act` itself; otherwise the first stays and routes to `review`. Both are kept in the store, and the batch table's `dept_by` column records which engine answered.
+When the first answer is below `act`, the same question goes to the `escalate` model. Its answer replaces the first only if it clears `act` itself; otherwise the first stays and routes to `review`. Both are kept in the store, and the batch table's `destroys_by` column records which engine answered.
 
 ## Capping the cost
 
@@ -101,71 +109,57 @@ If the decision already runs in production as a [Pydantic AI](https://pydantic.d
 `spec_from_agent` asks Pydantic AI itself. It starts one run of the agent on a model that records the request and stops, so nothing is sent anywhere, and writes the questions into a spec word for word:
 
 ```python
-from enum import Enum
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict
-from pydantic_ai import Agent, BoolCriteria, UseEnumMemberDocstrings
+from pydantic_ai import Agent, BoolCriteria
 import hunch
 
 
-class Team(UseEnumMemberDocstrings, str, Enum):
-    billing = "billing"
-    """Money already charged or owed: charges, invoices, refunds."""
-    technical = "technical"
-    """Something is broken or misbehaving in the product or API."""
-    sales = "sales"
-    """Buying more or differently: pricing, discounts, seats."""
-
-
-class Ticket(BaseModel):
-    """Triage a support ticket."""
+class Guard(BaseModel):
+    """Decide whether a person should see a coding agent's shell command before it runs."""
     model_config = ConfigDict(use_attribute_docstrings=True)
-    team: Team
-    """Which team should handle this ticket?"""
-    urgent: Annotated[bool, BoolCriteria(true="Something is down or money is lost right now.",
-                                         false="It can wait its turn.")]
-    """Should this ticket jump the queue?"""
+    destroys: Annotated[bool, BoolCriteria(true="It removes or replaces something that has no copy, or rewrites history.",
+                                           false="It only reads, builds, tests, or changes things that are easy to put back.")]
+    """Would running this command delete, overwrite or reset something in a way that would be hard to undo?"""
+    sends_out: bool
+    """Would running this command send code, files or data to another machine or service?"""
 
 
-agent = Agent("typesafe:jev-1.13.0", output_type=Ticket, instructions="You triage tickets for Acme.")
-spec = hunch.spec_from_agent(agent, judgment="triage", state="body", source="tickets.csv")
-open("triage.yml", "w").write(hunch.spec_yaml(spec))
+agent = Agent("typesafe:jev-1.13.0", output_type=Guard, instructions="You guard a coding agent's shell commands.")
+spec = hunch.spec_from_agent(agent, state="command", source="commands.csv")
+open("guard.yml", "w").write(hunch.spec_yaml(spec))
 ```
 
-```yaml triage.yml
-judgment: triage
+```yaml guard.yml
+judgment: guard
 model: jev-1.13.0
 key: id
-state: body
+state: command
 questions:
-  team:
-    type: choice
-    instructions:
-      field: team
-      question: Which team should handle this ticket?
-      goal: Triage a support ticket.
-      background: You triage tickets for Acme.
-    criteria:
-      billing: 'Money already charged or owed: charges, invoices, refunds.'
-      technical: Something is broken or misbehaving in the product or API.
-      sales: 'Buying more or differently: pricing, discounts, seats.'
-  urgent:
+  destroys:
     type: noul
     instructions:
-      field: urgent
-      question: Should this ticket jump the queue?
-      goal: Triage a support ticket.
-      background: You triage tickets for Acme.
+      field: destroys
+      question: Would running this command delete, overwrite or reset something in a way that would be hard to undo?
+      goal: Decide whether a person should see a coding agent's shell command before it runs.
+      background: You guard a coding agent's shell commands.
     criteria:
-      'true': Something is down or money is lost right now.
-      'false': It can wait its turn.
-source: tickets.csv
+      'true': It removes or replaces something that has no copy, or rewrites history.
+      'false': It only reads, builds, tests, or changes things that are easy to put back.
+  sends_out:
+    type: noul
+    instructions:
+      field: sends_out
+      question: Would running this command send code, files or data to another machine or service?
+      goal: Decide whether a person should see a coding agent's shell command before it runs.
+      background: You guard a coding agent's shell commands.
+source: commands.csv
 ```
 
-The agent's prompt is the text it judges, so `state` names the one column that holds it, here `body`. A single column name, rather than a list, is sent as a bare string, which is how the agent sends its prompt. For each row, hunch then sends Jev the same state and the same questions as the agent; only the question names, which the model never sees, are written with `__` instead of `.`. On three tickets, both gave the same labels and the same team probabilities, and `urgent` differed by no more than asking Jev the same thing twice does.
+The agent's prompt is the text it judges, so `state` names the one column that holds it, here `command`. A single column name, rather than a list, is sent as a bare string, which is how the agent sends its prompt. For each row, hunch then sends Jev the same state and the same questions as the agent; only the question names, which the model never sees, are written with `__` instead of `.`. On three real commands (a `find` script, a `git push` and the `rm -rf` above), the agent and hunch gave the same six answers, with margins no further apart than asking Jev the same thing twice.
 
-From here it is an ordinary spec: `hunch test`, `diff`, `review` and `docs` work on it. When the agent changes, record it again and `hunch diff triage.yml --against git:HEAD` shows what the new wording does. It needs Pydantic AI 2.50 or later, which your agent already has; hunch doesn't install it.
+From here it is an ordinary spec: `hunch test`, `diff`, `review` and `docs` work on it. When the agent changes, record it again and `hunch diff guard.yml --against git:HEAD` shows what the new wording does. It needs Pydantic AI 2.50 or later, which your agent already has; hunch doesn't install it.
 
 This holds when the agent's request is a function of one text column. `spec_from_agent` records the agent twice with different prompts and refuses, rather than write a spec that asks something else, when:
 
@@ -229,32 +223,26 @@ uv add "hunch-ai[pydantic]"
 Then:
 
 ```python
-from typing import Literal
 from pydantic import BaseModel, Field
 import hunch
 
 
-class Triage(BaseModel):
-    dept: Literal["billing", "technical", "sales"] | None = Field(
-        description="Which team should handle this support message?",
-        json_schema_extra={
-            "options": {"billing": "Money already charged or owed",
-                        "technical": "Something broken in the product or API",
-                        "sales": "Buying more or differently"},
-            "hunch": {"none": "The message needs no team (thanks, spam, chit-chat)",
-                      "act": 0.95, "gold": "gold_dept"},
-        })
+class Guard(BaseModel):
+    destroys: bool = Field(
+        description="Would running `command` delete, overwrite or reset something in a way that would be hard to undo?",
+        json_schema_extra={"hunch": {"act": 0.9}})
+    sends_out: bool = Field(
+        description="Would running `command` send code, files or data from this machine to another machine or service?")
 
 
-spec = hunch.spec_from_model(Triage, source="messages.csv", state=["subject", "body"])
-ticket = hunch.judge_model(Triage, spec, base="prototype/examples/features",
-                           subject="Charged twice",
-                           body="I see two identical charges for March. Please refund one.")
-# Triage(dept='billing')
+spec = hunch.spec_from_model(Guard, source="commands.csv", state=["request", "command"])
+verdict = hunch.judge_model(Guard, spec, base="src/hunch/recipes/agent_commands",
+                            request="ship it", command="git push --force origin main")
+# Guard(destroys=True, sends_out=True)
 ```
 
-`spec_from_model` produces an ordinary spec dict; `hunch.spec_yaml(spec)` prints it as YAML. The questions are identical to the YAML version's, so they share its cached answers. Save the YAML and commit it to use `hunch test`, `diff` and `review` on it.
+`spec_from_model` produces an ordinary spec dict; `hunch.spec_yaml(spec)` prints it as YAML. Save it and commit it to use `hunch test`, `diff` and `review` on it.
 
 Each field becomes a question: `bool` a yes/no, `Literal` or `Enum` a choice, `IntEnum` a score. The [Python reference](/reference/python#pydantic-classes-as-specs) has the full mapping and where descriptions and `act` go.
 
-`judge_model` returns labels only. For `p` and `route`, save the spec, call `hunch.judge` on the file, and convert with `hunch.to_model(Triage, answers)`.
+`judge_model` returns labels only. For `p` and `route`, save the spec, call `hunch.judge` on the file, and convert with `hunch.to_model(Guard, answers)`.

@@ -3,16 +3,17 @@ title: "Share what your judgments decide"
 description: "Turn a project into one page anyone can read and search: what each judgment decides, how well it was measured, and what depends on it."
 ---
 
-A spec is a policy. It decides which tickets go to billing, which shell commands wait for a person, which agent runs count as done. The people who should approve a policy often don't read YAML, and the numbers that justify it are in a terminal. `hunch docs` puts both on one page.
+A spec is a policy. It decides which shell commands wait for a person, which agent turns count as done, which claims of a fix to believe. The people who should approve a policy often don't read YAML, and the numbers that justify it are in a terminal. `hunch docs` puts both on one page.
 
 ```bash
-hunch docs support/
+hunch test prototype/examples/claude_code/ --max-cost 0
+hunch docs prototype/examples/claude_code/
 ```
 
 ```text
-4 judgments: 1 failing, 1 stale, 1 no results, 1 no gold
-  .hunch/target/support.html
-  .hunch/target/support.manifest.json
+3 judgments: 1 warning, 2 ok
+  prototype/.hunch/target/examples/claude_code.html
+  prototype/.hunch/target/examples/claude_code.manifest.json
 ```
 
 It asks the engine nothing and costs nothing. It reads the specs, the results of the last `hunch test` of the same path, and the store's record of runs. Open the HTML file in a browser, attach it to a pull request, or publish it from CI.
@@ -44,15 +45,15 @@ The page includes no text from your rows. It does include the spec, exposure det
 
 ## Say what uses a judgment
 
-A judgment's answers usually end up somewhere: an app that routes on them, a hook that blocks a command, a dashboard. Name them in the spec with `exposures`:
+A judgment's answers usually end up somewhere: a hook that holds a command for a person, an app that acts on them, a dashboard. Name them in the spec with `exposures`:
 
 ```yaml
 exposures:
-  - name: support-router
-    kind: app
-    owner: support-eng
-    uses: [department]
-  - name: triage-dashboard
+  - name: pre-command-hook
+    kind: hook
+    owner: platform-team
+    uses: [destroys, reaches_outside, sends_out]
+  - name: agent-safety-dashboard
     kind: dashboard
 ```
 
@@ -62,7 +63,7 @@ hunch never calls them. The page shows them under *Used by* and in the lineage. 
 
 The lineage view draws sources, judgments and exposures left to right; scroll to zoom and drag to move. Select a judgment to light up everything it reads from and everything that depends on it. Select it again to open its page.
 
-The search box filters the sidebar and the list by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "refund" finds the judgment whose options mention refunds as well as the one that asks about them.
+The search box filters the sidebar and the list by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "push" finds the command guard, although no question says "push": its answer descriptions mention `git push` and force pushes.
 
 ## In CI
 
