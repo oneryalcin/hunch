@@ -1,0 +1,75 @@
+---
+title: "Share what your judgments decide"
+description: "Turn a project into one page anyone can read and search: what each judgment decides, how well it was measured, and what depends on it."
+---
+
+A spec is a policy. It decides which tickets go to billing, which shell commands wait for a person, which agent runs count as done. The people who should approve a policy often don't read YAML, and the numbers that justify it are in a terminal. `hunch docs` puts both on one page.
+
+```bash
+hunch docs support/
+```
+
+```text
+4 judgments: 1 failing, 1 stale, 1 no results, 1 no gold
+  .hunch/target/support.html
+  .hunch/target/support.manifest.json
+```
+
+It asks the engine nothing and costs nothing. It reads the specs, the results of the last `hunch test` of the same path, and the store's record of runs. Open the HTML file in a browser, attach it to a pull request, or publish it from CI.
+
+## Every judgment gets one status
+
+The page opens on the project: its README's first paragraph, a bar of statuses, and the judgments with the ones that need a look first. A sidebar lists every judgment by status on every screen, with a search box (press `/`). Select a status in the bar to narrow the list to it; the sidebar keeps listing everything.
+
+| Status | Means |
+| --- | --- |
+| failing | A check failed at the last test. The judgment's page says which, with its value and limit. |
+| warning | A check marked `severity: warn` failed. |
+| stale | The spec changed after its last test, so its numbers describe an older version. |
+| no results | The last `hunch test` of this path did not include it: never tested, tested alone with `--node` or through another path, or a test stopped by `--max-cost` (which writes no results). |
+| no gold | Tested, but there is nothing to measure against yet: no answer key, reviews, examples or checks. |
+| ok | Tested, passing, and unchanged since. |
+
+A test records a hash of each spec it measured. When the spec on disk no longer matches, the page says so rather than showing old numbers as current. A test run with `--sample N` is labelled as a sample wherever its numbers appear, and one run with `--model` writes its own results, so it never stands in for the spec's engine.
+
+## A judgment's page starts with the answer
+
+Each judgment's page reads top to bottom in the order a reviewer needs it: what the judgment decides, one line on its status (which check failed, or why the numbers are old or missing), then the evidence, the questions, and the technical detail.
+
+The evidence is one list, a row per question and metric, each at the same weight: failing rows first, each number with its basis. For example, a question with an answer key reads *40 of 40 rows agree with the answer key; at act 0.8 it acts alone on 40 of 40 rows, none wrong*, and one without reads *not measured: no answer key or reviews*. When the accuracy comes from reviews it has a 95% interval, drawn as a band with its endpoints.
+
+Next come the questions, word for word with their options, each with its dial, calibration and most confident mistakes folded under it. Last, the technical reference: the table the judgment writes to the store (the columns an app reads), the spec as written, the shape of one request with the row's fields as placeholders, and recent runs. Beside it all sit its inputs and consumers: where rows come from, what the model sees and what is removed first, what reads its answers and what uses them, and a small lineage.
+
+The page includes no text from your rows. It does include the spec, exposure details, and for the most confident mistakes their row ids and answer-key labels, so share it as you would share the spec.
+
+## Say what uses a judgment
+
+A judgment's answers usually end up somewhere: an app that routes on them, a hook that blocks a command, a dashboard. Name them in the spec with `exposures`:
+
+```yaml
+exposures:
+  - name: support-router
+    kind: app
+    owner: support-eng
+    uses: [department]
+  - name: triage-dashboard
+    kind: dashboard
+```
+
+hunch never calls them. The list is for people: the page shows it under *Used by* and in the lineage, and `hunch diff` names the ones a change reaches:
+
+```text
+affects support-router (app, reads department), triage-dashboard (dashboard)
+```
+
+An exposure without `uses` counts as reading every answer. `description`, a sentence saying what the judgment decides, is the other key written for people; neither is sent to the model or changes an answer's key.
+
+## Lineage and search
+
+The lineage view draws sources, judgments and exposures left to right; scroll to zoom and drag to move. Select a judgment to light up everything it reads from and everything that depends on it. Select it again to open its page.
+
+The search box filters the sidebar and the list by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "refund" finds the judgment whose options mention refunds as well as the one that asks about them.
+
+## In CI
+
+Run `hunch test PATH`, then `hunch docs PATH` with the same path, and keep the HTML file as a build artifact or publish it. When the test finishes, the page describes the commit it was built from; a judgment the test did not reach shows as *no results*. `manifest.json` holds the same project as data, for tools of your own: see [the manifest](/reference/cli#the-manifest).

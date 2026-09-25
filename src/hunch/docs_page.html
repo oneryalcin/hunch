@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{title}} · hunch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* hunch docs. Tokens come from the hunch brand: petrol and blue-grey on white, charcoal ink, ivory for brand surfaces.
+   Fonts load from Google Fonts when online; every face has a fallback, so the page reads the same offline. */
+:root {
+  color-scheme: light;
+  --paper: #ffffff; --side: #f6f4ef; --raise: #fbfaf7; --ink: #252522; --soft: #4a4a45; --muted: #75736b;
+  --line: #e6e2d8; --hair: #efece5; --accent: #405a60; --accent-ink: #2f4449; --mark: #7d969b; --focus: #7d969b;
+  --ok: #3f7d58; --fail: #c64d35; --warn: #a86b12; --stale: #a86b12; --none: #8c8a82; --nogold: #5f7f86;
+  --tint-ok: #e9f2ec; --tint-fail: #f8e7e2; --tint-warn: #f6ecdc; --tint-none: #efeee9; --tint-nogold: #e7eef0;
+  --display: "Barlow Semi Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --body: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  color-scheme: dark;
+  --paper: #111315; --side: #16181b; --raise: #1a1d20; --ink: #ece8df; --soft: #c9c5bb; --muted: #9c998f;
+  --line: #2a2e32; --hair: #212428; --accent: #9db3b7; --accent-ink: #c3d3d6; --mark: #7d969b;
+  --ok: #6fb58a; --fail: #e4775f; --warn: #d9a04a; --stale: #d9a04a; --none: #8f8d85; --nogold: #8fb0b6;
+  --tint-ok: #18261d; --tint-fail: #2c1a16; --tint-warn: #2a2114; --tint-none: #1e1f21; --tint-nogold: #172225;
+} }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #111315; --side: #16181b; --raise: #1a1d20; --ink: #ece8df; --soft: #c9c5bb; --muted: #9c998f;
+  --line: #2a2e32; --hair: #212428; --accent: #9db3b7; --accent-ink: #c3d3d6; --mark: #7d969b;
+  --ok: #6fb58a; --fail: #e4775f; --warn: #d9a04a; --stale: #d9a04a; --none: #8f8d85; --nogold: #8fb0b6;
+  --tint-ok: #18261d; --tint-fail: #2c1a16; --tint-warn: #2a2114; --tint-none: #1e1f21; --tint-nogold: #172225;
+}
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+html, body { margin: 0; background: var(--paper); color: var(--ink) }
+body { font: 15px/1.6 var(--body); -webkit-font-smoothing: antialiased; font-feature-settings: "ss01" }
+a { color: var(--accent); text-decoration: none; text-underline-offset: 3px }
+a:hover { text-decoration: underline }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px }
+code, .mono { font: 13px/1.5 var(--mono) }
+p code, li code, dd code, td code { background: var(--hair); padding: 1px 5px; border-radius: 4px }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: .005em; text-wrap: balance; margin: 0 }
+.num, table.data td, .fig b { font-variant-numeric: tabular-nums }
+
+/* shell: a sidebar you never leave, like dbt docs */
+.shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh }
+.side { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; background: var(--side);
+  border-right: 1px solid var(--line); padding: 20px 16px 16px; display: flex; flex-direction: column; gap: 16px }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none !important }
+.brand svg { width: 22px; height: 22px; flex: none }
+.brand b { font: 600 19px/1.1 var(--display); letter-spacing: .01em; overflow-wrap: anywhere }
+.brand small { display: block; color: var(--muted); font: 11px/1.3 var(--body); letter-spacing: .08em; text-transform: uppercase }
+.search { position: relative }
+.search input { width: 100%; font: 14px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 32px 8px 10px }
+.search input::placeholder { color: var(--muted) }
+.search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 11px var(--mono); color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: var(--raise) }
+.chip { font: 500 12px/1 var(--body); border: 1px solid var(--line); background: var(--paper); color: var(--soft);
+  border-radius: 99px; padding: 5px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent) }
+.chip .n { color: var(--muted) }
+.tree { display: flex; flex-direction: column; gap: 14px }
+.tree h4 { margin: 0 0 4px; font: 600 11px/1 var(--body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted) }
+.tree a { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; color: var(--soft);
+  font: 13px/1.3 var(--mono); text-decoration: none; overflow-wrap: anywhere }
+.tree a:hover { background: var(--hair) }
+.tree a[aria-current="page"] { background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--line) }
+.side-links { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 12px }
+.side-links a { color: var(--soft); padding: 5px 8px; border-radius: 6px; font-size: 14px }
+.side-links a[aria-current="page"] { color: var(--ink); background: var(--paper); box-shadow: 0 0 0 1px var(--line) }
+.side footer { margin-top: auto; color: var(--muted); font-size: 12px; line-height: 1.5 }
+.menu { display: none }
+
+/* status: a dot, a pill, a row stripe */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--c) }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 11px/1 var(--body); letter-spacing: .06em; text-transform: uppercase;
+  color: var(--c); background: var(--t); border-radius: 99px; padding: 5px 9px; white-space: nowrap }
+.st-ok { --c: var(--ok); --t: var(--tint-ok) } .st-fail { --c: var(--fail); --t: var(--tint-fail) }
+.st-warn { --c: var(--warn); --t: var(--tint-warn) } .st-stale { --c: var(--stale); --t: var(--tint-warn) }
+.st-noresults { --c: var(--none); --t: var(--tint-none) } .st-nogold { --c: var(--nogold); --t: var(--tint-nogold) }
+.st-stale.dot { background: transparent; box-shadow: inset 0 0 0 2px var(--c) }
+
+main { min-width: 0; padding-block: 28px 64px; padding-inline: clamp(16px, 4vw, 48px) }
+main > section { max-width: 1040px }
+.eyebrow { font: 600 11px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted) }
+.lede { color: var(--soft); max-width: 68ch; margin: 8px 0 0 }
+.meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px }
+
+/* home */
+.home h1 { font-size: 40px; line-height: 1.05 }
+.health { margin-top: 28px; display: grid; gap: 10px }
+.bar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--hair) }
+.bar span { background: var(--c); min-width: 4px }
+.bar span + span { margin-left: 2px }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--soft) }
+.legend button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 7px }
+.legend button:hover .lab { text-decoration: underline }
+.legend b { font: 600 15px var(--display) }
+.table-wrap { overflow-x: auto; margin-top: 24px; border: 1px solid var(--line); border-radius: 10px }
+table { border-collapse: collapse; width: 100% }
+table.inv th { text-align: left; font: 600 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  padding: 12px 14px; background: var(--raise); border-bottom: 1px solid var(--line); white-space: nowrap }
+table.inv td { padding: 14px; border-bottom: 1px solid var(--hair); vertical-align: top }
+table.inv tr:last-child td { border-bottom: 0 }
+table.inv td:first-child { box-shadow: inset 3px 0 0 var(--c) }
+table.inv tbody tr:hover { background: var(--raise) }
+table.inv .name { font: 500 13px/1.4 var(--mono); color: var(--ink) }
+table.inv .decides { color: var(--soft); max-width: 44ch }
+table.inv .why { font-size: 12px; color: var(--accent) }
+.acc { display: grid; gap: 4px; min-width: 150px }
+.acc .v { font: 600 17px/1 var(--display) }
+.acc .v small { font: 12px var(--body); color: var(--muted) }
+.muted { color: var(--muted) }
+.empty { color: var(--muted); padding: 24px 14px }
+
+/* the interval: accuracy is a range, so it is drawn as one */
+.iv { display: block; width: 100%; max-width: 160px; height: 14px; overflow: visible }
+.iv .track { fill: var(--hair) } .iv .band { fill: var(--mark); opacity: .45 } .iv .pt { fill: var(--ink) }
+.iv .tick { stroke: var(--line) }
+
+/* judgment page: decision, status, evidence, questions, then reference; inputs and consumers in a rail */
+.jhead h1.is-id { font: 500 30px/1.15 var(--mono); letter-spacing: -.01em; overflow-wrap: anywhere }
+.meta .id { color: var(--soft); background: var(--hair); padding: 2px 7px; border-radius: 5px; user-select: all }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; margin-top: 22px; align-items: start }
+.flow { display: grid; gap: 30px; min-width: 0 }
+.flow h2 { font-size: 21px; margin-bottom: 10px }
+.rail { position: sticky; top: 20px; display: grid; gap: 12px }
+.rail .facts { grid-template-columns: 1fr; gap: 2px; padding: 14px 16px; font-size: 14px }
+.rail .facts dd { margin-bottom: 10px }
+.status { padding: 14px 18px; border-radius: 12px; background: var(--t); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent) }
+.status p, .status ul { margin: 0 } .status ul { padding-left: 18px; margin-top: 6px } .status p + p { margin-top: 6px }
+.st-ok.status { background: transparent; border-color: var(--line) }
+.evidence { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px }
+.evidence li { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr); gap: 6px 20px; padding: 14px 16px; border-top: 1px solid var(--hair) }
+.evidence li:first-child { border-top: 0 }
+.evidence li.bad { box-shadow: inset 3px 0 0 var(--fail) }
+.ev-name { font-size: 14px; overflow-wrap: anywhere } .ev-name .mk { color: var(--fail); font-weight: 700; margin-right: 6px }
+.ev-val { display: grid; gap: 4px; font-size: 14px } .ev-val b { font: 600 17px var(--display); margin-right: 6px }
+.ev-val .fail { color: var(--fail); font-weight: 500 }
+.question + .question { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--hair) }
+.question h3 { scroll-margin-top: 20px }
+.scroll { overflow-x: auto; max-width: 100% }
+.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
+.small { font-size: 13px }
+.reason { font-size: 13px; color: var(--fail); margin-top: 4px }
+.reset { font: 500 13px var(--body) } .linkish { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline }
+.legend .reset { color: var(--accent) }
+.edges { margin-top: 14px }
+.empty-side { color: var(--muted); font-size: 13px; margin: 0 }
+
+.crumb { font-size: 13px; color: var(--muted) }
+.jhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px }
+.jhead h1 { font: 600 32px/1.12 var(--display); max-width: 40ch }
+.desc { font-size: 17px; color: var(--soft); max-width: 66ch; margin: 10px 0 0 }
+.why-box { margin: 18px 0 0; padding: 12px 16px; border-radius: 10px; background: var(--t); color: var(--ink); display: grid; gap: 4px }
+.why-box p, .why-box ul { margin: 0 } .why-box ul { padding-left: 18px }
+.why-box b { font-family: var(--mono); font-weight: 500; font-size: 13px }
+.figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 22px }
+.fig { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--raise); display: grid; gap: 8px; align-content: start }
+.fig .q { font: 500 12px var(--mono); color: var(--muted) }
+.fig b { font: 600 32px/1 var(--display) }
+.fig b small { font: 500 14px var(--body); color: var(--muted); margin-left: 4px }
+.fig .sub { font-size: 13px; color: var(--soft) }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 28px; overflow-x: auto }
+.tabs a { padding: 10px 12px; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; text-decoration: none }
+.tabs a[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent) }
+.pane { padding-top: 20px; display: grid; gap: 22px }
+.pane h2 { font-size: 20px }
+.pane h3 { font: 500 15px var(--mono); margin-top: 6px }
+.summary { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 76ch }
+.facts { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px 18px; margin: 0; padding: 16px 18px;
+  border: 1px solid var(--line); border-radius: 12px }
+.facts dt { color: var(--muted); font-size: 13px } .facts dd { margin: 0; overflow-wrap: anywhere }
+.two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: start }
+.qtext { font-size: 16px; max-width: 70ch; margin: 4px 0 8px; white-space: pre-wrap }
+table.data { width: auto; max-width: 100% } table.data td, table.data th { padding: 6px 16px 6px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--hair) }
+table.data th { font: 600 11px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+table.opts td:first-child { white-space: nowrap; padding-right: 18px }
+details { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px }
+details + details { margin-top: 8px }
+summary { cursor: pointer; font-weight: 500; color: var(--accent) }
+details[open] summary { margin-bottom: 10px }
+pre { margin: 0; padding: 16px; background: var(--raise); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto;
+  font: 13px/1.6 var(--mono); tab-size: 2 }
+pre .k { color: var(--accent-ink); font-weight: 500 } pre .c { color: var(--muted); font-style: italic } pre .s { color: var(--soft) }
+.note { color: var(--muted); font-size: 13px; max-width: 72ch; margin: 0 }
+
+/* lineage */
+.dagbox { position: relative; border: 1px solid var(--line); border-radius: 12px; background: var(--raise); overflow: hidden }
+.dagbox.big { height: min(70vh, 640px); cursor: grab } .dagbox.big.dragging { cursor: grabbing }
+.dagbox svg { display: block; width: 100%; height: 100% }
+.dagbox.mini svg { height: auto; max-height: 260px }
+.tools { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px }
+.tools button { font: 500 12px var(--body); color: var(--soft); background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 9px; cursor: pointer }
+.dag .edge { fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 1.4 }
+.dag .node rect { fill: var(--paper); stroke: var(--line); stroke-width: 1.2 }
+.dag .node text { fill: var(--ink); font: 500 12.5px var(--mono) } .dag .node .sub { fill: var(--muted); font: 11px var(--body) }
+.dag .judgment { cursor: pointer } .dag .judgment rect { stroke: var(--c); stroke-width: 1.6 }
+.dag .judgment .bar-l { fill: var(--c) }
+.dag .source rect { stroke-dasharray: 4 3; fill: transparent } .dag .exposure rect { fill: var(--side) }
+.dag.focus .node, .dag.focus .edge { opacity: .16 } .dag.focus .on { opacity: 1 }
+.dag.focus .edge.on { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2 }
+.dag .sel rect { stroke-width: 3 }
+
+@media (max-width: 1180px) { .grid { grid-template-columns: minmax(0, 1fr) 260px; gap: 24px } }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr }
+  .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line) }
+  .menu { display: inline-flex; align-self: flex-start }
+  .side:not(.open) .tree, .side:not(.open) footer { display: none }
+  .grid { grid-template-columns: 1fr } .rail { position: static }
+  .evidence li { grid-template-columns: 1fr }
+  .home h1 { font-size: 32px }
+  table.inv .hide-sm, table.inv thead { display: none }
+  table.inv tr { display: grid; gap: 8px; padding: 14px; box-shadow: inset 3px 0 0 var(--c); border-bottom: 1px solid var(--hair) }
+  table.inv td, table.inv td:first-child { display: block; padding: 0; border: 0; box-shadow: none }
+  table.inv .decides { max-width: none }
+  .facts { grid-template-columns: 1fr; gap: 2px }
+  .facts dd { margin-bottom: 10px }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tree a, .chip, table.inv tbody tr { transition: background-color .12s, box-shadow .12s }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side" id="side">
+  <a class="brand" href="#/">{{mark}}<span><small>hunch docs</small><b>{{title}}</b></span></a>
+  <label class="search"><input id="q" type="search" placeholder="Search judgments" aria-label="Search judgments, questions, options, columns and apps" autocomplete="off"><kbd>/</kbd></label>
+  <button class="chip menu" type="button" id="menu" aria-expanded="false">Judgments</button>
+  {{sidebar}}
+  <footer>{{generated}}</footer>
+</aside>
+<main id="main">{{body}}</main>
+</div>
+<script>
+// Every section is in the HTML and readable without this script: anchors scroll to it. The script only shows one
+// section at a time, narrows the lists, and lets the lineage pan, zoom and highlight.
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+let filter = null;  // a status the overview list is narrowed to (the sidebar always lists every judgment)
+
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  let target = h ? document.getElementById(h) : null, focus = null;
+  if (!target && h.startsWith("lineage/")) { target = $("#lineage"); focus = h.slice(8); }
+  target = target || $("#home");
+  const sec = target.closest("main > section");
+  $$("main > section").forEach(s => s.hidden = s !== sec);
+  const cur = "#" + encodeURIComponent(sec.id);
+  $$(".tree a, .side-links a").forEach(a => a.getAttribute("href") === cur ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  if (sec.id === "lineage") { focusNode($("#lineage .dag"), focus); if (!focus) fit(); }
+  if (target !== sec) target.scrollIntoView(); else scrollTo(0, 0);
+}
+
+function apply() {
+  const q = $("#q").value.trim().toLowerCase();
+  const match = el => { const f = JSON.parse(el.dataset.search); return q ? Object.entries(f).find(([k, v]) => v.toLowerCase().includes(q)) : ["name"]; };
+  let shown = 0, side = 0;
+  $$(".tree a").forEach(a => { a.hidden = !match(a); side += !a.hidden; });
+  $$(".tree section").forEach(g => g.hidden = !$$("a", g).some(a => !a.hidden));
+  $$("table.inv tbody tr").forEach(tr => {
+    const hit = match(tr), ok = !!hit && (!filter || tr.dataset.st === filter);
+    tr.hidden = !ok; shown += ok;
+    $(".why", tr).textContent = q && hit && hit[0] !== "name" ? "matches " + hit[0] : "";
+  });
+  $("#none").hidden = shown > 0; $("#none-side").hidden = side > 0;
+  $$(".legend button[data-st]").forEach(b => b.setAttribute("aria-pressed", b.dataset.st === filter));
+  $$(".legend .reset").forEach(b => b.hidden = !filter);
+}
+$("#q").addEventListener("input", apply);
+$("#q").addEventListener("keydown", e => { if (e.key === "Enter") { const a = $$(".tree a").find(a => !a.hidden); if (a) location.hash = a.getAttribute("href"); } });
+$$(".legend button[data-st]").forEach(b => b.addEventListener("click", () => { filter = filter === b.dataset.st ? null : b.dataset.st; apply(); }));
+$$(".reset").forEach(b => b.addEventListener("click", () => { filter = null; $("#q").value = ""; apply(); }));
+addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (e.key === "/" && !typing) { e.preventDefault(); $("#q").focus(); }
+});
+$("#menu").addEventListener("click", () => { const o = $("#side").classList.toggle("open"); $("#menu").setAttribute("aria-expanded", o); });
+
+// lineage: highlight what a node reads from and what depends on it; the big graph pans and zooms
+function reach(dag, id, dir) {
+  const edges = $$(".edge", dag), seen = new Set([id]), todo = [id];
+  while (todo.length) { const n = todo.pop(); for (const e of edges) { const [a, b] = dir > 0 ? [e.dataset.a, e.dataset.b] : [e.dataset.b, e.dataset.a]; if (a === n && !seen.has(b)) { seen.add(b); todo.push(b); } } }
+  return seen;
+}
+function focusNode(dag, id) {
+  if (!dag) return;
+  $$(".on, .sel", dag).forEach(x => x.classList.remove("on", "sel"));
+  dag.classList.toggle("focus", !!id);
+  if (!id) return;
+  const on = new Set([...reach(dag, id, 1), ...reach(dag, id, -1)]);
+  $$(".node", dag).forEach(n => { if (on.has(n.dataset.id)) n.classList.add("on"); if (n.dataset.id === id) n.classList.add("sel"); });
+  $$(".edge", dag).forEach(e => { if (on.has(e.dataset.a) && on.has(e.dataset.b)) e.classList.add("on"); });
+}
+const box = $("#lineage .dagbox"), svg = box && $("svg", box);
+let vb = null, drag = null, moved = false;
+$$(".dag").forEach(dag => $$(".node.judgment", dag).forEach(n => {
+  const go = () => {
+    if (moved) return;
+    const id = n.dataset.id, big = dag.closest(".big");
+    location.hash = big && !n.classList.contains("sel") ? "lineage/" + encodeURIComponent(id) : "j-" + encodeURIComponent(id);
+  };
+  n.addEventListener("click", go);
+  n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+}));
+function setVB(v) { vb = v; svg.setAttribute("viewBox", v.join(" ")); }
+function fit() { if (svg) setVB(svg.dataset.full.split(" ").map(Number)); }
+if (svg) {
+  box.addEventListener("wheel", e => {
+    e.preventDefault(); const r = svg.getBoundingClientRect(), k = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+    const px = vb[0] + (e.clientX - r.left) / r.width * vb[2], py = vb[1] + (e.clientY - r.top) / r.height * vb[3];
+    setVB([px - (px - vb[0]) * k, py - (py - vb[1]) * k, vb[2] * k, vb[3] * k]);
+  }, { passive: false });
+  box.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; drag = [e.clientX, e.clientY, ...vb]; moved = false; });
+  addEventListener("pointermove", e => {
+    if (!drag) return; const r = svg.getBoundingClientRect(), dx = (e.clientX - drag[0]) / r.width * drag[4], dy = (e.clientY - drag[1]) / r.height * drag[5];
+    if (Math.abs(e.clientX - drag[0]) + Math.abs(e.clientY - drag[1]) > 4) { moved = true; box.classList.add("dragging"); }
+    if (moved) setVB([drag[2] - dx, drag[3] - dy, drag[4], drag[5]]);
+  });
+  addEventListener("pointerup", () => { drag = null; box.classList.remove("dragging"); setTimeout(() => moved = false, 0); });
+  $$(".tools button", box).forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.z === "fit") return fit();
+    const k = b.dataset.z === "in" ? 1 / 1.25 : 1.25, cx = vb[0] + vb[2] / 2, cy = vb[1] + vb[3] / 2;
+    setVB([cx - vb[2] * k / 2, cy - vb[3] * k / 2, vb[2] * k, vb[3] * k]);
+  }));
+  fit();
+}
+addEventListener("hashchange", route); route(); apply();
+</script>
+</body>
+</html>

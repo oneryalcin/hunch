@@ -44,6 +44,8 @@ pairs = {
     "on_change": (set(schema["properties"].get("on_change", {}).get("enum", [])), set(core.ON_CHANGE)),
     "view": (set(schema["properties"].get("view", {}).get("enum", [])), set(traces.VIEWS)),
     "severity": (set(d.get("severity", {}).get("enum", [])), set(core.SEVERITIES)),
+    "exposure keys": (set(schema["properties"]["exposures"]["items"]["properties"]), core.EXPOSURE_KEYS),
+    "exposure kinds": (set(schema["properties"]["exposures"]["items"]["properties"]["kind"]["enum"]), set(core.EXPOSURE_KINDS)),
 }
 drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}
 for name, (extra, absent) in drift.items():

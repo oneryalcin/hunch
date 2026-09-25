@@ -23,6 +23,7 @@ hunch init [--list] RECIPE [DIR]
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
 | `init` | Copies a starter recipe into a folder | No |
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
+| `docs` | Writes a page people can read and search: each judgment's status, numbers and lineage | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
 
@@ -44,6 +45,22 @@ hunch skill ~/       # for every project on this machine
 ```
 
 Writes the hunch skill to `.claude/skills/hunch/SKILL.md` (Claude Code) and `.agents/skills/hunch/SKILL.md` (Codex; Cursor reads both). It tells the agent how to run the loop (`lint`, `compile`, `run` with a cost cap, `test`, `diff`) and what not to do: spend without `--max-cost`, write `*.reviews.csv`, or edit `.hunch/`. Each file prints `installed`, `updated` or `up to date`; an existing copy is replaced, so re-run after upgrading hunch and commit the result.
+
+### `hunch docs`
+
+```bash
+hunch docs support/
+```
+
+Writes two files beside the results file (see below), named after the spec or folder: `<name>.html`, one self-contained page with no server or network needed, and `<name>.manifest.json`. It reads the specs, the results of the last `test` of the same path and the store's run log, and never asks the engine. See [Share what your judgments decide](/guides/share).
+
+#### The manifest
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Format version (1). Field names are stable within a version. |
+| `git_sha`, `project` | The commit, and the spec or folder name. No timestamp, so an unchanged project writes an identical file. |
+| `judgments.<name>` | The spec as written, every key it sets (a `multi` question stays one question), plus `file` (the spec's path), `spec_hash` (the hash `test` records; the page marks a judgment stale when they differ) and `upstream` (the judgments it reads). |
 
 ## Flags
 
@@ -166,7 +183,7 @@ answers: 685 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
 
 #### The results file
 
-When `test` finishes, it also writes what it printed as JSON, for CI, dashboards and agents: `.hunch/target/<tested path>.json`, beside the store, with the path of the tested spec or folder relative to the store's folder (`hunch test examples/tickets/triage.yml` writes `.hunch/target/examples/tickets/triage.json`). `test` removes the file when it starts, so a run stopped by `--max-cost` leaves none rather than an old one.
+When `test` finishes, it also writes what it printed as JSON, for CI, dashboards and agents: `.hunch/target/<tested path>.json`, beside the store, with the path of the tested spec or folder relative to the store's folder (`hunch test examples/tickets/triage.yml` writes `.hunch/target/examples/tickets/triage.json`). With `--model`, the engine's suffix is added, as for its tables (`triage__deepseek_deepseek_flash.json`), so another engine's results never replace the spec's own. `test` removes the file when it starts, so a run stopped by `--max-cost` leaves none rather than an old one.
 
 | Field | Meaning |
 | --- | --- |
@@ -179,6 +196,7 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 | `questions.<q>.gold` | Rows with gold: `rows`, and by origin `source`, `review`, `excluded`. |
 | `questions.<q>.accuracy` | `value`, `ci` (`[low, high]`, or `null` when `basis` is `gold`: plain accuracy against gold, no estimate), `basis` (`estimate` or `gold`), `reviewed` (per group: `reviewed` of `of` rows). |
 | `questions.<q>.calibration_error`, `auroc` | As printed; `auroc` for yes/no questions with both answers in gold. |
+| `questions.<q>.act` | With `act` in the spec: `threshold`, `automated` (share of all rows acted on), `judged` (acted-on rows with gold), `wrong` (share of those that are wrong; `null` if none has gold). |
 | `questions.<q>.dial` | Per threshold: `automated` and `wrong` (shares); yes/no questions have them under `yes` and `no`. |
 | `questions.<q>.mistakes` | `total`, and `most_confident`: `id`, `got`, `p`, `gold`. |
 | `questions.<q>.checks` | Each check: `check` (the test key, like `min_accuracy`), `passed`, `value`, `limit`, `severity`. |
@@ -214,6 +232,7 @@ intent: 77/770 rows flip (15 within noise band)
 | `paired sign test` | Whether fixed vs broken beats chance. |
 | flip rows | ✓ fixed, ✗ broken, blank: no gold or wrong both times. `~noise` flips are listed last. |
 | `unchanged (same keys, 0 calls)`, `new question`, `renamed from 'x'`, `moved by upstream changes` | Other outcomes; renames are matched by answer keys. |
+| `affects …` | The spec's [`exposures`](/reference/spec#exposures) that read a question whose answers changed (all of them, for an exposure without `uses`). |
 
 Both sides use today's reviews.
 
