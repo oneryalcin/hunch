@@ -29,6 +29,14 @@ Until every disagreement is reviewed and there is at least one spot check, `test
 
 Rows you marked ambiguous or as needing more context are left out of both groups.
 
+## Metrics
+
+A [metric](/reference/spec#metrics) is a rule over a row, such as "any of these three questions says yes". On the model's answers it is simply counted, on every row. The interesting number is how often the rule *should* hold, and for that the rule is evaluated again with gold standing in for each answer: the gold label for the question, `<q>_p` as 1, and `<q>_pyes` as 1 or 0. When a row has two acceptable labels, the model's is used if it is one of them.
+
+Which rows count against gold decides whether the number can be trusted. If every row has gold for the questions the rule reads (an answer key on every row), every row counts. Otherwise only random spot checks do. Rows reviewed because the model was unsure, or because a rule flagged them, were picked for a reason, and counting them would make the rule look better or worse than it is.
+
+Comparing the two on the same rows gives the misses (the rule did not hold on the answers but does on gold) and the false alarms (the other way round). Each is a share of its own rows, with a Wilson interval: 1 miss among 91 rows is 1.1%, but anywhere from 0.2% to 6.0%. Sampling weights are not applied to metrics yet.
+
 ## The interval
 
 The range is a 95% Wilson score interval on the reviewed rows. It behaves well with small samples and near 0% or 100%, where the textbook ±2 standard errors does not.

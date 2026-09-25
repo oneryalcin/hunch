@@ -76,6 +76,15 @@ tests:
 
 Without an answer key, leave `gold` out. You will review a random sample instead, and `test` estimates accuracy from it. See [Review](/guides/review).
 
+Some cases must never go wrong, however good the average. Write them into the spec as [examples](/reference/spec#examples), rows with the answers they must get, and `test` checks each one:
+
+```yaml
+examples:
+  - name: double charge
+    row: {subject: Charged twice, body: "I was billed twice for March, please refund one."}
+    expect: {dept: billing}
+```
+
 ## Check it before it costs anything
 
 ```sh
@@ -93,4 +102,4 @@ Then read the request that `compile` prints. It is exactly what the model will s
 
 ## Start small
 
-The first version of a question is rarely the best one, and every row asked under a changed question is paid for again. So run a sample first, review twenty rows, and test before you run everything. [Change a spec](/guides/change-a-spec) shows how to compare versions.
+The first version of a question is rarely the best one, and every row asked under a changed question is paid for again. So run a sample first (`hunch run triage.yml --sample 50` asks about the same 50 rows every time, and leaves the full table alone), review twenty rows, and test before you run everything. [Change a spec](/guides/change-a-spec) shows how to compare versions.
