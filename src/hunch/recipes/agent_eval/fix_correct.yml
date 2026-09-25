@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=spec.schema.json
 # Step 2, only for runs that claim success: is the fix actually right? Gold = the project's hidden tests.
 # Auto-reject is the useful side: a confident "no" is far more reliable than a confident "yes".
 judgment: fix_correct

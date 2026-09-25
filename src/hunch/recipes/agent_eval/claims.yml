@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=spec.schema.json
 # Step 1: what does the agent say about its own work? A three-way answer, because traces can be cut off
 # or ambiguous and a forced yes/no guesses confidently (review panel: 10 of 40 traces were "unclear").
 judgment: claims
