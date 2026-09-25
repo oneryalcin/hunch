@@ -18,7 +18,7 @@ import csv
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent / sys.argv[1]
@@ -35,7 +35,7 @@ for rev in ["opus", "sonnet_a", "sonnet_b"]:
         p["best"].append(a["best"])
 
 existing = {r["row_id"] for r in csv.DictReader(open(REVIEWS, newline=""))}
-now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+now = datetime.now(UTC).isoformat(timespec="seconds")
 out = []
 for rid, p in panel.items():
     assert rid not in existing, f"row {rid} already reviewed"

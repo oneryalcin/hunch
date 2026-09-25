@@ -42,3 +42,16 @@ packages = ["src/hunch"]
 
 [tool.hatch.build.targets.sdist]  # the library only: not the prototype, docs site, server or anything local
 include = ["/src/hunch", "/README.md", "/LICENSE", "/NOTICE", "/pyproject.toml"]
+
+# Checked by `make lint` and CI. Pinned here so no personal ruff config applies.
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = [
+    "E741",  # short names like l are fine in short scopes
+    "B905",  # zip() pairs same-length lists throughout
+    "E731",  # a one-line lambda helper is clearer than a def
+]

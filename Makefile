@@ -1,21 +1,25 @@
 # Every uv command here reads only ./uv.toml, never a personal uv config (it would leak into uv.lock).
 export UV_CONFIG_FILE := $(CURDIR)/uv.toml
 
-.PHONY: help check docs build clean release
+.PHONY: help check lint docs build clean release
 
 help:
-	@echo "make check     what CI runs: lock files, docs coverage and schema, recipe lint, docs build and links"
+	@echo "make check     what CI runs: lint, lock files, docs coverage and schema, recipe lint, docs build and links"
+	@echo "make lint      ruff, the version CI pins (make lint FIX=1 applies safe fixes)"
 	@echo "make docs      preview the docs site at http://localhost:3000"
 	@echo "make build     build the wheel and sdist into dist/ and check their metadata"
 	@echo "make clean     remove build artifacts and caches"
 	@echo "make release   how to publish (a version tag; CI does the rest)"
 
-check:
+check: lint
 	! grep -n 'exclude-newer-package' uv.lock server/uv.lock
 	uv run docs-site/check.py
 	uv run hunch lint src/hunch/recipes/tickets
 	cd docs-site && npx -y mint@latest validate
 	cd docs-site && npx -y mint@latest broken-links --check-anchors
+
+lint:
+	uvx ruff@0.16.8 check $(if $(FIX),--fix) .
 
 docs:
 	cd docs-site && npx -y mint@latest dev

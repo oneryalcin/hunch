@@ -31,6 +31,7 @@ print(f"checked {total} names across {len(checks)} reference pages: "
 
 # The spec schema (for editors) must say what the code says: same keys, same allowed values.
 import json  # noqa: E402
+
 from hunch import traces  # noqa: E402
 
 schema = json.loads((SRC / "spec.schema.json").read_text())

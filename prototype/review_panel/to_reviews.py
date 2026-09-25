@@ -14,7 +14,7 @@ import csv
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -36,7 +36,7 @@ for rev in ["opus", "sonnet_a", "sonnet_b"]:
         p["j"].append(bool(a["candidates"].get(info["jev"])))
         p["best"].append(a["best"])
 
-now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+now = datetime.now(UTC).isoformat(timespec="seconds")
 out = []
 for rid, p in panel.items():
     g, j = sum(p["g"]) >= 2, sum(p["j"]) >= 2

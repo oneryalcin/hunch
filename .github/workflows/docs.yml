@@ -10,13 +10,15 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Lock files carry no personal uv settings (exempt-package lists name other projects)
         run: "! grep -n 'exclude-newer-package' uv.lock server/uv.lock"
+      - name: Lint (ruff, pinned; config in pyproject.toml)
+        run: uvx ruff@0.16.8 check .
       - name: Every spec key, CLI flag and environment variable is documented
         run: uv run docs-site/check.py
       - name: The quickstart's recipe is a valid spec

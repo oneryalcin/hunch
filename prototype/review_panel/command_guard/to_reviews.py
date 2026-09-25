@@ -6,7 +6,7 @@ import csv
 import json
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -22,7 +22,7 @@ missing = {r: len(set(key) - set(a)) for r, a in answers.items() if set(key) - s
 if missing:
     sys.exit(f"answers missing rows: {missing}")
 
-now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+now = datetime.now(UTC).isoformat(timespec="seconds")
 out, unanimous = [], Counter()
 for n, k in key.items():
     for q in spec["questions"]:
