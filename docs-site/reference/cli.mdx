@@ -151,6 +151,25 @@ answers: 685 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
 | `weighted to the population` | The source has `weights`; every number is weighted. |
 | last line | Answers cached and asked, and cost. |
 
+#### The results file
+
+When `test` finishes, it also writes what it printed as JSON, for CI, dashboards and agents: `.hunch/target/<tested path>.json`, beside the store, with the path of the tested spec or folder relative to the store's folder (`hunch test examples/tickets/triage.yml` writes `.hunch/target/examples/tickets/triage.json`). `test` removes the file when it starts, so a run stopped by `--max-cost` leaves none rather than an old one.
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Format version (1). Field names are stable within a version. |
+| `command`, `at`, `git_sha` | `test`, when it ran (UTC), the commit it ran on. |
+| `passed` | Every check passed (the exit code was 0). |
+| `cost` | Spent by this run, in USD. |
+| `judgments.<name>` | `spec_hash`, `model`, `rows`, and `questions` (and `multi`, for `type: multi`). |
+| `questions.<q>.gold` | Rows with gold: `rows`, and by origin `source`, `review`, `excluded`. |
+| `questions.<q>.accuracy` | `value`, `ci` (`[low, high]`, or `null` when `basis` is `gold`: plain accuracy against gold, no estimate), `basis` (`estimate` or `gold`), `reviewed` (per group: `reviewed` of `of` rows). |
+| `questions.<q>.calibration_error`, `auroc` | As printed; `auroc` for yes/no questions with both answers in gold. |
+| `questions.<q>.dial` | Per threshold: `automated` and `wrong` (shares); yes/no questions have them under `yes` and `no`. |
+| `questions.<q>.mistakes` | `total`, and `most_confident`: `id`, `got`, `p`, `gold`. |
+| `questions.<q>.checks` | Each check: `check` (the test key, like `min_accuracy`), `passed`, `value`, `limit`. |
+| `questions.<q>.spot_checks`, `needs_context` | Random spot checks, and how many of them needed more context. |
+
 ### `diff`
 
 Real output, BANKING77 (`hunch diff intent.yml --against intent_bare.yml`), trimmed:

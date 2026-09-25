@@ -94,3 +94,5 @@ Exit 1 has two causes, and the last line of the log tells them apart. Run with `
 ```text
 intent: would ask 300 answers in 150 requests (~$0.0217), above --max-cost $0.0; nothing asked
 ```
+
+A script can tell them apart without reading the log. A finished `test` writes its results to `.hunch/target/`, as JSON with a `passed` field; a stopped one writes nothing. See [the results file](/reference/cli#the-results-file).
