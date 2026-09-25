@@ -6,6 +6,7 @@ stale rather than shown with numbers that describe an older version.
 """
 import html
 import json
+import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -150,7 +151,7 @@ def summary(r: dict | None) -> list[str]:
 
 def source_node(m: dict) -> tuple[str, str, str] | None:
     """(id, label, full text) of a root judgment's source; None for one that reads other judgments."""
-    if m["upstream"]:
+    if m["upstream"] or m.get("_hide_source"):  # _hide_source: a mini lineage cut off this node's own inputs
         return None
     kind, value = core.source_kind(m)
     return "src:" + value, (Path(value).name if kind == "csv" else value) or value, value
@@ -186,14 +187,15 @@ def lineage(man: dict) -> dict:
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
-def lineage_svg(lin: dict, st: dict[str, str]) -> str:
-    W, H, BW, BH = 230, 64, 180, 40
+def lineage_svg(lin: dict, st: dict[str, str], mini: bool = False) -> str:
+    W, H, BW, BH = (200, 56, 164, 38) if mini else (236, 64, 184, 42)
     size = {c: sum(nd["col"] == c for nd in lin["nodes"]) for c in {nd["col"] for nd in lin["nodes"]}}
     tall = max(size.values(), default=1)  # short columns are centred against the tallest
-    pos = {nd["id"]: (20 + nd["col"] * W, 20 + (nd["row"] + (tall - size[nd["col"]]) / 2) * H) for nd in lin["nodes"]}
-    width = max((x for x, _ in pos.values()), default=0) + BW + 40
-    height = max((y for _, y in pos.values()), default=0) + BH + 40
-    out = [f'<svg class="dag" viewBox="0 0 {width} {height}" width="{width}" height="{height}" role="img" aria-label="lineage">']
+    pos = {nd["id"]: (16 + nd["col"] * W, 16 + (nd["row"] + (tall - size[nd["col"]]) / 2) * H) for nd in lin["nodes"]}
+    width = max((x for x, _ in pos.values()), default=0) + BW + 32
+    height = max((y for _, y in pos.values()), default=0) + BH + 32
+    out = [f'<svg class="dag" viewBox="0 0 {width} {height}" data-full="0 0 {width} {height}" role="img" aria-label="lineage"'
+           + (f' style="max-width:{width}px"' if mini else "") + ">"]
     for a, b in lin["edges"]:
         (x1, y1), (x2, y2) = pos[a], pos[b]
         x1, y1, y2 = x1 + BW, y1 + BH / 2, y2 + BH / 2
@@ -201,42 +203,85 @@ def lineage_svg(lin: dict, st: dict[str, str]) -> str:
         out.append(f'<path class="edge" data-a="{e(a)}" data-b="{e(b)}" d="M{x1},{y1} C{mid},{y1} {mid},{y2} {x2},{y2}"/>')
     for nd in lin["nodes"]:
         x, y = pos[nd["id"]]
-        label = nd["label"] if len(nd["label"]) <= 24 else nd["label"][:23] + "…"
-        cls = f'node {nd["kind"]}' + (f' st-{st[nd["id"]]}' if nd["kind"] == "judgment" else "")
+        label = nd["label"] if len(nd["label"]) <= 22 else nd["label"][:21] + "…"
+        judg = nd["kind"] == "judgment"
+        cls = f'node {nd["kind"]}' + (f' st-{st[nd["id"]]}' if judg else "")
         sub = {"source": "source", "exposure": nd.get("sub", "app")}.get(nd["kind"]) or STATUS[st[nd["id"]]][0]
-        out.append(f'<g class="{cls}" data-id="{e(nd["id"])}" transform="translate({x},{y})">'
-                   f'<title>{e(nd.get("title", nd["label"]))}</title><rect width="{BW}" height="{BH}" rx="6"/>'
-                   f'<text x="10" y="17">{e(label)}</text><text class="sub" x="10" y="32">{e(sub)}</text></g>')
+        bar = f'<rect class="bar-l" width="4" height="{BH}" rx="2"/>' if judg else ""
+        out.append(f'<g class="{cls}" data-id="{e(nd["id"])}" transform="translate({x},{y})" tabindex="{0 if judg else -1}">'
+                   f'<title>{e(nd.get("title", nd["label"]))}</title><rect width="{BW}" height="{BH}" rx="7"/>{bar}'
+                   f'<text x="14" y="17">{e(label)}</text><text class="sub" x="14" y="32">{e(sub)}</text></g>')
     return "\n".join(out + ["</svg>"])
 
 
+def neighbourhood(man: dict, n: str) -> dict:
+    """One step up and down from `n`, plus its exposures, as a small manifest for a mini lineage."""
+    js = man["judgments"]
+    near = {n, *js[n]["upstream"], *(d for d, dm in js.items() if n in dm["upstream"])}
+    sub = {}
+    for k in js:  # keep dependency order
+        if k in near:
+            m = dict(js[k])
+            m["upstream"] = [u for u in m["upstream"] if u in near]
+            if k != n:
+                m["exposures"] = []
+                if m["upstream"] == [] and js[k]["upstream"]:
+                    m = {**m, "upstream": [], "_hide_source": True}
+            sub[k] = m
+    return {"judgments": sub}
+
+
 # ---------- page ----------
+
+PAGE = (Path(__file__).parent / "docs_page.html").read_text
+MARK = ('<svg viewBox="0 0 96 96" aria-hidden="true"><path fill="#7D969B" d="M16 8H44V23H25V73H40V88H16C12 88 9 85 9 81V15C9 '
+        '11 12 8 16 8Z M80 8H57V24H72V73H55V88H80C84 88 87 85 87 81V15C87 11 84 8 80 8Z"/></svg>')
+
 
 def e(x) -> str:
     return html.escape("" if x is None else str(x))
 
 
+def href(n: str, tab: str = "") -> str:
+    return f"#/j/{quote(n, safe='')}" + (f"/{tab}" if tab else "")
+
+
 def link(n: str) -> str:
-    return f'<a href="#/j/{quote(n, safe="")}">{e(n)}</a>'
+    return f'<a href="{href(n)}" class="mono">{e(n)}</a>'
 
 
 def text_of(v) -> str:
     return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, indent=1)
 
 
-def badge(st: str) -> str:
-    return f'<span class="badge st-{st}" title="{e(STATUS[st][1])}">{e(STATUS[st][0])}</span>'
+def pill(st: str) -> str:
+    return f'<span class="pill st-{st}" title="{e(STATUS[st][1])}">{e(STATUS[st][0])}</span>'
 
 
-def measured_cell(r: dict | None, sample: int | None) -> str:
+def interval(a: dict) -> str:
+    """Accuracy as what it is, a range: the track is 0–100%, the band the 95% interval, the dot the estimate."""
+    v, ci = a["value"], a.get("ci")
+    x = lambda f: 4 + f * 152  # 160 wide, 4 of margin each side so the dot never clips
+    band = f'<rect class="band" x="{x(ci[0]):.1f}" y="3" width="{max(x(ci[1]) - x(ci[0]), 2):.1f}" height="8" rx="4"/>' if ci else ""
+    return (f'<svg class="iv" viewBox="0 0 160 14" role="img" aria-label="{e(pct(v))}'
+            + (f", 95% interval {e(pct(ci[0]))} to {e(pct(ci[1]))}" if ci else "") + '">'
+            f'<rect class="track" x="4" y="5" width="152" height="4" rx="2"/>{band}'
+            f'<line class="tick" x1="{x(.5)}" x2="{x(.5)}" y1="2" y2="12"/><circle class="pt" cx="{x(v):.1f}" cy="7" r="3.5"/></svg>')
+
+
+def acc_cell(r: dict | None, sample: int | None) -> str:
     if not r:
-        return "–"
-    bits = [f'{e(qid)} {pct(q["accuracy"]["value"])}' + (f' <span class="dim">({pct(q["accuracy"]["ci"][0])}–{pct(q["accuracy"]["ci"][1])})</span>'
-            if q["accuracy"].get("ci") else "") for qid, q in r["questions"].items() if q.get("accuracy")]
-    rest = len(r["questions"]) - len(bits)
-    out = "<br>".join(bits[:2]) + (f'<br><span class="dim">+{len(bits) - 2} more</span>' if len(bits) > 2 else "")
-    out += (f'<br><span class="dim">{rest} not measured</span>' if rest and bits else "" if bits else '<span class="dim">not measured</span>')
-    return out + (f'<br><span class="dim">on a sample of {sample} rows</span>' if sample and bits else "")
+        return '<span class="muted">–</span>'
+    qs = [(qid, q) for qid, q in r["questions"].items() if q.get("accuracy")]
+    if not qs:
+        return '<span class="muted">not measured</span>'
+    qid, q = min(qs, key=lambda x: x[1]["accuracy"]["value"])  # the weakest question is the one to know about
+    a = q["accuracy"]
+    ci = f" <small>{pct(a['ci'][0])}–{pct(a['ci'][1])}</small>" if a.get("ci") else ""
+    more = f"lowest of {len(qs)} · " if len(qs) > 1 else ""
+    return (f'<div class="acc"><span class="v">{pct(a["value"])}{ci}</span>{interval(a)}'
+            f'<span class="muted" style="font-size:12px">{more}<span class="mono">{e(qid)}</span>'
+            + (f" · sample of {sample}" if sample else "") + "</span></div>")
 
 
 def decides(m: dict) -> str:
@@ -254,34 +299,76 @@ def options_of(q: dict) -> list[tuple[str, object]]:
     return rows + ([(core.NONE, q["none"])] if q.get("none") else [])
 
 
-def search_text(n: str, m: dict) -> dict:
+def search_text(n: str, m: dict) -> str:
     qs = m.get("questions") or {}
-    return {"name": n, "description": m.get("description") or "",
-            "questions": " ".join(f"{qid} {text_of(q.get('instructions'))}" for qid, q in qs.items()),
-            "options": " ".join(f"{k} {text_of(v)}" for q in qs.values() for k, v in options_of(q)),
-            "columns": " ".join([*m.get("state", []), m.get("key") or ""]), "source": str(m.get("source", "")),
-            "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')}"
-                                for x in m.get("exposures") or [])}
+    return json.dumps({
+        "name": n, "description": m.get("description") or "",
+        "questions": " ".join(f"{qid} {text_of(q.get('instructions'))}" for qid, q in qs.items()),
+        "options": " ".join(f"{k} {text_of(v)}" for q in qs.values() for k, v in options_of(q)),
+        "columns": " ".join([*m.get("state", []), m.get("key") or ""]), "source": str(m.get("source", "")),
+        "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')}"
+                            for x in m.get("exposures") or [])})
 
 
-def inventory(man: dict, res: dict, st: dict, run: dict, sample: int | None) -> str:
+def ordered(js: dict, st: dict) -> list[str]:
+    return sorted(js, key=lambda n: (list(STATUS).index(st[n]), n))
+
+
+def sidebar(man: dict, st: dict) -> str:
     js = man["judgments"]
     counts = {k: sum(v == k for v in st.values()) for k in STATUS}
-    head = " · ".join(f"{c} {STATUS[k][0]}" for k, c in counts.items() if c)
+    chips = "".join(f'<button class="chip" type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span>'
+                    f'{e(STATUS[k][0])} <span class="n">{c}</span></button>' for k, c in counts.items() if c)
+    groups = []
+    for k in STATUS:
+        names = [n for n in ordered(js, st) if st[n] == k]
+        if names:
+            groups.append(f'<section><h4>{e(STATUS[k][0])}</h4>' + "".join(
+                f'<a href="{href(n)}" data-name="{e(n)}" data-st="{k}" data-search="{e(search_text(n, js[n]))}">'
+                f'<span class="dot st-{k}"></span>{e(n)}</a>' for n in names) + "</section>")
+    return (f'<div class="chips" role="group" aria-label="Filter by status">{chips}</div>'
+            f'<nav class="tree" aria-label="Judgments">{"".join(groups)}</nav>'
+            '<nav class="side-links"><a href="#/">Overview</a><a href="#/lineage">Lineage</a></nav>')
+
+
+def readme(project: dict) -> str:
+    """The first paragraph of the folder's README, as plain text: the project's own words for the overview."""
+    root = Path(project["path"])
+    f = (root if root.is_dir() else root.parent) / "README.md"
+    if not f.exists():
+        return ""
+    paras = [p.strip() for p in f.read_text().split("\n\n")]
+    first = next((p for p in paras if p and not p.startswith(("#", "```", "|", "<", "!", "-", "*"))), "")
+    return " ".join(first.split()).replace("**", "").replace("`", "")
+
+
+def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: str, at: str | None) -> str:
+    js = man["judgments"]
+    counts = {k: sum(v == k for v in st.values()) for k in STATUS}
+    bar = "".join(f'<span class="st-{k}" style="flex:{c}" title="{c} {e(STATUS[k][0])}"></span>' for k, c in counts.items() if c)
+    legend = "".join(f'<button type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span><b>{c}</b>'
+                     f'<span class="lab">{e(STATUS[k][0])}</span></button>' for k, c in counts.items() if c)
     rows = []
-    for n, m in sorted(js.items(), key=lambda kv: (list(STATUS).index(st[kv[0]]), kv[0])):
-        last = (run.get(n) or [{}])[0]
+    for n in ordered(js, st):
+        m, r = js[n], res.get(n)
+        acted = [q["act"] for q in (r or {}).get("questions", {}).values() if q.get("act")]
+        auto = (f'{pct(min(a["automated"] for a in acted))}<div class="muted" style="font-size:12px">at its act</div>'
+                if acted else '<span class="muted">–</span>')
         rows.append(
-            f'<tr data-search="{e(json.dumps(search_text(n, m)))}"><td>{link(n)}</td>'
-            f'<td>{e(decides(m))}<div class="why"></div></td><td>{badge(st[n])}</td><td>{measured_cell(res.get(n), sample)}</td>'
-            f'<td class="dim">{e((last.get("finished_at") or "")[:10]) or "–"}</td>'
-            f'<td>{e(", ".join(x["name"] for x in m.get("exposures") or [])) or "–"}</td></tr>')
-    return f"""<section id="v-home">
-<p class="lede">{len(js)} judgment{'s' * (len(js) != 1)} · {head}</p>
-<table class="inv"><thead><tr><th>judgment</th><th>decides</th><th>status</th><th>measured</th><th>last run</th><th>used by</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table>
-<p class="none-found" hidden>Nothing matches.</p>
-<dl class="legend">{''.join(f'<dt>{badge(k)}</dt><dd>{e(v[1])}</dd>' for k, v in STATUS.items() if counts[k])}</dl>
+            f'<tr class="st-{st[n]}" data-st="{st[n]}" data-search="{e(search_text(n, m))}">'
+            f'<td><a class="name" href="{href(n)}">{e(n)}</a><div style="margin-top:6px">{pill(st[n])}</div></td>'
+            f'<td class="decides">{e(decides(m))}<div class="why"></div></td>'
+            f'<td>{acc_cell(r, sample)}</td><td class="num hide-sm">{auto}</td>'
+            f'<td class="hide-sm">{e(", ".join(x["name"] for x in m.get("exposures") or [])) or "<span class=muted>–</span>"}</td></tr>')
+    tested = f"last test {e(local(at))}" + (f" · sample of {sample} rows" if sample else "") if at else "no test results for this path yet"
+    return f"""<section id="home" class="home">
+<p class="eyebrow">Project</p><h1>{e(man['project'])}</h1>
+{f'<p class="lede">{e(about)}</p>' if about else ''}
+<div class="meta"><span>{len(js)} judgment{'s' * (len(js) != 1)}</span><span>{tested}</span>{f"<span>git {e(man['git_sha'])}</span>" if man['git_sha'] else ''}</div>
+<div class="health"><div class="bar" role="img" aria-label="{e(', '.join(f'{c} {STATUS[k][0]}' for k, c in counts.items() if c))}">{bar}</div>
+<div class="legend" role="group" aria-label="Filter by status">{legend}</div></div>
+<div class="table-wrap"><table class="inv"><thead><tr><th>Judgment</th><th>Decides</th><th>Accuracy</th><th class="hide-sm">Acts alone</th><th class="hide-sm">Used by</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table><p class="empty" id="none" hidden>No judgment matches. Clear the search or the status filter.</p></div>
 </section>"""
 
 
@@ -291,23 +378,93 @@ def attention(m: dict, r: dict | None, st: str, at: str | None, run: list[dict],
     notes = []
     if st == "noresults":
         ran = f" It last ran {e(local(run[0].get('finished_at')))}." if run else ""
-        notes.append(f"The last <code>hunch test</code> of this path did not include this judgment (never tested, "
-                     f"tested with <code>--node</code>, tested through another path, or stopped by <code>--max-cost</code>).{ran}")
+        notes.append(f"The last <code>hunch test</code> of this path did not include this judgment: never tested, tested alone "
+                     f"with <code>--node</code> or through another path, or a test stopped by <code>--max-cost</code>.{ran}")
     if st == "stale":
-        notes.append(f"The spec changed after its last test ({e(local(at))}): tested as <code>{e(r['spec_hash'])}</code>, "
-                     f"now <code>{e(m['spec_hash'])}</code>. The numbers below describe the older version.")
+        notes.append(f"The spec changed after its last test ({e(local(at))}): tested as <code>{e(r['spec_hash'])}</code>, now "
+                     f"<code>{e(m['spec_hash'])}</code>. The numbers below describe the older version; run <code>hunch test</code>.")
     if sample and r:
-        notes.append(f"Measured on a sample of {sample} rows (<code>--sample {sample}</code>), not every row.")
+        notes.append(f"Measured on a sample of {sample} rows (<code>--sample {sample}</code>), not on every row.")
     bad = [c for c in checks_of(r or {}) if not c["passed"]]
 
     def fmt(c: dict, k: str) -> str:
         v = c.get(k)
         return pct(v) if c["check"] in SHARE_CHECKS and isinstance(v, (int, float)) else e(v)
-    items = "".join(f"<li>{'✗' if c.get('severity', 'error') == 'error' else '!'} <b>{e(c['on'])}</b> {e(c['check'])}"
+    items = "".join(f"<li><b>{e(c['on'])}</b> {e(c['check'])}"
                     + (f": {fmt(c, 'value')}, limit {fmt(c, 'limit')}" if c.get("value") is not None else "")
-                    + ("" if c.get("severity", "error") == "error" else " <span class='dim'>(warn only)</span>") + "</li>"
-                    for c in bad)
-    return "".join(f"<p class='why-box'>{x}</p>" for x in notes) + (f"<ul class='why-box st-{st}'>{items}</ul>" if items else "")
+                    + ("" if c.get("severity", "error") == "error" else " (warn only)") + "</li>" for c in bad)
+    if not notes and not items:
+        return ""
+    return (f'<div class="why-box st-{st}">' + "".join(f"<p>{x}</p>" for x in notes)
+            + (f"<p>Failing at the last test:</p><ul>{items}</ul>" if items else "") + "</div>")
+
+
+def figures(r: dict | None, sample: int | None) -> str:
+    """One card per measured question: the estimate with its range, and what acting at `act` does."""
+    if not r:
+        return ""
+    cards = []
+    for qid, q in r["questions"].items():
+        a = q.get("accuracy")
+        if not a:
+            continue
+        basis = (f"estimated from {sum(v['reviewed'] for v in a.get('reviewed', {}).values())} reviewed rows"
+                 if a["basis"] == "estimate" else f"agrees with the answer key on {q['gold']['rows']} rows")
+        act = q.get("act")
+        act_line = (f"at act {e(act['threshold'])}: acts alone on {pct(act['automated'])}"
+                    + ("" if act["wrong"] is None else f", {pct(act['wrong'])} of those wrong") if act else "no act threshold")
+        ci = f"<small>{pct(a['ci'][0])}–{pct(a['ci'][1])}</small>" if a.get("ci") else ""
+        cards.append(f'<div class="fig"><span class="q">{e(qid)}</span><b>{pct(a["value"])}{ci}</b>{interval(a)}'
+                     f'<span class="sub">{e(basis)}{" (sample)" if sample else ""}</span><span class="sub">{act_line}</span></div>')
+    return f'<div class="figs">{"".join(cards)}</div>' if cards else ""
+
+
+def output_columns(spec: dict) -> list[tuple[str, str]]:
+    """The table this judgment writes, column by column: what apps and downstream judgments read."""
+    out = [(spec.get("key") or "", "the row's id (the spec's key)"), ("…", "every input column, as it arrived")]
+    for parent, labels in (spec.get("_multi") or {}).items():
+        out.append((parent, f"the options that apply, joined by |: any of {', '.join(labels)}"))
+    for qid, q in spec.get("questions", {}).items():
+        if "_multi" in q:
+            what = f"yes or no: does {q['_multi'][1]} apply"
+        else:
+            what = {"choice": "the chosen option", "noul": "yes or no", "score": "the nearest level, as level:label"}.get(q["type"], "")
+        out += [(qid, what), (f"{qid}_p", "confidence in that answer, 0 to 1")]
+        if q["type"] == "noul":
+            out.append((f"{qid}_pyes", "probability of yes"))
+        if "act" in q:
+            out.append((f"{qid}_route", "act (confident enough to use) or review"))
+        if "escalate" in q:
+            out.append((f"{qid}_by", "the engine whose answer is used"))
+        out.append((f"{qid}_key", "the answer's address in the store (lineage)"))
+    out.append(("_hunch_run_id", "the run that wrote this row"))
+    return out
+
+
+def yaml_html(text: str) -> str:
+    """The spec as written, with keys and comments marked: enough colour to scan, no highlighter library."""
+    out = []
+    for line in text.splitlines():
+        body, _, comment = line.partition(" #") if not line.lstrip().startswith("#") else ("", "", line)
+        t = e(body)
+        t = re.sub(r"^(\s*(?:- )?)([\w.-]+):", r'\1<span class="k">\2</span>:', t)
+        out.append(t + (f'<span class="c">{" #" if body else ""}{e(comment)}</span>' if comment else ""))
+    return "\n".join(out)
+
+
+def request_example(spec: dict) -> tuple[str, str]:
+    """(note, text): the shape of one request, as `compile` would print it, with the row's fields as placeholders.
+    No real row: the page is meant to be shared, and a row can hold customer text."""
+    state = {c: f"<{c}>" for c in spec.get("state", [])}
+    aqs = {qid: core.api_question(q) for qid, q in spec.get("questions", {}).items()}
+    if not aqs:
+        return "A union asks nothing: it merges its branches' answers.", ""
+    if core.is_llm(spec["model"]):
+        qid = next(iter(aqs))
+        return (f"{spec['model']} gets one request per question; this is the prompt for {qid}.",
+                core.llm_prompt(aqs[qid], state)[0])
+    return ("One request per row: every question reads the row once.",
+            json.dumps({"model": spec["model"], "state": state, "questions": aqs}, indent=2, ensure_ascii=False))
 
 
 def dial_table(q: dict) -> str:
@@ -321,101 +478,124 @@ def dial_table(q: dict) -> str:
     else:
         head = "<tr><th>act at</th><th>automated</th><th>wrong among automated</th></tr>"
         body = "".join(f"<tr><td>{r['threshold']}</td><td>{pct(r['automated'])}</td><td>{pct(r['wrong'])}</td></tr>" for r in d)
-    return ("<p class='dim'>Counted over the rows with a known answer, so the shares can differ from the summary's, which "
-            f"counts every row. Pick <code>act</code> where the wrong share is one you can live with.</p><table class='num'>{head}{body}</table>")
+    return ("<p class='note'>Counted over the rows with a known answer, so shares can differ from the figures above, which "
+            f"count every row. Pick <code>act</code> where the wrong share is one you can live with.</p><table class='data num'>{head}{body}</table>")
 
 
 def question_block(qid: str, q: dict, r: dict | None) -> str:
     opts = options_of(q)
-    parts = [f"<p class='q'>{e(text_of(q.get('instructions')))}</p>"]
+    parts = [f"<h3>{e(qid)}</h3><p class='qtext'>{e(text_of(q.get('instructions')))}</p>"]
     if opts:
-        parts.append("<table class='opts'>" + "".join(f"<tr><td><code>{e(k)}</code></td><td>{e(text_of(v))}</td></tr>"
-                                                      for k, v in opts) + "</table>")
+        parts.append("<table class='data opts'>" + "".join(f"<tr><td><code>{e(k)}</code></td><td>{e(text_of(v))}</td></tr>"
+                                                           for k, v in opts) + "</table>")
     esc = (q.get("escalate") or {}).get("model")
     meta = [f"type <code>{e(q.get('type'))}</code>"] + ([f"act <code>{e(q['act'])}</code>"] if "act" in q else []) \
         + ([f"gold column <code>{e(q['gold'])}</code>"] if q.get("gold") else []) \
         + ([f"uncertain answers re-asked of <code>{e(esc)}</code>"] if esc else [])
-    parts.append(f"<p class='dim'>{' · '.join(meta)}</p>")
+    parts.append(f"<p class='note'>{' · '.join(meta)}</p>")
     if r:
         if r.get("dial"):
-            parts.append(f"<details><summary>Where to set act (the dial)</summary>{dial_table(r)}</details>")
-        cal = ([f"calibration error {r['calibration_error']:.3f} (0 = stated confidence matches how often it is right)"]
+            parts.append(f"<details><summary>Where to set act</summary>{dial_table(r)}</details>")
+        cal = ([f"Calibration error {r['calibration_error']:.3f}: 0 means stated confidence matches how often it is right."]
                if r.get("calibration_error") is not None else [])
-        cal += [f"AUROC {r['auroc']:.3f} (how well p(yes) separates yes from no; 0.5 = coin toss)"] if r.get("auroc") is not None else []
+        cal += [f"AUROC {r['auroc']:.3f}: how well p(yes) separates yes from no; 0.5 is a coin toss."] if r.get("auroc") is not None else []
         if cal:
-            parts.append(f"<details><summary>Calibration</summary><p>{'<br>'.join(e(c) for c in cal)}</p></details>")
+            parts.append(f"<details><summary>Calibration</summary><p class='note'>{'<br>'.join(e(c) for c in cal)}</p></details>")
         if r.get("checks"):
-            parts.append("<details><summary>Checks</summary><table class='num'>" + "".join(
-                f"<tr><td>{'✓' if c['passed'] else '✗' if c.get('severity') == 'error' else '!'}</td><td>{e(c['check'])}</td>"
-                f"<td>{e(c.get('value'))}</td><td class='dim'>limit {e(c.get('limit'))}</td></tr>" for c in r["checks"]) + "</table></details>")
+            parts.append("<details><summary>Checks</summary><table class='data num'><tr><th></th><th>check</th><th>value</th><th>limit</th></tr>"
+                         + "".join(f"<tr><td>{'✓' if c['passed'] else '✗' if c.get('severity') == 'error' else '!'}</td>"
+                                   f"<td><code>{e(c['check'])}</code></td><td>{e(c.get('value'))}</td><td>{e(c.get('limit'))}</td></tr>"
+                                   for c in r["checks"]) + "</table></details>")
         mk = r.get("mistakes") or {}
         if mk.get("total"):
-            parts.append(f"<details><summary>Most confident mistakes ({mk['total']})</summary><p class='dim'>Wrong with high "
-                         "confidence: a dangerous mistake, or a wrong answer key. Review them with <code>hunch review</code>.</p>"
-                         "<table class='num'><tr><th>row</th><th>got</th><th>p</th><th>gold</th></tr>" + "".join(
-                             f"<tr><td>{e(x['id'])}</td><td>{e(x['got'])}</td><td>{e(x['p'])}</td><td>{e(' | '.join(x['gold']))}</td></tr>"
-                             for x in mk["most_confident"]) + "</table></details>")
-    return f"<h3>{e(qid)}</h3>" + "".join(parts)
+            parts.append(f"<details><summary>Most confident mistakes ({mk['total']})</summary><p class='note'>Wrong with high "
+                         "confidence: a dangerous mistake, or a wrong answer key. <code>hunch review</code> shows them first.</p>"
+                         "<table class='data'><tr><th>row</th><th>got</th><th>p</th><th>gold</th></tr>" + "".join(
+                             f"<tr><td class='mono'>{e(x['id'])}</td><td>{e(x['got'])}</td><td class='num'>{e(x['p'])}</td>"
+                             f"<td>{e(' | '.join(x['gold']))}</td></tr>" for x in mk["most_confident"]) + "</table></details>")
+    return "<div>" + "".join(parts) + "</div>"
 
 
-def judgment_page(n: str, m: dict, r: dict | None, st: str, run: list[dict], at: str | None, sample: int | None,
-                  downstream: list[str]) -> str:
-    if src := source_node(m):
-        reads = f"<code>{e(src[2])}</code>"
-    else:
-        reads = " + ".join(link(u) for u in m["upstream"])
+def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: list[dict], at: str | None, sample: int | None,
+                  downstream: list[str], mini: str) -> str:
+    reads = f"<code>{e(src[2])}</code>" if (src := source_node(m)) else " + ".join(link(u) for u in m["upstream"])
     exposures = "<br>".join(
-        f"{e(x['name'])} <span class='dim'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
-        f"{' · reads ' + e(', '.join(x['uses'])) if x.get('uses') else ''}</span>"
-        + (f" <a href='{e(x['url'])}'>↗</a>" if str(x.get("url", "")).startswith(("https://", "http://")) else "")
-        + (f"<br><span class='dim'>{e(x['description'])}</span>" if x.get("description") else "")
+        f"{e(x['name'])} <span class='muted'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
+        f"{' · reads ' + e(', '.join(x['uses'])) if x.get('uses') else ' · reads every answer'}</span>"
+        + (f" <a href='{e(x['url'])}' rel='noopener'>open</a>" if str(x.get("url", "")).startswith(("https://", "http://")) else "")
+        + (f"<br><span class='muted'>{e(x['description'])}</span>" if x.get("description") else "")
         for x in m.get("exposures") or [])
-    facts = [f"<dt>Reads</dt><dd>{reads}" + (f" where <code>{e(m['where'])}</code>" if m.get("where") else "") + "</dd>",
+    facts = (f"<dt>Reads</dt><dd>{reads}" + (f" where <code>{e(m['where'])}</code>" if m.get("where") else "") + "</dd>"
              f"<dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in m.get('state', [])) or '–'}"
-             + (f"<br><span class='dim'>removed first: {e(', '.join(m['redact']))}</span>" if m.get("redact") else "") + "</dd>",
-             f"<dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>",
-             f"<dt>Used by</dt><dd>{exposures or '–'}</dd>"]
-    tested = f"last tested {e(local(at))}" if r else "no test results"
+             + (f"<br><span class='muted'>removed first: {e(', '.join(m['redact']))}</span>" if m.get("redact") else "") + "</dd>"
+             f"<dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>"
+             f"<dt>Used by</dt><dd>{exposures or '–'}</dd>"
+             f"<dt>Engine</dt><dd><code>{e(m.get('model'))}</code></dd>")
     sums = "".join(f"<li>{e(x)}</li>" for x in summary(r))
-    qs = "".join(question_block(qid, q, (r or {}).get("questions", {}).get(qid)) for qid, q in (m.get("questions") or {}).items())
     union = (f"<p>Merges the answers to <code>{e(m.get('question'))}</code> from "
              f"{', '.join(link(u) for u in m['union'])}.</p>") if "union" in m else ""
     rmetrics = (r or {}).get("metrics") or {}
     metrics = "".join(f"<li><code>{e(k)}</code>: <code>{e((v or {}).get('rule'))}</code>"
-                      + (f" fires on {pct(rmetrics[k]['rate'])}" if rmetrics.get(k, {}).get("rate") is not None else "") + "</li>"
+                      + (f", fires on {pct(rmetrics[k]['rate'])}" if rmetrics.get(k, {}).get("rate") is not None else "") + "</li>"
                       for k, v in (m.get("metrics") or {}).items())
     examples = "".join(f"<li>{'✓' if x['passed'] else '✗'} {e(x['name'])}</li>" for x in (r or {}).get("examples") or [])
     runs_html = "".join(f"<tr><td>{e((x.get('finished_at') or '')[:16].replace('T', ' '))}</td><td>{e(x.get('rows'))}</td>"
-                        f"<td>{e(x.get('asked'))}</td><td>${(x.get('cost') or 0):.4f}</td><td class='dim'>{e(x.get('status'))}</td></tr>"
+                        f"<td>{e(x.get('asked'))}</td><td>${(x.get('cost') or 0):.4f}</td><td class='muted'>{e(x.get('status'))}</td></tr>"
                         for x in run)
-    return f"""<section id="v-j-{e(n)}" class="page" hidden>
-<p class="crumb"><a href="#/">all judgments</a></p>
-<h1>{e(n)} {badge(st)}</h1>
-<p class="dim">{tested} · model <code>{e(m.get('model'))}</code> · spec <code>{e(m['file'])}</code></p>
-{attention(m, r, st, at, run, sample)}
+    qs = "".join(question_block(qid, q, (r or {}).get("questions", {}).get(qid)) for qid, q in (m.get("questions") or {}).items())
+    cols = "".join(f"<tr><td><code>{e(c)}</code></td><td>{e(w)}</td></tr>" for c, w in output_columns(spec))
+    f = spec.get("_file")
+    note, req = request_example(spec)
+    tabs = [("overview", "Overview"), ("questions", "Questions"), ("output", "Output columns"), ("spec", "Spec"), ("request", "Request")]
+    tested = f"tested {e(local(at))}" if r else "no test results"
+    overview = f"""<div class="two"><div style="display:grid;gap:18px">
+{f'<ul class="summary">{sums}</ul>' if sums else ''}<dl class="facts">{facts}</dl></div>
+<div style="display:grid;gap:8px"><p class="eyebrow">Lineage</p><div class="dagbox mini">{mini}</div>
+<a href="#/lineage/{quote(n, safe='')}" style="font-size:13px">Open in the full lineage</a></div></div>
+{f'<div><h2>Metrics</h2><ul class="summary">{metrics}</ul></div>' if metrics else ''}
+{f'<div><h2>Pinned examples</h2><ul class="summary">{examples}</ul></div>' if examples else ''}
+{f'<div><h2>Recent runs</h2><div style="overflow-x:auto"><table class="data num"><tr><th>finished</th><th>rows</th><th>asked</th><th>cost</th><th>status</th></tr>{runs_html}</table></div></div>' if runs_html else ''}"""
+    panes = {
+        "overview": overview,
+        "questions": union + (qs or "<p class='note'>No questions of its own.</p>"),
+        "output": ("<p class='note'>The table this judgment writes to the store: what an app or a downstream judgment reads. "
+                   f"Its name in the store is <code>{e(core.table_name(spec))}</code>.</p>"
+                   f"<div style='overflow-x:auto'><table class='data'><tr><th>column</th><th>holds</th></tr>{cols}</table></div>"),
+        "spec": (f"<p class='note'><code>{e(m['file'])}</code> · spec hash <code>{e(m['spec_hash'])}</code></p>"
+                 f"<pre>{yaml_html(Path(f).read_text()) if f and Path(f).exists() else ''}</pre>"),
+        "request": (f"<p class='note'>{e(note)} The row's fields are shown as placeholders; nothing from your data is on this page.</p>"
+                    + (f"<pre>{e(req)}</pre>" if req else "")),
+    }
+    return f"""<section id="j-{e(n)}" hidden>
+<p class="crumb"><a href="#/">Overview</a> / judgment</p>
+<div class="jhead"><h1>{e(n)}</h1>{pill(st)}</div>
 {f'<p class="desc">{e(m["description"])}</p>' if m.get("description") else ''}
-{f'<ul class="summary">{sums}</ul>' if sums else ''}
-<dl class="facts">{''.join(facts)}</dl>
-<p><a href="#/lineage/{quote(n, safe='')}">Show in lineage →</a></p>
-<h2>Questions</h2>{union}{qs}
-{f'<h2>Metrics</h2><ul>{metrics}</ul>' if metrics else ''}
-{f'<h2>Pinned examples</h2><ul>{examples}</ul>' if examples else ''}
-{f'<h2>Recent runs</h2><table class="num"><tr><th>finished</th><th>rows</th><th>asked</th><th>cost</th><th>status</th></tr>{runs_html}</table>' if runs_html else ''}
+<div class="meta"><span>{tested}</span><span>spec <code>{e(m['file'])}</code></span></div>
+{attention(m, r, st, at, run, sample)}{figures(r, sample)}
+<nav class="tabs" role="tablist">{''.join(f'<a role="tab" data-tab="{k}" href="{href(n, k)}" aria-selected="false">{label}</a>' for k, label in tabs)}</nav>
+{''.join(f'<div class="pane" data-tab="{k}" role="tabpanel" hidden>{v}</div>' for k, v in panes.items())}
 </section>"""
 
 
-def page(man: dict, results: dict | None, run: dict, st: dict[str, str]) -> str:
+def page(project: dict, man: dict, results: dict | None, run: dict, st: dict[str, str]) -> str:
     res, at, sample = (results or {}).get("judgments", {}), (results or {}).get("at"), (results or {}).get("sample")
     js = man["judgments"]
     down = {n: [d for d, dm in js.items() if n in dm["upstream"]] for n in js}
-    pages = "".join(judgment_page(n, m, res.get(n), st[n], run.get(n, []), at, sample, down[n]) for n, m in js.items())
-    body = (inventory(man, res, st, run, sample) + pages
-            + '<section id="v-lineage" hidden><p class="crumb"><a href="#/">all judgments</a></p><h1>Lineage</h1>'
-              '<p class="dim">Select a judgment to light up what feeds it and what it affects; select it again to open it.</p>'
-              f'<div class="dagwrap">{lineage_svg(lineage(man), st)}</div></section>')
-    made = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M") + (f" · git {e(man['git_sha'])}" if man["git_sha"] else "")
-    return (TEMPLATE.replace("{{title}}", e(man["project"])).replace("{{css}}", CSS).replace("{{js}}", JS)
-            .replace("{{body}}", body).replace("{{generated}}", made))
+    pages = "".join(judgment_page(n, m, project["nodes"][n], res.get(n), st[n], run.get(n, []), at, sample, down[n],
+                                  lineage_svg(lineage(neighbourhood(man, n)), st, mini=True)) for n, m in js.items())
+    lin = ('<section id="lineage" hidden><p class="eyebrow">Project</p><h1 style="font-size:34px">Lineage</h1>'
+           '<p class="lede">Sources on the left, then judgments, then what uses them. Select a judgment to light up what it reads '
+           'from and what depends on it; select it again to open it. Scroll to zoom, drag to move.</p>'
+           '<div class="dagbox big" style="margin-top:18px"><div class="tools"><button type="button" data-z="in">Zoom in</button>'
+           '<button type="button" data-z="out">Zoom out</button><button type="button" data-z="fit">Fit</button></div>'
+           f'{lineage_svg(lineage(man), st)}</div></section>')
+    made = "Generated " + datetime.now().astimezone().strftime("%Y-%m-%d %H:%M") + " by hunch docs from the last hunch test of this path."
+    fill = {"{{title}}": e(man["project"]), "{{mark}}": MARK, "{{sidebar}}": sidebar(man, st), "{{generated}}": e(made),
+            "{{body}}": home(man, res, st, run, sample, readme(project), at) + pages + lin}
+    out = PAGE()
+    for k, v in fill.items():
+        out = out.replace(k, v)
+    return out
 
 
 def write_docs(project: dict) -> None:
@@ -426,63 +606,7 @@ def write_docs(project: dict) -> None:
     mpath, hpath = rp.with_suffix(".manifest.json"), rp.with_suffix(".html")
     mpath.parent.mkdir(parents=True, exist_ok=True)
     mpath.write_text(json.dumps(man, indent=1, ensure_ascii=False, default=str) + "\n")
-    hpath.write_text(page(man, results, runs(project), st))
+    hpath.write_text(page(project, man, results, runs(project), st))
     counts = [f"{list(st.values()).count(k)} {v[0]}" for k, v in STATUS.items() if k in st.values()]
     print(f"{len(st)} judgment{'s' * (len(st) != 1)}: " + ", ".join(counts))
     print(f"  {hpath}\n  {mpath}")
-
-
-TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{title}} · hunch</title><style>{{css}}</style></head><body>
-<header><a class="brand" href="#/">{{title}}</a><nav><a href="#/">Judgments</a><a href="#/lineage">Lineage</a></nav>
-<input id="q" type="search" placeholder="Search judgments, questions, options, columns, apps" aria-label="search"></header>
-<main>{{body}}</main><footer>Generated by hunch docs · {{generated}} · numbers from the last hunch test</footer>
-<script>{{js}}</script></body></html>"""
-
-CSS = """:root{--bg:#fff;--fg:#252522;--dim:#6b6b66;--line:#e6e4de;--accent:#405A60;--card:#fafaf8;
---ok:#3F7D58;--fail:#C64D35;--warn:#A86B12;--stale:#A86B12;--noresults:#8a8a85;--nogold:#7D969B}
-@media (prefers-color-scheme: dark){:root{--bg:#0f1012;--fg:#e9e6de;--dim:#9a988f;--line:#2a2b2e;--accent:#7D969B;--card:#16171a}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
-header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);display:flex;gap:20px;align-items:center;padding:10px 24px;flex-wrap:wrap;z-index:1}
-.brand{font-weight:600;color:var(--fg);text-decoration:none}nav a{margin-right:14px}
-#q{flex:1;min-width:220px;max-width:460px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);font:inherit}
-main{max-width:1100px;margin:0 auto;padding:24px}footer{color:var(--dim);font-size:13px;text-align:center;padding:24px}
-a{color:var(--accent)}code{font:13px ui-monospace,Menlo,monospace;background:var(--card);padding:1px 4px;border-radius:4px}
-h1{font-size:26px;margin:.2em 0}h2{font-size:18px;margin-top:2em;border-bottom:1px solid var(--line);padding-bottom:4px}h3{font-size:16px;margin:1.6em 0 .3em}
-.dim,.crumb{color:var(--dim)}.why-box{border-left:3px solid currentColor;padding:8px 14px;margin:12px 0;background:var(--card);list-style:none}
-.why-box li{margin:2px 0;color:var(--fg)}p.why-box{color:var(--fg);border-left-color:var(--warn)}ul.why-box.st-fail{color:var(--fail)}.lede{font-size:16px}.desc{font-size:17px}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:13px;color:var(--dim);font-weight:500}.num{width:auto}.num td,.num th{padding:4px 12px 4px 0}tr.cur td{font-weight:600}
-.inv td:first-child{white-space:nowrap;font-weight:500}.why{font-size:12px;color:var(--dim)}
-.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid currentColor;white-space:nowrap;vertical-align:middle}
-.st-ok{color:var(--ok)}.st-fail{color:var(--fail)}.st-warn,.st-stale{color:var(--warn)}.st-noresults{color:var(--noresults)}.st-nogold{color:var(--nogold)}
-.legend{display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;font-size:13px;color:var(--dim);margin-top:20px}.legend dd{margin:0}
-.inv td:nth-child(5){white-space:nowrap}.summary{font-size:16px;padding-left:20px}.summary li{margin:.3em 0}
-.facts{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 18px}
-.facts dt{color:var(--dim)}.facts dd{margin:0}.q{font-size:16px;white-space:pre-wrap}.opts td:first-child{width:1%;white-space:nowrap}
-details{margin:.4em 0}summary{cursor:pointer;color:var(--accent)}
-.dagwrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-.dag .edge{fill:none;stroke:var(--dim);stroke-opacity:.5;stroke-width:1.5}.dag .node rect{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
-.dag .node text{fill:var(--fg);font-size:13px}.dag .node .sub{fill:var(--dim);font-size:11px}
-.dag .judgment{cursor:pointer}.dag .judgment rect{stroke:currentColor}.dag .source rect{stroke-dasharray:4 3}.dag .exposure rect{fill:var(--card)}
-.dag.focus .node,.dag.focus .edge{opacity:.18}.dag.focus .on{opacity:1}.dag.focus .edge.on{stroke:var(--accent);stroke-opacity:1}
-.dag .sel rect{stroke-width:3}
-@media (max-width:700px){main{padding:16px}.inv th:nth-child(5),.inv td:nth-child(5),.inv th:nth-child(6),.inv td:nth-child(6){display:none}.facts{grid-template-columns:1fr}}"""
-
-JS = r"""const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
-function show(){const h=location.hash.slice(1)||'/';$$('main>section').forEach(s=>s.hidden=true);
- let m;if(m=h.match(/^\/j\/(.+)$/)){const s=document.getElementById('v-j-'+decodeURIComponent(m[1]));if(s){s.hidden=false;scrollTo(0,0);return}}
- if(m=h.match(/^\/lineage(?:\/(.+))?$/)){$('#v-lineage').hidden=false;focus(m[1]?decodeURIComponent(m[1]):null);return}
- $('#v-home').hidden=false}
-const dag=$('.dag'),edges=$$('.edge',dag||document);
-function reach(id,dir){const seen=new Set([id]),todo=[id];while(todo.length){const n=todo.pop();
- for(const e of edges){const [a,b]=dir>0?[e.dataset.a,e.dataset.b]:[e.dataset.b,e.dataset.a];if(a===n&&!seen.has(b)){seen.add(b);todo.push(b)}}}return seen}
-function focus(id){if(!dag)return;$$('.on,.sel',dag).forEach(x=>x.classList.remove('on','sel'));dag.classList.toggle('focus',!!id);if(!id)return;
- const on=new Set([...reach(id,1),...reach(id,-1)]);$$('.node',dag).forEach(n=>{if(on.has(n.dataset.id))n.classList.add('on');if(n.dataset.id===id)n.classList.add('sel')});
- edges.forEach(e=>{if(on.has(e.dataset.a)&&on.has(e.dataset.b))e.classList.add('on')})}
-$$('.node',dag||document).forEach(n=>n.addEventListener('click',()=>{const id=n.dataset.id;
- if(n.classList.contains('judgment')&&n.classList.contains('sel'))location.hash='/j/'+encodeURIComponent(id);else location.hash='/lineage/'+encodeURIComponent(id)}));
-$('#q').addEventListener('input',ev=>{const q=ev.target.value.trim().toLowerCase();if(q&&location.hash!==''&&location.hash!=='#/')location.hash='/';let any=false;
- $$('.inv tbody tr').forEach(tr=>{const f=JSON.parse(tr.dataset.search);const hit=Object.entries(f).find(([k,v])=>v.toLowerCase().includes(q));
-  tr.hidden=!!q&&!hit;any=any||!tr.hidden;$('.why',tr).textContent=q&&hit&&hit[0]!=='name'?'matches '+hit[0]:''});$('.none-found').hidden=any});
-addEventListener('hashchange',show);show();"""

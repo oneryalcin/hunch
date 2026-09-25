@@ -19,7 +19,7 @@ It asks the engine nothing and costs nothing. It reads the specs, the results of
 
 ## Every judgment gets one status
 
-The page opens on a list of judgments, with the ones that need a look first:
+The page opens on the project: its README's first paragraph, a bar of statuses, and the judgments with the ones that need a look first. A sidebar lists every judgment by status on every screen, with a search box (press `/`) and a filter per status.
 
 | Status | Means |
 | --- | --- |
@@ -38,7 +38,15 @@ Each judgment has a page that opens with a few sentences built from what `test` 
 
 > department: agrees with the answer key on 100% of the 40 rows that have one; at act 0.8 it acts alone on 100% of rows, and none of the 40 with a known answer was wrong.
 
-Below that: where its rows come from, which columns the model sees and what is removed first, which judgments read its answers, and what uses them. Each question follows, word for word with its options, and then the detail most readers skip until they need it: the dial, calibration, every check, the most confident mistakes and recent runs.
+Each measured question also gets a card with its accuracy drawn as a range: the band is the 95% interval, the dot the estimate. Below that, tabs:
+
+| Tab | Shows |
+| --- | --- |
+| Overview | The sentences, where rows come from, what the model sees and what is removed first, what reads its answers and what uses them, a small lineage, metrics, examples and recent runs. |
+| Questions | Each question word for word with its options, then the dial, calibration, every check and the most confident mistakes. |
+| Output columns | The table the judgment writes to the store, column by column: what an app or a downstream judgment reads. |
+| Spec | The YAML file as written. |
+| Request | The shape of one request the engine receives, with the row's fields as placeholders. The page never includes rows from your data, so it is safe to share. |
 
 ## Say what uses a judgment
 
@@ -64,9 +72,9 @@ An exposure without `uses` counts as reading every answer. `description`, a sent
 
 ## Lineage and search
 
-The lineage view draws sources, judgments and exposures left to right. Select a judgment to light up everything it reads from and everything that depends on it. Select it again to open its page.
+The lineage view draws sources, judgments and exposures left to right; scroll to zoom and drag to move. Select a judgment to light up everything it reads from and everything that depends on it. Select it again to open its page.
 
-The search box filters judgments by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "refund" finds the judgment whose options mention refunds as well as the one that asks about them.
+The search box filters the sidebar and the list by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "refund" finds the judgment whose options mention refunds as well as the one that asks about them.
 
 ## In CI
 
