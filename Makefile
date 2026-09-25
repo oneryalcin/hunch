@@ -14,6 +14,7 @@ help:
 check: lint
 	! grep -n 'exclude-newer-package' uv.lock server/uv.lock
 	uv run docs-site/check.py
+	uv run hunch lint src/hunch/recipes/agent_commands
 	uv run hunch lint src/hunch/recipes/tickets
 	cd docs-site && npx -y mint@latest validate
 	cd docs-site && npx -y mint@latest broken-links --check-anchors
