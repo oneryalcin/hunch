@@ -23,6 +23,7 @@ import argparse
 import ast
 import asyncio
 import csv
+import difflib
 import getpass
 import hashlib
 import itertools
@@ -579,12 +580,52 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
     return errors, warnings
 
 
-def lint_meta(spec: dict) -> tuple[list[str], list[str]]:
-    """description and exposures: for people and `hunch docs`, checked on every judgment, unions included."""
+def answer_values(q: dict) -> list[str]:
+    """What a question's column holds: the values an app's code compares against (multi: each option, joined by "|")."""
+    if not isinstance(q, dict) or q.get("type") == "noul":
+        return ["yes", "no"] if isinstance(q, dict) else []
+    crit = q.get("criteria")
+    labels = [str(c) for c in crit] if isinstance(crit, (list, dict)) else []
+    if q.get("type") == "score":
+        return [f"{i}:{c}" for i, c in enumerate(labels)]
+    return labels + ([NONE] if q.get("none") and q.get("type") == "choice" else [])
+
+
+def question_values(spec: dict, branches: list[dict] = ()) -> dict[str, list[str]]:
+    """Every question an exposure can use, with the values its column holds. A union's come from its branches."""
+    if "union" in spec:
+        q = spec.get("question")
+        return {q: list(dict.fromkeys(v for b in branches for v in question_values(b).get(q, [])))}
+    qs = {**(spec.get("questions") or {}), **(spec.get("_written") or {})}  # multi: the parent and one yes/no per option
+    return {qid: answer_values(q) for qid, q in qs.items()}
+
+
+def uses_of(x: dict) -> dict[str, list[str] | None] | None:
+    """An exposure's `uses` as {question: the values its code relies on, None for any}; None: it reads every answer."""
+    u = x.get("uses")
+    if not isinstance(u, dict):
+        return None if u is None else dict.fromkeys(u)
+    return {q: None if vs is None else [str(v) for v in vs] for q, vs in u.items()}
+
+
+def uses_text(x: dict) -> str:
+    """"reads department = billing, technical; urgent", or "reads every answer"."""
+    uses = uses_of(x)
+    return "reads " + ("; ".join(f"{q} = {', '.join(vs)}" if vs else q for q, vs in uses.items()) if uses else "every answer")
+
+
+def relies_on(label: str | None, values: list[str] | None) -> bool:
+    """Whether an exposure's code branches on this answer: it relies on any, on this one, or on this score level."""
+    level = (label or "").split(":", 1)[0]
+    return values is None or (label is not None and (label in values or level.isdigit() and ":" in label and level in values))
+
+
+def lint_meta(spec: dict, values: dict[str, list[str]]) -> tuple[list[str], list[str]]:
+    """description and exposures: for people, `hunch docs` and `hunch diff`, checked on every judgment, unions
+    included. An exposure's `uses` can name the answers its code compares against: its contract with this spec."""
     errors, warnings = [], []
     if "description" in spec and not isinstance(spec["description"], str):
         errors.append("description must be text")
-    questions = {*spec.get("questions", {}), *spec.get("_multi", {}), *([spec["question"]] if "union" in spec else [])}
     names, exposures = [], spec.get("exposures") or []
     if not isinstance(exposures, list):
         errors.append("exposures must be a list: - name: <what uses this judgment>")
@@ -593,18 +634,30 @@ def lint_meta(spec: dict) -> tuple[list[str], list[str]]:
         if not isinstance(x, dict) or not isinstance(x.get("name"), str):
             errors.append(f"exposures[{i}]: needs a name (what uses this judgment: an app, hook, dashboard or job)")
             continue
+        where_ = f"exposures.{x['name']}"
         names.append(x["name"])
         for k in set(x) - EXPOSURE_KEYS:
-            warnings.append(f"exposures.{x['name']}: unknown key {k!r} (typo?)")
+            warnings.append(f"{where_}: unknown key {k!r} (typo?)")
         if x.get("kind", "app") not in EXPOSURE_KINDS:
-            errors.append(f"exposures.{x['name']}: kind must be one of {EXPOSURE_KINDS}")
+            errors.append(f"{where_}: kind must be one of {EXPOSURE_KINDS}")
         uses = x.get("uses")
-        if uses is not None and (not isinstance(uses, list) or not uses):
-            errors.append(f"exposures.{x['name']}: uses must list question names (leave it out if it reads every answer)")
+        if uses is not None and (not isinstance(uses, (list, dict)) or not uses
+                                 or isinstance(uses, list) and not all(isinstance(q, str) for q in uses)
+                                 or isinstance(uses, dict) and any(v is not None and (not isinstance(v, list) or not v)
+                                                                   for v in uses.values())):
+            errors.append(f"{where_}: uses lists the questions it reads ([department]), or maps each to the answers "
+                          f"its code compares against (department: [billing, technical]); leave it out if it reads every answer")
             continue
-        for qid in uses or []:
-            if qid not in questions:
-                errors.append(f"exposures.{x['name']}: uses {qid!r}, which is not a question here")
+        for qid, relied in (uses_of(x) or {}).items():
+            if qid not in values:
+                errors.append(f"{where_}: uses {qid!r}, which is not a question here")
+                continue
+            for v in relied or []:
+                if v not in values[qid] and not (v.isdigit() and any(a.startswith(f"{v}:") for a in values[qid])):
+                    has = (f"its answers: {', '.join(values[qid])}" if len(values[qid]) <= 10 else f"it has {len(values[qid])}; "
+                           f"closest: {', '.join(difflib.get_close_matches(v, values[qid], 3, 0))}")
+                    errors.append(f"{where_} relies on {qid} = {v!r}, but {qid} has no such answer ({has}): "
+                                  f"if an answer was renamed or removed on purpose, change {x['name']} first, then its uses")
     for n in sorted({n for n in names if names.count(n) > 1}):
         errors.append(f"exposures: {n!r} is listed twice")
     return errors, warnings
@@ -617,7 +670,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
         tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
-        e, w = lint_meta(spec)
+        e, w = lint_meta(spec, question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]]))
         errors, warnings = errors + tag(e), warnings + tag(w)
         if "union" in spec:
             branches = [project["nodes"][u] for u in ups]
@@ -2105,8 +2158,11 @@ def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Ch
     return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[-1:]}
 
 
-def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict, same_spec: bool) -> int:
-    """Prints how this question's answers moved; returns how many rows' answers changed, appeared or disappeared."""
+def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict,
+                  same_spec: bool) -> dict[str, tuple[str | None, str | None]]:
+    """Prints how this question's answers moved; returns {row id: (old answer, new answer)} for every row whose
+    answer changed, appeared (old None) or disappeared (new None)."""
+    lab = lambda a: decide(a)[0] if a else None
     old_by = {it["id"]: it for it in old_its}
     new_ids = {it["id"] for it in new_its}
     pairs = [(old_by[it["id"]], it) for it in new_its if it["id"] in old_by]
@@ -2114,10 +2170,10 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
     moved = f"; {entered} rows newly reach it, {left} no longer do" if entered or left else ""
     if not old_its:
         print(f"\n{qid}: new question ({len(new_its)} rows)")
-        return len(new_its)
+        return {it["id"]: (None, lab(new_a.get(it["key"]))) for it in new_its}
     if all(o["key"] == n["key"] for o, n in pairs) and not moved:
         print(f"\n{qid}: unchanged (same keys, 0 calls)")
-        return 0
+        return {}
     flips = []
     for o, n in pairs:
         oa, na = old_a[o["key"]], new_a[n["key"]]
@@ -2151,7 +2207,24 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
         print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n, 40)}")
     if len(flips) > SHOW:
         print(f"  … {len(flips) - SHOW} more")
-    return len(flips) + entered + left
+    return ({n["id"]: (lab(oa), lab(na)) for n, oa, na, _ in flips}
+            | {it["id"]: (None, lab(new_a.get(it["key"]))) for it in new_its if it["id"] not in old_by}
+            | {it["id"]: (lab(old_a.get(it["key"])), None) for it in old_its if it["id"] not in new_ids})
+
+
+def exposure_rows(spec: dict, x: dict, changed: dict[str, dict]) -> set[str]:
+    """Rows whose change this exposure's code can see: an answer it relies on appeared or disappeared."""
+    uses, rows = uses_of(x), set()
+    for q, moves in changed.items():
+        multi = ((spec.get("questions") or {}).get(q) or {}).get("_multi")  # [parent, option] of a multi's yes/no
+        if uses is None or q in uses:
+            relied = uses and uses[q]
+        elif multi and multi[0] in uses and (uses[multi[0]] is None or multi[1] in uses[multi[0]]):
+            relied = None if uses[multi[0]] is None else ["yes"]  # relying on an option: seeing it in the set
+        else:
+            continue
+        rows |= {i for i, (a, b) in moves.items() if relies_on(a, relied) or relies_on(b, relied)}
+    return rows
 
 
 def twin_of(n: str, names: list[str]) -> str | None:
@@ -2214,11 +2287,20 @@ def cmd_diff(project: dict, args) -> None:
                     print(f"\n{qid}: renamed from {oq!r}")
             changed[qid] = diff_question(qid, new_its, [it for it in old_r[o]["items"] if it["qid"] == oq],
                                          new_r[n]["answers"], old_r[o]["answers"], same)
-        affected = [x for x in spec.get("exposures") or [] if any(  # an exposure without `uses` reads every answer
-            k for q, k in changed.items() if not x.get("uses") or q in x["uses"] or q.split("__")[0] in x["uses"])]
-        if affected:
-            print("\naffects " + ", ".join(f"{x['name']} ({x.get('kind', 'app')}"
-                                          + (f", reads {', '.join(x['uses'])}" if x.get("uses") else "") + ")" for x in affected))
+        print_exposures(spec, changed)
+
+
+def print_exposures(spec: dict, changed: dict[str, dict]) -> None:
+    """What the change reaches outside hunch: per exposure, the rows whose answer its code sees differently."""
+    hit, missed = [], []
+    for x in spec.get("exposures") or []:
+        rows = exposure_rows(spec, x, changed)
+        what = f"{x['name']} ({x.get('kind', 'app')}, {uses_text(x)})"
+        (hit.append(f"affects {what}: {len(rows)} row{'s' * (len(rows) != 1)}") if rows else missed.append(what))
+    if missed:
+        hit.append(f"not affected: {', '.join(missed)}; no answer {'it relies' if len(missed) == 1 else 'they rely'} on changed")
+    if hit:
+        print("\n" + "\n".join(hit))
 
 
 def review_queue(items: list[dict], answers: dict, audit: int, other: dict | None = None) -> list[tuple[str, dict]]:

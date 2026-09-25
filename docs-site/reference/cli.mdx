@@ -232,7 +232,8 @@ intent: 77/770 rows flip (15 within noise band)
 | `paired sign test` | Whether fixed vs broken beats chance. |
 | flip rows | ✓ fixed, ✗ broken, blank: no gold or wrong both times. `~noise` flips are listed last. |
 | `unchanged (same keys, 0 calls)`, `new question`, `renamed from 'x'`, `moved by upstream changes` | Other outcomes; renames are matched by answer keys. |
-| `affects …` | The spec's [`exposures`](/reference/spec#exposures) that read a question whose answers changed (all of them, for an exposure without `uses`). |
+| `affects …: N rows` | Per [exposure](/reference/spec#exposures), the rows whose change it can see: an answer changed, appeared or disappeared on a question it reads, and, if its `uses` names the [answers it relies on](/reference/spec#answers-an-exposure-relies-on), one of those was the old or the new answer. |
+| `not affected: …` | Exposures that read a question in the diff but see no change. |
 
 Both sides use today's reviews.
 

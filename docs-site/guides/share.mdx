@@ -56,13 +56,14 @@ exposures:
     kind: dashboard
 ```
 
-hunch never calls them. The list is for people: the page shows it under *Used by* and in the lineage, and `hunch diff` names the ones a change reaches:
+hunch never calls them. The list is for people: the page shows it under *Used by* and in the lineage, and `hunch diff` counts the rows each one sees change:
 
 ```text
-affects support-router (app, reads department), triage-dashboard (dashboard)
+affects support-router (app, reads department): 2 rows
+affects triage-dashboard (dashboard, reads every answer): 2 rows
 ```
 
-An exposure without `uses` counts as reading every answer. `description`, a sentence saying what the judgment decides, is the other key written for people; neither is sent to the model or changes an answer's key.
+An exposure without `uses` counts as reading every answer. When an app branches on particular answers, name them (`uses: {department: [billing]}`): renaming or removing one then fails lint instead of silently breaking the app, and `diff` counts only the rows that move into or out of them. See [answers an exposure relies on](/reference/spec#answers-an-exposure-relies-on). `description`, a sentence saying what the judgment decides, is the other key written for people; neither is sent to the model or changes an answer's key.
 
 ## Lineage and search
 
