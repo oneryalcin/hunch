@@ -1035,17 +1035,21 @@ def hit(it: dict, a: dict, gold: str = "gold") -> bool:
     return decide(a)[0] in it[gold]
 
 
+EXCLUDED = ("ambiguous", "needs_context")  # verdicts that drop a row from scoring
+
+
 def attach_gold(items: list[dict], reviews: dict) -> None:
     """Effective gold = a review verdict on this exact row text if there is one, else the source column.
     Verdicts: model_right / key_right / labeled / confirmed / against_right / spec_right → that label; both_ok → both labels;
-    ambiguous → row dropped from scoring. A verdict on text that has since changed is ignored."""
+    ambiguous / needs_context (a reviewer could only decide it by knowing more than the state shows) → row dropped
+    from scoring. A verdict on text that has since changed is ignored."""
     for it in items:
         col = it["q"].get("gold")
         it["raw_gold"] = normalize_gold(it["q"], it["row"].get(col, "")) if col else None
         r = reviews.get((it["qid"], it["id"]))
         it["verdict"] = r["verdict"] if r and r["state_hash"] == it["shash"] else None
         it["review_kind"] = (r.get("kind") or "") if it["verdict"] else None
-        if it["verdict"] == "ambiguous":
+        if it["verdict"] in EXCLUDED:
             it["gold"], it["gold_src"] = None, "excluded"
         elif it["verdict"]:
             it["gold"], it["gold_src"] = frozenset(r["label"].split("|")), "review"
@@ -1567,7 +1571,11 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     both = sum(len(it["gold"]) > 1 for it in gold_its)
     print(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
           f"{f', {both} with two acceptable labels' if both else ''}"
-          f"{f', {src['excluded']} excluded as ambiguous' if src['excluded'] else ''})")
+          f"{f', {src['excluded']} excluded as ambiguous or needing more context' if src['excluded'] else ''})")
+    spot = [it for it in its if it["review_kind"] == "audit"]
+    if gap := sum(it["verdict"] == "needs_context" for it in spot):
+        print(f"  context: {gap} of {len(spot)} random spot checks ({gap / len(spot):.0%}) needed more than the state "
+              f"shows to decide; give the state more (earlier or later turns, what happened next)")
     reviewed = src["review"] + src["excluded"] > 0 and any(it["raw_gold"] for it in its)  # raw vs reviewed needs a key
 
     weights, note = None, ""
@@ -1891,6 +1899,8 @@ def cmd_review(project: dict, args) -> None:
     print(f"{bold(name)}: {len(queue)} of {sum(kinds.values())} rows to review ("
           + ", ".join(f"{c} {REVIEW_KINDS[k]}" for k, c in kinds.items()) + f"). Each answer is saved to "
           f"{reviews_path(spec).name} as you go.")
+    print(dim("Judge only from the text shown, as a stranger would. If you can only decide it because you know more "
+              "than this (the session, what happened later), press c: that counts as missing context, not a model error."))
     done = 0
     for n, (kind, it) in enumerate(queue, 1):
         a = answers[it["key"]]
@@ -1924,7 +1934,7 @@ def cmd_review(project: dict, args) -> None:
             print(dim(f"      … {len(ranking) - len(shown)} more; type an option's name to pick it"))
         choice = "Enter = agree with the marked answer · " if default else ""
         both = " · b both acceptable" if kind in ("shadow", "disputed") else ""
-        print(dim(f"{choice}1-{len(shown)} pick{both} · a ambiguous · s skip · q quit"))
+        print(dim(f"{choice}1-{len(shown)} pick{both} · c needs more context · a ambiguous · s skip · q quit"))
         while True:
             try:
                 ans = input("> ").strip()
@@ -1936,8 +1946,8 @@ def cmd_review(project: dict, args) -> None:
             if ans == "s":
                 break
             label = None
-            if ans == "a":
-                verdict = "ambiguous"
+            if ans in ("a", "c"):
+                verdict = {"a": "ambiguous", "c": "needs_context"}[ans]
             elif ans == "b" and kind == "shadow":
                 verdict, label = "both_ok", f"{old_label}|{model}"
             elif ans == "b" and kind == "disputed":

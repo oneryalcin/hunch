@@ -255,7 +255,7 @@ async def review_page(request: Request):
                                 ("both_ok", f"{key}|{top[0][0]}", "both acceptable")],
                    "audit": [("confirmed", key, "label is right")]}.get(kind, [])
         choices += [("labeled", lab, f"it is {lab}") for lab, _ in top if lab not in {c[1] for c in choices}]
-        choices += [("ambiguous", "", "ambiguous")]
+        choices += [("needs_context", "", "needs more context"), ("ambiguous", "", "ambiguous")]
         hidden = {"path": rel, "node": node, "qid": it["qid"], "row_id": it["id"], "state_hash": it["shash"],
                   "kind": kind, "token": token, "reviewer": reviewer, "audit": audit}
         buttons = "".join(
@@ -264,12 +264,14 @@ async def review_page(request: Request):
             + f"<input type='hidden' name='verdict' value='{v}'><input type='hidden' name='label' value='{html.escape(lab)}'>"
             f"<button>{html.escape(text)}</button></form>" for v, lab, text in choices)
         cards.append(f"<div class='card'><p class='k'>{kind} · #{html.escape(it['id'])} · {html.escape(it['qid'])}"
-                     f"{' · answer key: ' + html.escape(key) if key != '-' else ''}</p>{state}"
+                     f"{' · answer key: ' + html.escape(key) if it['raw_gold'] else ''}</p>{state}"
                      f"<p>model: {' · '.join(f'{html.escape(l)} {p:.2f}' for l, p in top)}</p>"
                      f"{buttons}</div>")
     head = (f"<h1>Review · {html.escape(node)}</h1><p>{kinds['disputed']} disputed · {kinds['audit']} audit · "
             f"{kinds['uncertain']} uncertain; verdicts go to <code>{html.escape(core.reviews_path(spec).name)}</code>"
-            f"{' as ' + html.escape(reviewer) if reviewer else ' (add &amp;reviewer=you to the address to sign them)'}</p>")
+            f"{' as ' + html.escape(reviewer) if reviewer else ' (add &amp;reviewer=you to the address to sign them)'}</p>"
+            "<p>Judge only from the text shown, as a stranger would. If you can only decide because you know more "
+            "than this, choose <b>needs more context</b>: it counts as missing context, not a model error.</p>")
     return HTMLResponse(page(f"review · {rel}", head + ("".join(cards) or "<p>Nothing to review.</p>")))
 
 
@@ -280,7 +282,8 @@ async def review_post(request: Request):
     project = load(rel)
     node = node_of(project, form.get("node"))
     spec = project["nodes"][node]
-    if form.get("verdict") not in {"model_right", "key_right", "both_ok", "confirmed", "labeled", "ambiguous"}:
+    if form.get("verdict") not in {"model_right", "key_right", "both_ok", "confirmed", "labeled", "ambiguous",
+                                "needs_context"}:
         raise Refused(400, f"unknown verdict {form.get('verdict')!r}")
     # only rows the queue offers, with the kind it offers them as: `audit` must stay a random sample for the
     # estimator, so a verdict can't be filed as one for a row picked by hand
