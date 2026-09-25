@@ -3,6 +3,9 @@ title: "Concepts"
 description: "The ideas hunch is built from, each resting on the one before: rows, questions, specs, the store, gold, act and review."
 ---
 
+import { ActDial } from "/snippets/act-dial.jsx";
+import { DIAL_ROWS } from "/snippets/dial-rows.jsx";
+
 Each idea on this page rests on the one before it.
 
 ## A row is one thing you judge
@@ -49,6 +52,12 @@ An answer key is someone else's judgment, and it can be wrong ([one public key](
 An answer given at 0.55 deserves less trust than one given at 0.99. `act` is the confidence below which an answer is not acted on automatically; those rows go to review instead.
 
 Choosing `act` is a trade. Set it higher and fewer rows are automated, but fewer of those are wrong. `hunch test` shows this trade as a dial, with one line per threshold, so you can pick with numbers. Neither `act` nor `gold` is sent to the model, so changing them asks nothing.
+
+Here is that trade on 770 real answers from the [banking cookbook](/cookbooks/banking-intents). Each dot is one message, the most confident at the top. Move `act` and watch mistakes leave the automated block and land with a person:
+
+<ActDial rows={DIAL_ROWS} initial={0.9} />
+
+At 0.90, 82.6% of answers are automated and 8.2% of those are wrong. Point at a red dot near the top: some of the model's most confident "mistakes" are the answer key's.
 
 ## Review turns your verdicts into gold
 

@@ -3,6 +3,8 @@ title: "How the numbers work"
 description: "Where test's accuracy estimate, interval, calibration, dial and AUROC come from, and how diff decides a change is real."
 ---
 
+import { IntervalSlider } from "/snippets/interval.jsx";
+
 `hunch test` might tell you a question is 91.7% accurate, somewhere between 74% and 98%. This page explains where each part of that comes from, so you can tell when to trust it.
 
 ## Estimated accuracy
@@ -32,6 +34,10 @@ Its width comes from how many rows you reviewed, not from how many rows there ar
 |---|---|---|---|
 | 30 | 27 | 90% | 74.4–96.5% |
 | 100 | 90 | 90% | 82.6–94.5% |
+
+Drag the number of reviewed rows. The accuracy stays at about 90%; only how sure you can be of it changes:
+
+<IntervalSlider rate={0.9} initial={30} />
 
 With sampling weights (`weights:`), each row counts by its weight, and the interval uses the effective sample size, (Σw)² / Σw².
 
