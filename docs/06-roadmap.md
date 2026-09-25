@@ -125,6 +125,26 @@ Pre-v1, in this order (each one PR):
 
 **Plugin strategy.** No hunch plugin registry before v1. Each extension point reuses an interface someone else maintains: sources through dlt and `py()`, engines through Pydantic AI's `DecisionModel` (the `pydantic:` adapter above), traces through OpenTelemetry, stores as SQLite now and Postgres later.
 
+## Later, with a trigger: extraction as propose, then verify (discussed 2026-09-25)
+
+**Question.** Should hunch also extract values (names, amounts, dates, claims) with generative models (DeepSeek, any OpenRouter model), so that more of a pipeline can be written as specs and lineage?
+
+**Position.** Not as general generation. hunch is worth using because every answer that code acts on has a measured error rate, and decisions make that cheap: a closed answer set, a probability read from the answer tokens, exact comparison with gold, and the `act` dial. Free-form output breaks each of these: no reliable probability (so no `act`), fuzzy gold matching ("£1,200" against "1200 GBP"), and a `diff` that flags every rewording. A general "any model, any output" layer would also put hunch in a crowded field (DSPy, BAML, Instructor, dbt Python models calling LLMs) where it has no advantage.
+
+**Today, without new code: select instead of generate.** Code lists the candidate values (regex, a parser, spans from a document), and a `choice` question picks one, with `none` when no candidate fits. The answer stays typed, cached, tested and on the dial. This covers more extraction than it first appears to.
+
+**If it earns its place: propose, then verify.**
+
+| Piece | Design |
+|---|---|
+| `extract` step | A judgment whose question asks an LLM engine for a typed value (`string`, `number`, `date`, or a list of one of these) with structured output. Cached under its exact input like every answer, materialized as a column, available to downstream judgments through `ref()` |
+| Accuracy | Exact match against gold after a declared normalisation (`number`, `date`, `casefold`), reported with a Wilson interval like any rate |
+| Confidence | Not from the generator. A follow-up `noul` over the source and the proposed value ("Is this value stated in the text?") supplies `p`, so `act`, review, `test`, `metrics` and `examples` work unchanged |
+| Lineage | extract → verify → decide composes with what exists: `ref()`, `where`, `chain`, `escalate` |
+| Not in scope | Free text (summaries, rewrites), open-ended generation, agents, prompt chains |
+
+**Trigger.** A real use case that selection cannot cover (candidates cannot be listed by code), measured end to end the way the triage, agent-claim and command-guard cookbooks were. Cost when triggered: an engine method for structured output, one question type, normalised gold matching, and a cookbook with honest numbers.
+
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
 | Item | Question it answers | Done when |
