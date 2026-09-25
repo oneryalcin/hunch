@@ -8,7 +8,9 @@ Every format is read into one event stream per session, then viewed as rows:
               (their reaction: the closest thing to free gold), what the agent did in between.
     runs:     one row per session: the first request, the agent's final messages, totals.
     commands: one row per shell command the agent ran: the request it served, the folder it ran in, the command,
-              the agent's own description, and whether the person rejected it or it failed (Claude Code only for now).
+              the agent's own description, who refused it (`person`, `classifier` or `no`) and whether it failed
+              (Claude Code only). `request` is the last message the person typed before the command, including
+              across a context compaction or a background notification, which the reader does not count as requests.
 
 Formats (detected from the file): Claude Code session .jsonl, Cursor agent .jsonl, OpenCode session .json,
 OpenTelemetry GenAI spans (`gen_ai.input.messages` / `gen_ai.output.messages`, one trace per line or a
@@ -34,7 +36,8 @@ INTERRUPT = "[Request interrupted by user"
 TURN_COLUMNS = ["id", "session", "at", "request", "final_reply", "next_message", "tools", "edits", "ran_after_edit"]
 RUN_COLUMNS = ["id", "session", "at", "request", "final_messages", "human_messages", "tools", "edits", "ran_after_edit"]
 COMMAND_COLUMNS = ["id", "session", "at", "request", "cwd", "tool", "command", "description", "rejected", "failed"]
-REJECTED = "doesn't want to proceed with this tool use"
+REJECTED = {"person": "doesn't want to proceed with this tool use",  # the person refused it in the prompt
+            "classifier": "denied by the Claude Code auto mode classifier"}  # Claude Code's safety classifier refused it
 
 
 def human(text: str) -> str | None:
@@ -60,8 +63,8 @@ def claude_code(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
             if isinstance(b, dict) and b.get("type") == "tool_result":
                 t = b.get("content")
                 t = t if isinstance(t, str) else " ".join(x.get("text", "") for x in t or [] if isinstance(x, dict))
-                results[b.get("tool_use_id")] = {"rejected": "yes" if REJECTED in t else "no",
-                                                 "failed": "yes" if b.get("is_error") and REJECTED not in t else "no"}
+                by = next((who for who, mark in REJECTED.items() if mark in t), "")
+                results[b.get("tool_use_id")] = {"rejected": by or "no", "failed": "yes" if b.get("is_error") and not by else "no"}
     for r in lines:
         if r.get("isSidechain") or r.get("isMeta"):
             continue
@@ -234,7 +237,10 @@ def rows(pattern: str, base: Path = Path("."), view: str = "turns") -> list[dict
     files = sorted(glob.glob(str(base / Path(pattern).expanduser()), recursive=True))
     if not files:
         raise FileNotFoundError(f"traces({pattern}): no files under {base}")
-    return [r for f in files for s, ev in read(f) for r in fn(s, ev)]
+    out = [r for f in files for s, ev in read(f) for r in fn(s, ev)]
+    if view == "commands" and not out:
+        raise ValueError(f"traces({pattern}): no shell commands found (the commands view reads Claude Code sessions only)")
+    return out
 
 
 if __name__ == "__main__":  # quick look: python traces.py 'glob' [turns|runs]

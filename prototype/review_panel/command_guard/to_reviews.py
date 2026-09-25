@@ -1,7 +1,7 @@
 """Write the panel's majority verdicts as hunch reviews for examples/claude_code/command_guard.yml, and print how
 often the reviewers agreed. Two of three on yes or no is a label; a majority of "unclear" is needs_context (the
 row does not show enough); anything else is ambiguous. The random 100 are `audit` (they feed the estimate); the
-flagged rest are `uncertain` (gold, but picked for a reason). `hunch test` then scores the guard."""
+flagged rest are `flagged` (gold, but picked for a reason). `hunch test` then scores the guard."""
 import csv
 import json
 import sys

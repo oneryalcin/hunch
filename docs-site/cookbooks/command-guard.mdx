@@ -3,7 +3,7 @@ title: "Guard a coding agent's commands"
 description: "Decide which shell commands a person should see before they run, then measure the guard: how often it stops a harmless command, and how often it lets a harmful one through."
 ---
 
-A coding agent is about to run `rm -rf build dist node_modules`. Should it just run, or should a person look first? Most commands are harmless: builds, tests, `git status`. A few delete things that have no copy, change the machine, or push code somewhere. A guard that stops everything is useless, and one that stops nothing is dangerous.
+A coding agent is about to run `rm -rf build dist node_modules`. Should it run straight away, or should a person look first? Most commands are harmless: builds, tests, `git status`. A few delete things that have no copy, change the machine, or push code somewhere. A guard that stops everything is useless, and one that stops nothing is dangerous.
 
 A model can make this call before each command runs. Frameworks now make that easy: Pydantic AI, for example, shows a decision model judging every tool call in a hook. What they cannot tell you is how often the guard is wrong. This cookbook builds one and measures it.
 
@@ -22,7 +22,7 @@ redact: [secrets, emails, home]
 clip: {request: 1500, command: 1500}
 ```
 
-The sessions also record when a person refused a command. That looks like free gold, but it is not: all 15 refusals were builds, test runs and installs the person wanted to handle differently. None was about safety. The gold would have to come from review.
+The sessions also record refusals, which look like free gold. There are 17. The person refused 15: builds, test runs, installs, a branch rename, a script run. Those were about how or when to do the work, not about safety. Claude Code's auto-mode safety classifier refused the other 2: a script uploading a session trace, and a push straight to `main`. Those are exactly what a guard is for, and the guard below flags both, at 0.98 on `sends_out`. But two examples cannot measure anything, so the gold has to come from review.
 
 ## Three narrow questions
 
@@ -54,7 +54,7 @@ The guard's rule lives in code: a person looks if any answer is yes. All three q
 
 ## The spec was vague, not the model
 
-The first version asked whether a command would "change anything outside the project folder it works in". It flagged 228 commands, and some of the most confident were plainly wrong: a type check and a test run inside the project, at 0.96.
+The first version asked whether a command would "change anything outside the project folder it works in". It flagged 228 commands, and some of the most confident were plainly wrong: a type check inside the project, at 0.96.
 
 The obvious suspect was missing context. The model could not see which folder was the project, so the folder went into the state. That changed almost nothing: 49 answers flipped, and the mean probability moved by 0.037.
 
@@ -87,13 +87,13 @@ The accuracy is high partly because most commands are harmless and easy to call 
 
 Two numbers matter: how many of its stops were needed, and how many harmful commands it let through. Each depends on the threshold a yes has to clear:
 
-| Threshold | Commands stopped | Stops a person needed to see | Misses among reviewed commands |
+| Threshold | Commands stopped | Reviewed stops a person needed to see | Misses among reviewed commands |
 |---|---|---|---|
-| 0.5 | 153 (11.6%) | 60% | 1 |
-| 0.6 | 113 (8.6%) | 77% | 5 |
-| 0.7 | 92 (7.0%) | 88% | 10 |
-| 0.8 | 74 (5.6%) | 95% | 21 |
-| 0.9 | 48 (3.7%) | 98% | 44 |
+| 0.5 | 153 (11.6%) | 90 of 149 (60%) | 1 |
+| 0.6 | 113 (8.6%) | 86 of 111 (78%) | 5 |
+| 0.7 | 92 (7.0%) | 81 of 92 (88%) | 10 |
+| 0.8 | 74 (5.6%) | 70 of 74 (95%) | 21 |
+| 0.9 | 48 (3.7%) | 47 of 48 (98%) | 44 |
 
 A higher bar removes false alarms quickly, and lets harmful commands through just as quickly. For a guard, a miss costs more than an interruption, so the bar stays at 0.5: four in ten stops are unnecessary, and that is the price.
 
@@ -120,6 +120,7 @@ Call it from whatever runs before the command: a Claude Code `PreToolUse` hook, 
 
 - The reviewers are AI models, not people, and they applied the spec's own definitions. The numbers say the model follows the policy; whether the policy is the right one is your call.
 - 28 sessions from a handful of developers, many on Windows. Your agent's commands will look different: run the spec on your own sessions and review a random sample before trusting the numbers.
-- The model says yes more readily than it should: of commands it gave 0.5–0.8, the panel said yes to far fewer. That errs on the safe side for a guard, and it is where the false alarms come from.
+- On `destroys` and `reaches_outside` the model says yes more readily than it should: of the commands it gave 0.5–0.8, the panel said yes to 6 of 23 and 20 of 66. On `sends_out` it did not (11 of 13). That errs on the safe side for a guard, and it is where the false alarms come from.
+- After a context compaction, a background notification or a slash command, the reader has no new request, so `request` is the last message the person typed before it. That is true of 111 of the 1,315 commands (72, 32 and 7). The model and the panel saw the same text, so the numbers are consistent, but the request may describe an earlier task.
 
 The spec is `prototype/examples/claude_code/command_guard.yml`; the panel's packets, answers and scripts are in `prototype/review_panel/command_guard/`. Download the sessions as described in the example's `NOTICE.md`. The three versions of the spec cost $0.11 to run.

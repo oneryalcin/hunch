@@ -703,7 +703,9 @@ def llm_prompt(aq: dict, state: dict) -> tuple[str, list[str], list[str]]:
         codes, tail = [str(i) for i in range(1, len(labels) + 1)], "Answer with only the number of the best option."
     elif t == "noul":
         labels = codes = ["yes", "no"]
-        opts, tail = "", "Answer with only yes or no."
+        crit = {str(k).lower(): v for k, v in (aq.get("criteria") or {}).items()}
+        opts = "\n".join(f"{w.capitalize()} means: {crit[k]}" for w, k in (("yes", "true"), ("no", "false")) if crit.get(k))
+        tail = "Answer with only yes or no."
     elif t == "score":
         labels = list(aq["criteria"])
         opts = "\n".join(f"{i}. {k}" for i, k in enumerate(labels))
@@ -1077,16 +1079,23 @@ def attach_gold(items: list[dict], reviews: dict) -> None:
     from scoring. A verdict follows its text: matched by row id, else by the exact state it was made on (ids can
     shift, e.g. when the trace reader stops counting a kind of message); on text that has since changed, ignored."""
     by_text = {(r["qid"], r["state_hash"]): r for r in reviews.values()}
-    live = {(it["qid"], it["id"]) for it in items}
+    text_of = {(it["qid"], it["id"]): it["shash"] for it in items}
+    ids_with = {}
+    for it in items:
+        ids_with.setdefault((it["qid"], it["shash"]), []).append(it["id"])
     for it in items:
         col = it["q"].get("gold")
         it["raw_gold"] = normalize_gold(it["q"], it["row"].get(col, "")) if col else None
         r, copied = reviews.get((it["qid"], it["id"])), False
         if not r or r["state_hash"] != it["shash"]:
             r = by_text.get((it["qid"], it["shash"]))
-            # Same text as a row that is still here under its own id: the verdict is right for this row too, but this
-            # row was not drawn at random, so it must not count as a spot check (it would narrow the interval).
-            copied = bool(r) and (r["qid"], r["row_id"]) in live
+            # One row owns a verdict: the row it was made on, if that row still has the reviewed text, else (the id
+            # shifted) the first live row with that text. Other rows with the same text get the verdict as gold, but
+            # were not drawn at random, so they must not count as spot checks (they would narrow the interval).
+            if r:
+                owner = r["row_id"] if text_of.get((r["qid"], r["row_id"])) == r["state_hash"] \
+                    else min(ids_with[(it["qid"], it["shash"])])
+                copied = it["id"] != owner
         it["verdict"] = r["verdict"] if r else None
         it["review_kind"] = ("same_text" if copied else r.get("kind") or "") if it["verdict"] else None
         if it["verdict"] in EXCLUDED:

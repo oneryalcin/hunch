@@ -144,7 +144,7 @@ How `traces(...)` turns sessions into rows. Ignored for other sources.
 - A session's last turn has no next message, so it is not a row.
 - `ran_after_edit`: `yes` if the agent ran a command after its last edit, `no` if not, empty if it made no edits.
 - `final_messages` (`runs`): the agent's last three messages.
-- `commands`: `request` is the human message the command served; `cwd` the folder it ran in; `description` the agent's own note on it; `rejected` is `yes` if the person refused the call, `failed` if it returned an error. Ids are `<session>#<turn>.<n>`, the n-th command in that turn.
+- `commands`: `request` is the last message the person typed before the command; `cwd` the folder it ran in; `description` the agent's own note on it; `rejected` is `person` if the person refused the call, `classifier` if Claude Code's auto-mode safety classifier did, `no` otherwise; `failed` is `yes` if it returned an error. After a context compaction, a background notification or a slash command (none of which count as requests), `request` is the last message the person typed before it. Ids are `<session>#<turn>.<n>`, the n-th command in that turn.
 
 ```yaml
 source: traces(sessions/*.jsonl)
@@ -286,7 +286,7 @@ on_change: new_rows_only
 | --- | --- | --- |
 | `type` | `choice`, `noul`, `score` or `multi`. | yes |
 | `instructions` | The question: text, or structured YAML (sent as JSON). Refer to state columns in backticks, like `` `next_message` ``. | yes |
-| `criteria` | The options: a mapping for `choice` and `multi`, a list of levels for `score`. | yes |
+| `criteria` | The options: a mapping for `choice` and `multi`, a list of levels for `score`. On a `noul`, optional: `{"true": …, "false": …}`, what a yes and a no mean. | yes (not for `noul`) |
 | `none` | Adds an option `none_of_these` with this description (`choice` only). | yes |
 | `act` | The confidence needed to act on an answer without review. | no |
 | `gold` | The source column holding the right answer. | no |
@@ -310,7 +310,7 @@ Keys not sent are not in the cache key; changing them asks nothing.
     ```
   </Tab>
   <Tab title="noul">
-    Yes or no. Only `instructions`. The answer carries p(yes).
+    Yes or no. `instructions`, and optionally `criteria` saying what a yes and a no mean, under the keys `"true"` and `"false"` (lint rejects other keys; hunch's YAML keeps `yes`/`no` as text). The answer carries p(yes).
 
     ```yaml
     urgent:
