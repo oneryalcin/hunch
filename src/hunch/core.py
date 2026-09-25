@@ -1592,15 +1592,23 @@ def estimate_accuracy(its: list[dict], answers: dict, weights: dict | None = Non
 
 
 class Checks:
-    """Collects PASS/FAIL lines so `test` can exit non-zero."""
+    """Collects PASS/FAIL lines so `test` can exit non-zero, and each check as data for results.json."""
     failed = False
 
-    def __call__(self, ok: bool, text: str) -> None:
+    def __init__(self) -> None:
+        self.log: list[dict] = []
+
+    def __call__(self, ok: bool, text: str, check: str = "", value: float | None = None, limit: float | None = None) -> None:
         self.failed |= not ok
+        self.log.append({"check": check, "passed": ok, "value": _r(value), "limit": limit})
         print(f"  {'PASS' if ok else 'FAIL'} {text}")
 
 
-def print_dial(q: dict, rows_: list[tuple]) -> None:
+def _r(x: float | None) -> float | None:
+    return None if x is None else round(float(x), 4)
+
+
+def print_dial(q: dict, rows_: list[tuple]) -> list[dict]:
     """rows_: (answer, correct, weight, path confidence). Share of rows acted on automatically at each threshold,
     and how many of those are wrong. Yes/no questions get one column per side: the two sides are separate decisions."""
     total = sum(r[2] for r in rows_)
@@ -1610,37 +1618,47 @@ def print_dial(q: dict, rows_: list[tuple]) -> None:
         ws = sum(w for _, w in auto)
         return ws / total, (sum(w for c, w in auto if not c) / ws if ws else 0.0)
 
+    dial = []
     if q["type"] == "noul":
         print("       dial   act on yes: automated  wrong   │  act on no: automated  wrong")
         for t in DIAL:
             (ya, yw), (na, nw) = side("yes", t), side("no", t)
             mark = "".join(f"  ← act {s}" for s in ("yes", "no") if act_needed(q, s) == t)
             print(f"       {t:>4.2f}   {ya:>20.1%}  {yw:>5.1%}   │  {na:>19.1%}  {nw:>5.1%}{mark}")
+            dial.append({"threshold": t, "yes": {"automated": _r(ya), "wrong": _r(yw)}, "no": {"automated": _r(na), "wrong": _r(nw)}})
     else:
         print("       dial   automated   wrong among automated")
         for t in DIAL:
             auto, wrong = side(None, t)
             print(f"       {t:>4.2f}   {auto:>9.1%}   {wrong:>21.1%}{'  ← act' if act_needed(q, '') == t else ''}")
+            dial.append({"threshold": t, "automated": _r(auto), "wrong": _r(wrong)})
+    return dial
 
 
 def it_spec_chain(its: list[dict]) -> bool:
     return any(it["spec"].get("chain") for it in its)
 
 
-def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> None:
+def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
+    """Prints the question's report and returns it as data (results.json)."""
     conf = (spec.get("tests") or {}).get(qid, {})
     q = its[0]["q"] if its else spec["questions"][qid]
     print(f"\n{qid} ({q['type']}, {len(its)} rows)")
     src = Counter(it["gold_src"] for it in its)
     gold_its = [it for it in its if it["gold"]]
+    out: dict = {"type": q["type"], "rows": len(its), "gold": {"rows": len(gold_its), "source": src["source"],
+                                                               "review": src["review"], "excluded": src["excluded"]}}
+    first_check = len(check.log)
     if not gold_its:
-        return
+        return out | {"checks": []}
     both = sum(len(it["gold"]) > 1 for it in gold_its)
     print(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
           f"{f', {both} with two acceptable labels' if both else ''}"
           f"{f', {src['excluded']} excluded as ambiguous or needing more context' if src['excluded'] else ''})")
     spot = [it for it in its if it["review_kind"] == "audit"]
+    out["spot_checks"] = len(spot)
     if gap := sum(it["verdict"] == "needs_context" for it in spot):
+        out["needs_context"] = gap
         print(f"  context: {gap} of {len(spot)} random spot checks ({gap / len(spot):.0%}) needed more than the state "
               f"shows to decide; give the state more (earlier or later turns, what happened next)")
     reviewed = src["review"] + src["excluded"] > 0 and any(it["raw_gold"] for it in its)  # raw vs reviewed needs a key
@@ -1662,21 +1680,26 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         # Headline = the estimate. Accuracy on "current gold" trusts every unreviewed row, so once
         # disagreements are corrected it only errs upward.
         e, lo, hi, d = est
+        out["accuracy"] = {"value": _r(e), "ci": [_r(lo), _r(hi)], "basis": "estimate",
+                           "reviewed": {g: {"reviewed": n, "of": m} for g, (n, m) in d.items()}}
         check(e >= want, f"estimated accuracy {e:.1%} (95% CI {lo:.1%}–{hi:.1%}) from reviews of "
               + ", ".join(f"{n}/{m} {g if g == 'random' else g + 'ing'} rows" for g, (n, m) in d.items())
-              + f" (min {want:.0%})")
+              + f" (min {want:.0%})", "min_accuracy", e, want)
         if "random" not in d:
             print(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
                   f"on the raw answer key {accuracy(its, answers, qid, 'raw_gold'):.1%}")
     else:
         raw = f" (raw source gold: {accuracy(its, answers, qid, 'raw_gold'):.1%})" if reviewed else ""
-        check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})")
+        out["accuracy"] = {"value": _r(acc), "ci": None, "basis": "gold"}
+        check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})", "min_accuracy", acc, want)
         if reviewed:
             print(f"       upper bound only, no estimate: {est}")
 
     ece, table = calibration(calib_pairs(its, answers, weights=weights))
     raw = f" (raw source gold: {calibration(calib_pairs(its, answers, 'raw_gold', weights))[0]:.3f})" if reviewed else ""
-    check(ece <= conf.get("max_calibration_error", 1), f"calibration error {ece:.3f}{raw}{note} (max {conf.get('max_calibration_error', 1)})")
+    out["calibration_error"] = _r(ece)
+    check(ece <= conf.get("max_calibration_error", 1), f"calibration error {ece:.3f}{raw}{note} (max {conf.get('max_calibration_error', 1)})",
+          "max_calibration_error", ece, conf.get("max_calibration_error", 1))
     print(f"         {'stated p(yes)' if q['type'] == 'noul' else 'stated p':<13} {'n':>5}   avg stated   observed")
     for lo_, hi_, n, c, a in table:
         print(f"       {lo_:.1f}–{hi_:.1f}      {n:>6}   {c:>10.3f}   {a:>8.3f}")
@@ -1686,8 +1709,10 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         neg = [answers[it["key"]]["noul"] for it in gold_its if "no" in it["gold"]]
         if pos and neg:
             auc = auroc(pos, neg)
+            out["auroc"] = _r(auc)
             check(auc >= conf.get("min_auroc", 0),
-                  f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {conf.get('min_auroc', 0)})")
+                  f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {conf.get('min_auroc', 0)})",
+                  "min_auroc", auc, conf.get("min_auroc", 0))
 
     offered = [it for it in gold_its if it["aq"].get("type") == "choice" and isinstance(it["aq"].get("criteria"), dict)]
     lost = [it for it in offered if not it["gold"] & set(it["aq"]["criteria"])]
@@ -1701,16 +1726,20 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         print(f"       confidence is chained (× P(routed here correctly)); it separates right from wrong answers "
               f"with AUROC {sep(chn):.3f}, own confidence alone {sep(own):.3f}")
     scored = [(answers[it["key"]], hit(it, answers[it["key"]]), w(it), it.get("path_p", 1.0)) for it in gold_its]
-    print_dial(q, scored)
+    out["dial"] = print_dial(q, scored)
     if "act" in q and "min_act_accuracy" in conf:
         acted = [(c, wt) for (a, c, wt, pp) in scored if route(q, a, pp) == "act"]
         ws = sum(wt for _, wt in acted)
         a_acc = sum(wt for c, wt in acted if c) / ws if ws else 1.0
         check(a_acc >= conf["min_act_accuracy"],
-              f"accuracy among auto-acted {a_acc:.1%} on {ws / sum(sc[2] for sc in scored):.0%} of rows at act={q['act']} (min {conf['min_act_accuracy']:.0%})")
+              f"accuracy among auto-acted {a_acc:.1%} on {ws / sum(sc[2] for sc in scored):.0%} of rows at act={q['act']} (min {conf['min_act_accuracy']:.0%})",
+              "min_act_accuracy", a_acc, conf["min_act_accuracy"])
 
     wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -conf_of(it, answers[it["key"]]))
     print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
+    out["mistakes"] = {"total": len(wrong), "most_confident": [
+        {"id": it["id"], "got": decide(answers[it["key"]])[0], "p": _r(conf_of(it, answers[it["key"]])), "gold": sorted(it["gold"])}
+        for it in wrong[:SHOW]]}
     for it in wrong[:SHOW]:
         got = f"{decide(answers[it['key']])[0]} {conf_of(it, answers[it['key']]):.2f}"
         print(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {got:<38} {label_of(it, 50)}")
@@ -1737,18 +1766,24 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         rate = len(flips) / len(variants)
         check(rate <= order.get("max_flip_rate", 1),
               f"order stability: {len(flips)}/{len(variants)} answers flip ({rate:.1%}, {noisy} within noise band), "
-              f"mean |Δp| of original answer {sum(dp) / len(dp):.3f} (max flip rate {order.get('max_flip_rate', 1):.0%})")
+              f"mean |Δp| of original answer {sum(dp) / len(dp):.3f} (max flip rate {order.get('max_flip_rate', 1):.0%})",
+              "order_stability", rate, order.get("max_flip_rate", 1))
         for b, v in flips[:SHOW]:
             print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
+    out["checks"] = check.log[first_check:]
+    return out
 
 
 def cmd_test(project: dict, args) -> None:
+    results_path(project).unlink(missing_ok=True)  # never leave an older run's results looking current
     results = execute(project)
     check = Checks()
     all_stats = [r["stats"] for r in results.values()]
     names = [args.node] if args.node else project["order"]
+    report: dict = {}
     for n in names:
         res, spec = results[n], project["nodes"][n]
+        rep = report[n] = {"spec_hash": spec_hash(spec), "model": spec.get("model"), "rows": len(res["rows"]), "questions": {}}
         if len(project["nodes"]) > 1:
             where = f", where kept {len(res['rows'])} of {res['input']}" if "where" in spec else ""
             kind = f"union of {', '.join(spec['union'])}" if "union" in spec else f"{res['input']} rows in{where}"
@@ -1756,7 +1791,7 @@ def cmd_test(project: dict, args) -> None:
         attach_gold(res["items"], load_reviews(spec))  # just before testing: a union shares its branches' items
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
-            test_question(spec, qid, its, res["answers"], check, all_stats)
+            rep["questions"][qid] = test_question(spec, qid, its, res["answers"], check, all_stats)
             if its and its[0]["q"].get("none"):
                 k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
                 print(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")
@@ -1767,13 +1802,43 @@ def cmd_test(project: dict, args) -> None:
                 print(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows now act on its "
                       f"answer{acc} (the rest stay in review)")
         for parent, labels in spec.get("_multi", {}).items():
-            test_multi(spec, parent, labels, res, check)
+            rep.setdefault("multi", {})[parent] = test_multi(spec, parent, labels, res, check)
     print()
-    print_stats(merge_stats(*all_stats))
+    stats = merge_stats(*all_stats)
+    print_stats(stats)
+    write_results(project, report, check, stats)
     sys.exit(1 if check.failed else 0)
 
 
-def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Checks") -> None:
+RESULTS_VERSION = 1
+
+
+def results_path(project: dict) -> Path:
+    """.hunch/target/<tested spec or folder, relative to the store's folder>.json: one file per spec or project, so
+    projects sharing a store keep their own."""
+    spec = project["nodes"][project["order"][0]]
+    store = store_path(spec["_dir"])
+    tested = Path(project["path"]).resolve()
+    try:
+        name = tested.relative_to(store.parent.parent).with_suffix("")
+    except ValueError:  # tested outside the store's folder (HUNCH_STORE elsewhere)
+        name = Path(tested.stem)
+    return store.parent / "target" / name.with_suffix(".json")
+
+
+def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> None:
+    """`test` as data, read by CI, dashboards, agents and `hunch docs`; field names are stable within a version.
+    Written only when `test` finishes: a run stopped by --max-cost leaves no file (the old one is removed at start)."""
+    spec = project["nodes"][project["order"][0]]
+    path = results_path(project)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed,
+           "cost": _r(stats.get("cost")), "judgments": report}
+    path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+
+
+def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Checks") -> dict:
     """A multi question as a whole: is the set of options judged to apply exactly the gold set?"""
     by_row: dict[str, dict[str, dict]] = {}
     for it in res["items"]:
@@ -1783,12 +1848,15 @@ def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Ch
                frozenset(l for l, it in its.items() if it["gold"] and "yes" in it["gold"]))
               for its in by_row.values() if all(it["gold"] for it in its.values())]
     print(f"\n{parent} (multi: {len(labels)} options, {len(by_row)} rows)")
+    out: dict = {"type": "multi", "options": labels, "rows": len(by_row), "gold_rows": len(scored)}
     if not scored:
-        return
+        return out | {"checks": []}
     exact = sum(got == gold for _, got, gold in scored) / len(scored)
     jac = sum(len(got & gold) / len(got | gold) if got | gold else 1.0 for _, got, gold in scored) / len(scored)
     want = ((spec.get("tests") or {}).get(parent) or {}).get("min_accuracy", 0)
-    check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f}) (min {want:.0%})")
+    check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f}) (min {want:.0%})",
+          "min_accuracy", exact, want)
+    return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[-1:]}
 
 
 def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict, same_spec: bool) -> None:
