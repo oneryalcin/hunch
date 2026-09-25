@@ -22,6 +22,7 @@ hunch init [--list] RECIPE [DIR]
 | `diff` | Compares this spec with an older or other version on today's rows | Yes, missing answers only |
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
 | `init` | Copies a starter recipe into a folder | No |
+| `skill` | Installs the skill that teaches a coding agent to use hunch | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
 
@@ -34,6 +35,15 @@ hunch init agent-eval evals/    # copies into evals/
 ```
 
 The folder must not exist. Recipes: `agent-eval` (check a coding agent's work from its trace), `tickets` (40 sample support tickets, about $0.001).
+
+### `hunch skill`
+
+```bash
+hunch skill          # into this folder
+hunch skill ~/       # for every project on this machine
+```
+
+Writes the hunch skill to `.claude/skills/hunch/SKILL.md` (Claude Code) and `.agents/skills/hunch/SKILL.md` (Codex; Cursor reads both). It tells the agent how to run the loop (`lint`, `compile`, `run` with a cost cap, `test`, `diff`) and what not to do: spend without `--max-cost`, write `*.reviews.csv`, or edit `.hunch/`. Each file prints `installed`, `updated` or `up to date`; an existing copy is replaced, so re-run after upgrading hunch and commit the result.
 
 ## Flags
 
