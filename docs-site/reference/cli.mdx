@@ -66,6 +66,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 
 | Flag | Used by | Default | What it does |
 | --- | --- | --- | --- |
+| `--version` | alone | | Prints the installed version and exits. |
 | `--node NAME` | `run`, `test`, `diff`, `review`, `compile`, `suggest` | all (`run`, `test`), required when a project has several judgments (`review`, `suggest`) | One judgment in a project. `run --node X` runs X and the judgments it reads from. |
 | `--against REF` | `diff`, `review` | none | `diff`: the old version, a spec/folder path or `git:REF` (for example `git:HEAD~1`); with `--model` and no `--against`, the same specs on their own engine. `review`: put rows where that version answers differently first |
 | `--source CSV` | all | the spec's `source` | Run the root judgments on this CSV instead (a holdout set, for example) |

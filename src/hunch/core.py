@@ -2749,6 +2749,7 @@ def main() -> None:
     commands = {"lint": cmd_lint, "compile": cmd_compile, "run": cmd_run, "test": cmd_test, "suggest": cmd_suggest,
                 "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs}
     p = argparse.ArgumentParser(prog="hunch")
+    p.add_argument("--version", action="version", version=f"hunch {__import__('hunch').__version__}")
     p.add_argument("command", choices=list(commands))
     p.add_argument("path", type=Path, help="a spec file, or a directory of specs (a project)")
     p.add_argument("--node", help="one judgment in a project (test, diff, review, compile; run: it and the judgments it reads from)")
