@@ -51,10 +51,11 @@ PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
 HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
 QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
-SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews",
+SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics",
              "weights", "chain", "view", "clip", "redact", "on_change"}
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
 TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability"}
+METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms"}  # tests on a metric, by its name
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = int(os.environ.get("HUNCH_CONCURRENCY", 16))  # requests in flight per fill
 RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx, transport): the scale test reads it
@@ -223,7 +224,7 @@ def compile_where(expr: str):
     tree = ast.parse(expr, mode="eval")
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED):
-            raise ValueError(f"where: {type(node).__name__} not allowed in {expr!r} (use columns, constants, comparisons, and/or/not)")
+            raise ValueError(f"{type(node).__name__} not allowed in {expr!r} (use columns, constants, comparisons, and/or/not)")
 
     def val(node, row):
         if isinstance(node, ast.Constant):
@@ -459,7 +460,16 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 for col in sorted(used - set(header)):
                     errors.append(f"where uses {col!r}, which does not reach this judgment")
             except (ValueError, SyntaxError) as e:
-                errors.append(str(e))
+                errors.append(f"where: {e}")
+        for name, m in (spec.get("metrics") or {}).items():
+            if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
+                continue  # reported below
+            try:
+                _, used = compile_where(m["rule"])
+                for col in sorted(used - set(header) - set(answer_columns(spec))):
+                    errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
+            except (ValueError, SyntaxError) as e:
+                errors.append(f"metrics.{name}: {e}")
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
@@ -502,7 +512,17 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             errors.append(f"{qid}: multi questions are expanded when the spec is loaded (internal error)")
         if q["type"] == "score" and not 2 <= len(q.get("criteria") or []) <= 10:
             errors.append(f"{qid}: score needs 2 to 10 levels")
+    metrics = spec.get("metrics") or {}
+    for name, m in metrics.items():
+        if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule"}:
+            errors.append(f"metrics.{name}: needs one key, rule: <condition over answers and columns>")
+        if name in spec["questions"] or name in spec.get("_multi", {}):
+            errors.append(f"metrics.{name}: a question has the same name")
     for qid, conf in (spec.get("tests") or {}).items():
+        if qid in metrics:
+            for k in set(conf) - METRIC_TEST_KEYS:
+                warnings.append(f"tests.{qid}: unknown metric test {k!r} (typo?)")
+            continue
         if qid in spec.get("_multi", {}):
             if set(conf) - {"min_accuracy"}:
                 warnings.append(f"tests.{qid}: a multi question takes min_accuracy (exact set); per-option tests go "
@@ -1774,6 +1794,70 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     return out
 
 
+def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") -> dict:
+    """A rule over a row, counted twice: on the model's answers (every row: exact), and on gold (with a 95% interval),
+    and the two compared on the same rows: what the rule missed and its false alarms. Gold comes from every row when
+    every row has it for the questions the rule reads, else from random spot checks only (rows reviewed for any other
+    reason would bias it). A question's gold stands in for its answer: the label, `_p` 1.0, `_pyes` 1 or 0; when two
+    labels are acceptable, the model's if it is one of them."""
+    conf = (spec.get("tests") or {}).get(name, {})
+    pred, used = compile_where(rule)
+    qids = [q for q in spec["questions"] if {q, f"{q}_p", f"{q}_pyes"} & used]
+    nq = len(spec["questions"])
+    rows = []  # (fired on answers, gold row items or None)
+    for i, r in enumerate(res["rows"]):
+        try:
+            fired = bool(pred(r))
+        except Unknown:  # an answer the rule needs is missing
+            continue
+        rows.append((r, fired, {it["qid"]: it for it in res["items"][i * nq:(i + 1) * nq]}))
+    k = sum(f for _, f, _ in rows)
+    print(f"\n{name} (metric: {rule})")
+    print(f"  on answers: {k} of {len(rows)} rows ({k / len(rows):.1%})" if rows else "  on answers: no rows")
+    out: dict = {"rule": rule, "rows": len(rows), "fired": k, "rate": _r(k / len(rows)) if rows else None}
+    first_check = len(check.log)
+    if "min_rate" in conf or "max_rate" in conf:
+        rate = k / len(rows) if rows else 0.0
+        if "min_rate" in conf:
+            check(rate >= conf["min_rate"], f"rate {rate:.1%} (min {conf['min_rate']:.1%})", "min_rate", rate, conf["min_rate"])
+        if "max_rate" in conf:
+            check(rate <= conf["max_rate"], f"rate {rate:.1%} (max {conf['max_rate']:.1%})", "max_rate", rate, conf["max_rate"])
+    if qids:
+        census = all(its[q]["gold"] for _, _, its in rows for q in qids)
+        pairs = []
+        for r, fired, its in rows:
+            if not all(its[q]["gold"] and (census or its[q]["review_kind"] == "audit") for q in qids):
+                continue
+            g = dict(r)
+            for q in qids:
+                gold = its[q]["gold"]
+                label = r[q] if r[q] in gold else min(gold)
+                g[q], g[f"{q}_p"] = label, 1.0
+                if its[q]["q"]["type"] == "noul":
+                    g[f"{q}_pyes"] = 1.0 if label == "yes" else 0.0
+            pairs.append((fired, bool(pred(g))))
+        basis = f"all {len(pairs)} rows with gold" if census else f"{len(pairs)} random spot checks"
+        out["gold"] = {"basis": "census" if census else "spot checks", "rows": len(pairs)}
+        if pairs:
+            def rate_line(label: str, key: str, hits: int, n: int, of: str) -> float:
+                lo, hi = wilson(hits, n)
+                print(f"  {label}: {hits} of {n} {of} ({hits / n:.1%}, 95% CI {lo:.1%}–{hi:.1%})" if n else f"  {label}: none of {of}")
+                out[key] = {"count": hits, "of": n, "rate": _r(hits / n) if n else None, "ci": [_r(lo), _r(hi)] if n else None}
+                return hits / n if n else 0.0
+            rate_line(f"on gold ({basis})", "gold_rate", sum(g for _, g in pairs), len(pairs), "rows")
+            passed = [g for f, g in pairs if not f]
+            caught = [g for f, g in pairs if f]
+            missed = rate_line("missed", "missed", sum(passed), len(passed), "rows the rule passed")
+            alarms = rate_line("false alarms", "false_alarms", len(caught) - sum(caught), len(caught), "rows the rule caught")
+            if "max_missed" in conf:
+                check(missed <= conf["max_missed"], f"missed {missed:.1%} (max {conf['max_missed']:.1%})", "max_missed", missed, conf["max_missed"])
+            if "max_false_alarms" in conf:
+                check(alarms <= conf["max_false_alarms"], f"false alarms {alarms:.1%} (max {conf['max_false_alarms']:.1%})",
+                      "max_false_alarms", alarms, conf["max_false_alarms"])
+    out["checks"] = check.log[first_check:]
+    return out
+
+
 def cmd_test(project: dict, args) -> None:
     results_path(project).unlink(missing_ok=True)  # never leave an older run's results looking current
     results = execute(project)
@@ -1803,6 +1887,8 @@ def cmd_test(project: dict, args) -> None:
                       f"answer{acc} (the rest stay in review)")
         for parent, labels in spec.get("_multi", {}).items():
             rep.setdefault("multi", {})[parent] = test_multi(spec, parent, labels, res, check)
+        for mname, m in (spec.get("metrics") or {}).items():
+            rep.setdefault("metrics", {})[mname] = test_metric(spec, mname, m["rule"], res, check)
     print()
     stats = merge_stats(*all_stats)
     print_stats(stats)
