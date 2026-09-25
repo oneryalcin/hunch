@@ -75,7 +75,29 @@ jobs:
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
         run: hunch test evals/ --max-cost 0.50
+      - name: Summary
+        if: always()
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, pathlib
+          for f in sorted(pathlib.Path(".hunch/target").rglob("*.json")):
+              d = json.loads(f.read_text())
+              print(f"### {f.relative_to('.hunch/target').with_suffix('')}: {'passed' if d['passed'] else 'FAILED'}\n")
+              print("| Question | Accuracy | 95% range | Checks |\n|---|---|---|---|")
+              for j, v in d["judgments"].items():
+                  for q, x in v["questions"].items():
+                      a = x.get("accuracy")
+                      if not a:
+                          print(f"| {j}.{q} | no gold yet | | |")
+                          continue
+                      ci = "–".join(f"{c:.1%}" for c in a["ci"]) if a["ci"] else "no estimate"
+                      failed = [c["check"] for c in x["checks"] if not c["passed"]]
+                      print(f"| {j}.{q} | {a['value']:.1%} | {ci} | {'FAIL: ' + ', '.join(failed) if failed else 'pass'} |")
+              print()
+          PY
 ```
+
+The last step turns `test`'s [results file](/reference/cli#the-results-file) into a table on the run's summary page, one row per question with its accuracy and range. It runs even when `test` fails, and shows nothing when `test` stopped before finishing.
 
 The cache key changes every run and `restore-keys` picks the newest store, so answers asked in one run are there for the next. hunch uses the nearest `.hunch/store.sqlite` at or above the spec's folder, or creates one at the repository root. Set `HUNCH_STORE` to choose another path.
 
