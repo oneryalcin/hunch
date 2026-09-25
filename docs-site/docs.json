@@ -51,6 +51,7 @@
               "guides/write-a-spec",
               "guides/review",
               "guides/test-in-ci",
+              "guides/share",
               "guides/change-a-spec",
               "guides/use-in-your-app"
             ]

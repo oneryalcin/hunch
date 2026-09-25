@@ -6,6 +6,7 @@ Your code asks a model small questions all day. Which team should get this ticke
 - `hunch test` measures accuracy against gold, an answer key or your own reviews, as a range, not a single number.
 - `hunch diff` shows which rows a change to the question would flip, before you ship it.
 - `hunch review` shows you the rows worth reading, and your verdicts become gold.
+- `hunch docs` writes a page anyone can read and search: what each judgment decides, how well it was measured, and what depends on it.
 
 If you know dbt, the idea will feel familiar: dbt did this for SQL; hunch does it for model judgments.
 

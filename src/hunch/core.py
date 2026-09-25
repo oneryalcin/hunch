@@ -52,7 +52,10 @@ HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config
 QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
-             "weights", "chain", "view", "clip", "redact", "on_change"}
+             "weights", "chain", "view", "clip", "redact", "on_change", "description", "exposures"}
+META_KEYS = ("description", "exposures")  # for people and `hunch docs`: never sent, never in a key or spec hash
+EXPOSURE_KEYS = {"name", "kind", "owner", "uses", "url", "description"}
+EXPOSURE_KINDS = ("app", "hook", "dashboard", "job")
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
 TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability", "severity"}
 METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "severity"}  # tests on a metric, by its name
@@ -96,7 +99,7 @@ def load_spec(path: Path, text: str | None = None) -> dict:
         sys.exit(f"{path}: a spec is a YAML mapping (judgment:, source:, questions: …)")
     if "model" in spec and (spec["model"].endswith("latest") or ":~" in spec["model"]):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
-    spec["_dir"] = path.parent
+    spec["_dir"], spec["_file"] = path.parent, path
     expand_multi(spec)
     return spec
 
@@ -117,8 +120,8 @@ def expand_multi(spec: dict) -> None:
             sub = {"type": "noul", "_multi": [qid, label],
                    "instructions": f"{q['instructions']}\nDoes this apply: {label}" + (f" ({desc})" if desc else "") + "?"}
             qs[f"{qid}__{label}"] = sub | {k: q[k] for k in ("act", "gold", "escalate") if k in q}
-    if parents:
-        spec["questions"], spec["_multi"] = qs, parents
+    if parents:  # `_written` keeps the questions as written, for `hunch docs`
+        spec["_written"], spec["questions"], spec["_multi"] = spec["questions"], qs, parents
 
 
 def load_spec_ref(ref: str, current: Path) -> dict:
@@ -576,6 +579,37 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
     return errors, warnings
 
 
+def lint_meta(spec: dict) -> tuple[list[str], list[str]]:
+    """description and exposures: for people and `hunch docs`, checked on every judgment, unions included."""
+    errors, warnings = [], []
+    if "description" in spec and not isinstance(spec["description"], str):
+        errors.append("description must be text")
+    questions = {*spec.get("questions", {}), *spec.get("_multi", {}), *([spec["question"]] if "union" in spec else [])}
+    names, exposures = [], spec.get("exposures") or []
+    if not isinstance(exposures, list):
+        errors.append("exposures must be a list: - name: <what uses this judgment>")
+        exposures = []
+    for i, x in enumerate(exposures):
+        if not isinstance(x, dict) or not isinstance(x.get("name"), str):
+            errors.append(f"exposures[{i}]: needs a name (what uses this judgment: an app, hook, dashboard or job)")
+            continue
+        names.append(x["name"])
+        for k in set(x) - EXPOSURE_KEYS:
+            warnings.append(f"exposures.{x['name']}: unknown key {k!r} (typo?)")
+        if x.get("kind", "app") not in EXPOSURE_KINDS:
+            errors.append(f"exposures.{x['name']}: kind must be one of {EXPOSURE_KINDS}")
+        uses = x.get("uses")
+        if uses is not None and (not isinstance(uses, list) or not uses):
+            errors.append(f"exposures.{x['name']}: uses must list question names (leave it out if it reads every answer)")
+            continue
+        for qid in uses or []:
+            if qid not in questions:
+                errors.append(f"exposures.{x['name']}: uses {qid!r}, which is not a question here")
+    for n in sorted({n for n in names if names.count(n) > 1}):
+        errors.append(f"exposures: {n!r} is listed twice")
+    return errors, warnings
+
+
 def lint(project: dict) -> tuple[list[str], list[str]]:
     """Lint every judgment, tracking which columns flow along each ref() so where-clauses and state are
     checked before anything runs."""
@@ -583,6 +617,8 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
         tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
+        e, w = lint_meta(spec)
+        errors, warnings = errors + tag(e), warnings + tag(w)
         if "union" in spec:
             branches = [project["nodes"][u] for u in ups]
             for b in branches:
@@ -1582,7 +1618,7 @@ def table_name(spec: dict) -> str:
 def spec_hash(spec: dict) -> str:
     """What the judgment asks: not its policy (on_change) or where this run's rows come from (source, which
     --source and --traffic replace), so freeze guards the questions, not the data."""
-    return digest({k: v for k, v in spec.items() if not k.startswith("_") and k not in ("on_change", "source")})[:12]
+    return digest({k: v for k, v in spec.items() if not k.startswith("_") and k not in ("on_change", "source", *META_KEYS)})[:12]
 
 
 def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> float | None:
@@ -1718,6 +1754,11 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
                                                                "review": src["review"], "excluded": src["excluded"]}}
     first_check = len(check.log)
     check.severity = conf.get("severity", "error")
+    if "act" in q and its:  # at the spec's own threshold: the share of all rows acted on, and how often those are wrong
+        acted = [it for it in its if route(q, answers[it["key"]], it.get("path_p", 1.0)) == "act"]
+        judged = [it for it in acted if it["gold"]]
+        out["act"] = {"threshold": q["act"], "automated": _r(len(acted) / len(its)), "judged": len(judged),
+                      "wrong": _r(sum(not hit(it, answers[it["key"]]) for it in judged) / len(judged)) if judged else None}
     if not gold_its:
         return out | {"checks": []}
     both = sum(len(it["gold"]) > 1 for it in gold_its)
@@ -1986,9 +2027,14 @@ def cmd_test(project: dict, args) -> None:
 RESULTS_VERSION = 1
 
 
+def cmd_docs(project: dict, args) -> None:
+    from hunch.docs import write_docs  # the page generator is its own module; core stays the engine
+    write_docs(project)
+
+
 def results_path(project: dict) -> Path:
     """.hunch/target/<tested spec or folder, relative to the store's folder>.json: one file per spec or project, so
-    projects sharing a store keep their own."""
+    projects sharing a store keep their own; with --model, the engine's suffix too (`triage__deepseek_deepseek_flash`)."""
     spec = project["nodes"][project["order"][0]]
     store = store_path(spec["_dir"])
     tested = Path(project["path"]).resolve()
@@ -1996,7 +2042,7 @@ def results_path(project: dict) -> Path:
         name = tested.relative_to(store.parent.parent).with_suffix("")
     except ValueError:  # tested outside the store's folder (HUNCH_STORE elsewhere)
         name = Path(tested.stem)
-    return store.parent / "target" / name.with_suffix(".json")
+    return store.parent / "target" / name.with_name(name.name + spec.get("_table_suffix", "")).with_suffix(".json")
 
 
 def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> None:
@@ -2059,7 +2105,8 @@ def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Ch
     return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[-1:]}
 
 
-def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict, same_spec: bool) -> None:
+def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict, same_spec: bool) -> int:
+    """Prints how this question's answers moved; returns how many rows' answers changed, appeared or disappeared."""
     old_by = {it["id"]: it for it in old_its}
     new_ids = {it["id"] for it in new_its}
     pairs = [(old_by[it["id"]], it) for it in new_its if it["id"] in old_by]
@@ -2067,10 +2114,10 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
     moved = f"; {entered} rows newly reach it, {left} no longer do" if entered or left else ""
     if not old_its:
         print(f"\n{qid}: new question ({len(new_its)} rows)")
-        return
+        return len(new_its)
     if all(o["key"] == n["key"] for o, n in pairs) and not moved:
         print(f"\n{qid}: unchanged (same keys, 0 calls)")
-        return
+        return 0
     flips = []
     for o, n in pairs:
         oa, na = old_a[o["key"]], new_a[n["key"]]
@@ -2104,6 +2151,7 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
         print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n, 40)}")
     if len(flips) > SHOW:
         print(f"  … {len(flips) - SHOW} more")
+    return len(flips) + entered + left
 
 
 def twin_of(n: str, names: list[str]) -> str | None:
@@ -2149,13 +2197,13 @@ def cmd_diff(project: dict, args) -> None:
         if o is None:
             sys.exit(f"--against has no judgment matching {n!r}; it has {old['order']}")
         spec, ospec = project["nodes"][n], old["nodes"][o]
-        same = {k: v for k, v in spec.items() if k != "_dir"} == {k: v for k, v in ospec.items() if k != "_dir"}
+        same = spec_hash(spec) == spec_hash(ospec)
         if len(project["nodes"]) > 1 or n != o:
             print(f"\n══ {n}" + (f"  vs  {o}" if n != o else ""))
         reviews = load_reviews(spec)  # gold is about the data, so both sides use today's reviews
         attach_gold(new_r[n]["items"], reviews)
         attach_gold(old_r[o]["items"], reviews)
-        old_qs = question_of(ospec)
+        old_qs, changed = question_of(ospec), {}
         for qid in question_of(spec):
             new_its = [it for it in new_r[n]["items"] if it["qid"] == qid]
             oq = qid
@@ -2164,8 +2212,13 @@ def cmd_diff(project: dict, args) -> None:
                 oq = next((q for q in old_qs if {it["key"] for it in old_r[o]["items"] if it["qid"] == q} & keys), qid)
                 if oq != qid:
                     print(f"\n{qid}: renamed from {oq!r}")
-            diff_question(qid, new_its, [it for it in old_r[o]["items"] if it["qid"] == oq],
-                          new_r[n]["answers"], old_r[o]["answers"], same)
+            changed[qid] = diff_question(qid, new_its, [it for it in old_r[o]["items"] if it["qid"] == oq],
+                                         new_r[n]["answers"], old_r[o]["answers"], same)
+        affected = [x for x in spec.get("exposures") or [] if any(  # an exposure without `uses` reads every answer
+            k for q, k in changed.items() if not x.get("uses") or q in x["uses"] or q.split("__")[0] in x["uses"])]
+        if affected:
+            print("\naffects " + ", ".join(f"{x['name']} ({x.get('kind', 'app')}"
+                                          + (f", reads {', '.join(x['uses'])}" if x.get("uses") else "") + ")" for x in affected))
 
 
 def review_queue(items: list[dict], answers: dict, audit: int, other: dict | None = None) -> list[tuple[str, dict]]:
@@ -2591,7 +2644,7 @@ def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = No
 
 def main() -> None:
     commands = {"lint": cmd_lint, "compile": cmd_compile, "run": cmd_run, "test": cmd_test, "suggest": cmd_suggest,
-                "diff": cmd_diff, "review": cmd_review}
+                "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs}
     p = argparse.ArgumentParser(prog="hunch")
     p.add_argument("command", choices=list(commands))
     p.add_argument("path", type=Path, help="a spec file, or a directory of specs (a project)")

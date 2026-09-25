@@ -1,0 +1,73 @@
+---
+title: "Share what your judgments decide"
+description: "Turn a project into one page anyone can read and search: what each judgment decides, how well it was measured, and what depends on it."
+---
+
+A spec is a policy. It decides which tickets go to billing, which shell commands wait for a person, which agent runs count as done. The people who should approve a policy often don't read YAML, and the numbers that justify it are in a terminal. `hunch docs` puts both on one page.
+
+```bash
+hunch docs support/
+```
+
+```text
+4 judgments: 1 failing, 1 stale, 1 no results, 1 no gold
+  .hunch/target/support.html
+  .hunch/target/support.manifest.json
+```
+
+It asks the engine nothing and costs nothing. It reads the specs, the results of the last `hunch test` of the same path, and the store's record of runs. Open the HTML file in a browser, attach it to a pull request, or publish it from CI.
+
+## Every judgment gets one status
+
+The page opens on a list of judgments, with the ones that need a look first:
+
+| Status | Means |
+| --- | --- |
+| failing | A check failed at the last test. The judgment's page says which, with its value and limit. |
+| warning | A check marked `severity: warn` failed. |
+| stale | The spec changed after its last test, so its numbers describe an older version. |
+| no results | The last `hunch test` of this path did not include it: never tested, tested alone with `--node` or through another path, or a test stopped by `--max-cost` (which writes no results). |
+| no gold | Tested, but there is nothing to measure against yet: no answer key, reviews, examples or checks. |
+| ok | Tested, passing, and unchanged since. |
+
+A test records a hash of each spec it measured. When the spec on disk no longer matches, the page says so rather than showing old numbers as current. A test run with `--sample N` is labelled as a sample wherever its numbers appear, and one run with `--model` writes its own results, so it never stands in for the spec's engine.
+
+## A judgment's page starts with the answer
+
+Each judgment has a page that opens with a few sentences built from what `test` measured, for example:
+
+> department: agrees with the answer key on 100% of the 40 rows that have one; at act 0.8 it acts alone on 100% of rows, and none of the 40 with a known answer was wrong.
+
+Below that: where its rows come from, which columns the model sees and what is removed first, which judgments read its answers, and what uses them. Each question follows, word for word with its options, and then the detail most readers skip until they need it: the dial, calibration, every check, the most confident mistakes and recent runs.
+
+## Say what uses a judgment
+
+A judgment's answers usually end up somewhere: an app that routes on them, a hook that blocks a command, a dashboard. Name them in the spec with `exposures`:
+
+```yaml
+exposures:
+  - name: support-router
+    kind: app
+    owner: support-eng
+    uses: [department]
+  - name: triage-dashboard
+    kind: dashboard
+```
+
+hunch never calls them. The list is for people: the page shows it under *Used by* and in the lineage, and `hunch diff` names the ones a change reaches:
+
+```text
+affects support-router (app, reads department), triage-dashboard (dashboard)
+```
+
+An exposure without `uses` counts as reading every answer. `description`, a sentence saying what the judgment decides, is the other key written for people; neither is sent to the model or changes an answer's key.
+
+## Lineage and search
+
+The lineage view draws sources, judgments and exposures left to right. Select a judgment to light up everything it reads from and everything that depends on it. Select it again to open its page.
+
+The search box filters judgments by name, description, question wording, option names, columns, sources and exposures, and says which one matched. A search for "refund" finds the judgment whose options mention refunds as well as the one that asks about them.
+
+## In CI
+
+Run `hunch test PATH`, then `hunch docs PATH` with the same path, and keep the HTML file as a build artifact or publish it. When the test finishes, the page describes the commit it was built from; a judgment the test did not reach shows as *no results*. `manifest.json` holds the same project as data, for tools of your own: see [the manifest](/reference/cli#the-manifest).

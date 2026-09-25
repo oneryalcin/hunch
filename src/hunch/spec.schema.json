@@ -10,6 +10,10 @@
       "type": "string",
       "description": "Name of the judgment; also the name of its results table."
     },
+    "description": {
+      "type": "string",
+      "description": "What this judgment decides, in a sentence for people. Shown by hunch docs; never sent to the model."
+    },
     "model": {
       "type": "string",
       "description": "The engine, pinned to an exact version: jev-1.13.0, deepseek:<id>, openrouter:<id>[@provider]."
@@ -161,6 +165,51 @@
             "type": "object",
             "minProperties": 1,
             "description": "Question → answer. Quote \"yes\" and \"no\"; multi options as <question>__<option>."
+          }
+        }
+      }
+    },
+    "exposures": {
+      "type": "array",
+      "description": "What uses this judgment's answers (apps, hooks, dashboards, jobs). Shown by hunch docs; hunch diff names the ones a change affects.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique within this judgment."
+          },
+          "kind": {
+            "enum": [
+              "app",
+              "hook",
+              "dashboard",
+              "job"
+            ],
+            "description": "Default app."
+          },
+          "owner": {
+            "type": "string",
+            "description": "Who to ask about it."
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The questions it reads. Leave out if it reads every answer.",
+            "minItems": 1
+          },
+          "url": {
+            "type": "string",
+            "description": "A link to it (http or https)."
+          },
+          "description": {
+            "type": "string"
           }
         }
       }
