@@ -16,17 +16,17 @@ export const ReviewLoop = () => {
         aria-label="A loop: run, review, test, change the spec, diff, then run again">
         <defs>
           <marker id="hunch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#B45309" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#7D969B" />
           </marker>
         </defs>
         {steps.map((_, i) => (
-          <path key={"a" + i} d={arc(i)} fill="none" stroke="#B45309" strokeOpacity="0.7" strokeWidth="1.5" markerEnd="url(#hunch-arrow)" />
+          <path key={"a" + i} d={arc(i)} fill="none" stroke="#7D969B" strokeOpacity="0.7" strokeWidth="1.5" markerEnd="url(#hunch-arrow)" />
         ))}
         {steps.map(([name, what], i) => {
           const [x, y] = at(i);
           return (
             <g key={name}>
-              <rect x={x - 50} y={y - 21} width="100" height="42" rx="10" fill="#F59E0B" fillOpacity="0.14" stroke="#B45309" strokeOpacity="0.5" />
+              <rect x={x - 50} y={y - 21} width="100" height="42" rx="10" fill="#7D969B" fillOpacity="0.14" stroke="#7D969B" strokeOpacity="0.5" />
               <text x={x} y={y - 3} textAnchor="middle" fontSize="14" fontWeight="600" fill="currentColor" fontFamily="ui-monospace, monospace">{name}</text>
               <text x={x} y={y + 13} textAnchor="middle" fontSize="10.5" fill="currentColor" fillOpacity="0.65">{what}</text>
             </g>
@@ -52,7 +52,7 @@ export const AccuracyGroups = ({ agree = 340, disagree = 45, sampled = 60 }) => 
   const gap = 34, top = 20, W = cols * size;
   const H = top + a.h + gap + d.h + 4;
   const dot = (p, i, dy) => (
-    <circle key={dy + "-" + i} cx={p.x} cy={p.y + dy} r={r} fill={p.on ? "#F59E0B" : "rgba(128,128,128,0.3)"} />
+    <circle key={dy + "-" + i} cx={p.x} cy={p.y + dy} r={r} fill={p.on ? "#7D969B" : "rgba(128,128,128,0.3)"} />
   );
   return (
     <figure className="not-prose" style={{ margin: "16px 0" }}>
@@ -64,7 +64,7 @@ export const AccuracyGroups = ({ agree = 340, disagree = 45, sampled = 60 }) => 
         {d.dots.map((p, i) => dot(p, i, top + a.h + gap))}
       </svg>
       <figcaption style={{ fontSize: 13, textAlign: "center", opacity: 0.7, marginTop: 6 }}>
-        <span style={{ color: "#F59E0B" }}>●</span> reviewed
+        <span style={{ color: "#7D969B" }}>●</span> reviewed
       </figcaption>
     </figure>
   );

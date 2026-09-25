@@ -8,7 +8,7 @@ export const ActDial = ({ rows, initial = 0.9 }) => {
   const wrong = auto.filter((x) => !x[1]).length;
   const caught = order.length - auto.length - order.filter((x) => x[0] < act && x[1]).length;
   const pct = (a, b) => (b ? ((100 * a) / b).toFixed(1) : "0.0") + "%";
-  const color = (x) => (x[0] >= act ? (x[1] ? "#F59E0B" : "#DC2626") : "rgba(128,128,128,0.3)");
+  const color = (x) => (x[0] >= act ? (x[1] ? "#7D969B" : "#C64D35") : "rgba(128,128,128,0.3)");
   const height = Math.ceil(order.length / cols) * size;
   const p = picked !== null ? order[picked] : null;
   return (
@@ -17,21 +17,21 @@ export const ActDial = ({ rows, initial = 0.9 }) => {
       <label style={{ display: "block", fontSize: 14 }}>
         <code>act: {act.toFixed(2)}</code>
         <input type="range" min="0.5" max="0.99" step="0.01" value={act} onChange={(e) => setAct(Number(e.target.value))}
-          style={{ width: "100%", accentColor: "#B45309" }} aria-label="act threshold" />
+          style={{ width: "100%", accentColor: "#7D969B" }} aria-label="act threshold" />
       </label>
       <svg viewBox={`0 0 ${cols * size} ${height}`} style={{ width: "100%", display: "block", margin: "8px 0" }} role="img"
         aria-label={`${auto.length} of ${order.length} answers automated, ${wrong} of them wrong`}>
         {order.map((x, i) => (
           <circle key={i} cx={(i % cols) * size + size / 2} cy={Math.floor(i / cols) * size + size / 2} r={r}
-            fill={color(x)} stroke={x[0] < act && !x[1] ? "#DC2626" : "none"} strokeWidth="1.2"
+            fill={color(x)} stroke={x[0] < act && !x[1] ? "#C64D35" : "none"} strokeWidth="1.2"
             onMouseEnter={() => setPicked(i)} onClick={() => setPicked(i)} style={{ cursor: "pointer" }} />
         ))}
       </svg>
       <div style={{ fontSize: 14, lineHeight: 1.6, display: "flex", flexWrap: "wrap", columnGap: 16 }}>
-        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#F59E0B" }}>●</span> automated, right</span>
-        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#DC2626" }}>●</span> automated, wrong</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#7D969B" }}>●</span> automated, right</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#C64D35" }}>●</span> automated, wrong</span>
         <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "rgba(128,128,128,0.6)" }}>●</span> to a person</span>
-        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#DC2626" }}>○</span> a mistake the person catches</span>
+        <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#C64D35" }}>○</span> a mistake the person catches</span>
       </div>
       <p style={{ fontSize: 15, margin: "10px 0 0" }}>
         <b>{auto.length}</b> of {order.length} answers automated ({pct(auto.length, order.length)}),{" "}

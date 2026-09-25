@@ -4,11 +4,15 @@
   "name": "hunch",
   "description": "Specs, tests and reviews for the judgments your software makes with a model.",
   "colors": {
-    "primary": "#B45309",
-    "light": "#F59E0B",
-    "dark": "#92400E"
+    "primary": "#405A60",
+    "light": "#7D969B",
+    "dark": "#405A60"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/logo/hunch-favicon.svg",
+  "logo": {
+    "light": "/logo/hunch-light.svg",
+    "dark": "/logo/hunch-dark.svg"
+  },
   "navbar": {
     "links": [
       {
@@ -106,6 +110,13 @@
   "footer": {
     "socials": {
       "github": "https://github.com/oneryalcin/hunch"
+    }
+  },
+  "seo": {
+    "metatags": {
+      "og:image": "https://fuguai.mintlify.site/logo/hunch-social.png",
+      "twitter:image": "https://fuguai.mintlify.site/logo/hunch-social.png",
+      "twitter:card": "summary_large_image"
     }
   }
 }
