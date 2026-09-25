@@ -82,7 +82,14 @@ SpecLoader.add_implicit_resolver("tag:yaml.org,2002:bool", re.compile(r"^(?:true
 
 
 def load_spec(path: Path, text: str | None = None) -> dict:
-    spec = yaml.load(text if text is not None else path.read_text(), Loader=SpecLoader)
+    try:
+        spec = yaml.load(text if text is not None else path.read_text(), Loader=SpecLoader)
+    except FileNotFoundError:
+        sys.exit(f"{path}: no such file")
+    except yaml.YAMLError as e:  # e.g. a regex in double quotes: "\d" is a YAML escape; use single quotes
+        sys.exit(f"{path}: not valid YAML: {' '.join(str(e).split())}")
+    if not isinstance(spec, dict):
+        sys.exit(f"{path}: a spec is a YAML mapping (judgment:, source:, questions: …)")
     if "model" in spec and (spec["model"].endswith("latest") or ":~" in spec["model"]):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
     spec["_dir"] = path.parent
@@ -139,7 +146,11 @@ def load_project(path: Path, texts: dict[str, str] | None = None) -> dict:
     """A spec file is a one-node project; a directory is every *.yml in it. `texts` (name → yaml) loads an old
     version (git) against today's files. Nodes run in dependency order."""
     path = path.resolve()
+    if texts is None and not path.exists():
+        sys.exit(f"{path}: no such file or folder")
     files = [path] if path.is_file() or path.suffix == ".yml" else sorted(path.glob("*.yml"))
+    if not files:
+        sys.exit(f"{path}: no *.yml specs in this folder")
     if texts is not None:
         files = [path] if path.suffix == ".yml" else [path / name for name in sorted(texts)]
     return topo_project([load_spec(f, texts.get(f.name) if texts is not None else None) for f in files], path)
@@ -521,6 +532,15 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             known = [columns[u] for u in ups]
             columns[name] = None if None in known else sorted({c for cs in known for c in cs} | {"_branch"})
             continue
+        missing = [k for k in ("model", "key", "state", "questions") if k not in spec]
+        if missing:  # the checks below read them; report once instead of crashing
+            errors += tag([f"missing {', '.join(missing)} (every judgment needs model, key, state and questions)"])
+            columns[name] = None
+            continue
+        if source_kind(spec)[0] == "traces" and spec.get("view", "turns") not in ("turns", "runs"):
+            errors += tag([f"view must be turns or runs, got {spec['view']!r}"])
+            columns[name] = None
+            continue
         if ups:
             header = columns[ups[0]]
         else:
@@ -809,8 +829,10 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
                              f"(~${est:.4f}), above --max-cost ${MAX_COST}; nothing asked")
         print(f"  asking {sum(map(len, group))} answers in {stats['requests']} requests (~${est:.4f})", file=sys.stderr)
-        key = (os.environ[endpoint(model)["key"]] if is_llm(model)
-               else os.environ.get("TYPESAFE_API_KEY") or os.environ["TYPESAFE_AI_API_KEY"])
+        var = endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
+        key = os.environ.get(var) or (None if is_llm(model) else os.environ.get("TYPESAFE_AI_API_KEY"))
+        if not key:
+            raise SystemExit(f"{spec.get('judgment', '')}: set {var} to ask {model} ({len(group)} requests to send)")
         async with httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=120) as client:
             sem = asyncio.Semaphore(CONCURRENCY)
 
@@ -1024,6 +1046,9 @@ def normalize_gold(q: dict, v: str) -> frozenset | None:
         return None
     if "_multi" in q:  # the parent's gold is the set of options that apply; "-" = none of them
         return frozenset({"yes" if q["_multi"][1] in {s.strip() for s in v.split("|")} else "no"})
+    if q["type"] == "score":  # a level: "2", "2:Frustrated" or "Frustrated" all mean level 2
+        levels = [str(c).strip().lower() for c in q.get("criteria") or []]
+        return frozenset({str(levels.index(v.lower())) if v.lower() in levels else v.split(":", 1)[0].strip()})
     return frozenset({("yes" if is_yes(v) else "no") if q["type"] == "noul" else v})
 
 
@@ -1032,6 +1057,8 @@ def gold_str(g: frozenset | None) -> str:
 
 
 def hit(it: dict, a: dict, gold: str = "gold") -> bool:
+    if a["type"] == "score":  # answers are "level:text"; gold is a level, from a column or a review
+        return decide(a)[0].split(":", 1)[0] in {g.split(":", 1)[0] for g in it[gold]}
     return decide(a)[0] in it[gold]
 
 
@@ -1142,7 +1169,7 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
         else:
             hits = set(cached(db, [it["key"] for it in items]))
             answers, stats = await fill(spec, db, items)
-        answers, by, stats = await escalate(spec, db, items, answers, stats, dry)
+        answers, by, stats = await escalate(spec, db, items, answers, stats, dry, hits)
         out_rows = []
         for i, r in enumerate(keep):
             out = dict(r)
@@ -1169,10 +1196,12 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
     return results
 
 
-async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict, dry: bool) -> tuple[dict, dict, dict]:
+async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict, dry: bool,
+                   hits: set) -> tuple[dict, dict, dict]:
     """escalate: {model: X} on a question re-asks, on engine X, only the answers that fall below `act`; the
     escalated answer replaces the original when it clears `act` itself. Both stay in the store; the returned
-    answers are the combined system's, `by` says which key was answered by which engine."""
+    answers are the combined system's, `by` says which key was answered by which engine. Escalated answers that
+    were already stored are added to `hits`."""
     todo: dict[str, list[dict]] = {}
     for it in items:
         a = answers.get(it["key"])
@@ -1184,6 +1213,7 @@ async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict
     for model, its in todo.items():
         espec = {**spec, "model": model}
         eitems = [item(espec, it["row"], it["qid"]) for it in its]
+        hits |= set(cached(db, [e["key"] for e in eitems]))
         if dry:
             got, estats = cached(db, [e["key"] for e in eitems]), {**ZERO}
         else:
@@ -1387,7 +1417,21 @@ def frozen_changes(project: dict) -> list[str]:
     return out
 
 
+def with_upstream(project: dict, name: str) -> dict:
+    """The part of a project that `name` needs: it and every judgment it reads from (dbt's +model)."""
+    need, todo = set(), [name]
+    while todo:
+        n = todo.pop()
+        if n not in need:
+            need.add(n)
+            todo += upstream(project["nodes"][n])
+    return {**project, "nodes": {n: s for n, s in project["nodes"].items() if n in need},
+            "order": [n for n in project["order"] if n in need]}
+
+
 def cmd_run(project: dict, args) -> None:
+    if getattr(args, "node", None):
+        project = with_upstream(project, pick(project, args.node))
     changed = frozen_changes(project)
     if changed and not getattr(args, "allow_change", False):
         sys.exit(f"on_change: freeze, and {changed} changed since the last complete run: nothing asked. "
@@ -1437,7 +1481,9 @@ def cmd_run(project: dict, args) -> None:
                 print(f"  {qid}: {k} rows below act={q['act']} → review queue")
     if len(project["nodes"]) > 1:
         print_stats(merge_stats(*(r["stats"] for r in results.values())), "total")
-    print(f"materialized {len(project['nodes'])} table(s) in .hunch/store.sqlite (run {run_id})")
+    where = store_path(project["nodes"][project["order"][0]]["_dir"])
+    where = where.relative_to(Path.cwd()) if where.is_relative_to(Path.cwd()) else where
+    print(f"materialized {len(project['nodes'])} table(s) in {where} (run {run_id})")
 
 
 def table_name(spec: dict) -> str:
@@ -1457,16 +1503,15 @@ def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> 
 
 
 def calib_pairs(its: list[dict], answers: dict, gold: str = "gold", weights: dict | None = None) -> list[tuple]:
-    """(stated probability, did it happen, weight). choice: top p vs label in gold; noul: p(yes) vs "yes" in gold."""
+    """(stated probability, did it happen, weight). choice/score: confidence vs answer in gold; noul: p(yes) vs "yes"."""
     out = []
     for it in its:
         a, g = answers[it["key"]], it[gold]
         if not g:
             continue
         w = weights.get(it["id"], 1.0) if weights else 1.0
-        if a["type"] == "choice":
-            label, _, _ = decide(a)
-            out.append((conf_of(it, a), label in g, w))
+        if a["type"] in ("choice", "score"):
+            out.append((conf_of(it, a), hit(it, a, gold), w))
         elif a["type"] == "noul":
             out.append((a["noul"], "yes" in g, w))
     return out
@@ -1792,7 +1837,13 @@ def load_against(project: dict, args) -> dict:
 
 
 def cmd_diff(project: dict, args) -> None:
-    """Old logic on today's data: the old project's root judgments read the same rows as today's."""
+    """Old logic on today's data: the old project's root judgments read the same rows as today's.
+    With --model and no --against: the same specs on their own engine vs on --model."""
+    if not args.against:
+        if not args.model:
+            sys.exit("diff needs --against PATH or git:REF (the version to compare with), or --model ENGINE "
+                     "(the same specs on another engine)")
+        args.against = str(args.path)
     old = load_against(project, args)
     new_r, old_r = execute(project), execute(old)
     print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
@@ -1882,6 +1933,9 @@ def cmd_review(project: dict, args) -> None:
         other = {k: oa for k, oa in other.items() if k in by and decide(oa)[0] != decide(by[k])[0]}
     queue = review_queue(items, answers, args.audit, other)
     kinds = Counter(k for k, _ in queue)
+    if not queue:
+        print(f"{name}: nothing to review (every disagreement and spot check has a verdict, and no answer is below act)")
+        return
     queue = queue[: args.limit] if args.limit else queue
     if args.list:
         print("review queue: " + ", ".join(f"{c} {k}" for k, c in kinds.items()))
@@ -1997,8 +2051,15 @@ WRITER = "deepseek:deepseek-flash"
 async def llm_text(model: str, prompt: str, temperature: float = 0.7) -> tuple[str, float]:
     """A plain completion from an LLM endpoint (for writing, not judging): (text, cost)."""
     ep = endpoint(model)
+    if not os.environ.get(ep["key"]):
+        raise SystemExit(f"set {ep['key']} for the writer ({model})")
     body = {"model": llm_route(model)[0], "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 32000, "temperature": temperature}  # reasoning models think first: leave room
+    if MAX_COST is not None:  # worst case: the whole reply allowance used
+        p_in = price_per_token(model)
+        worst = len(prompt) / 4 * p_in + body["max_tokens"] * (ep["price"][1] if "price" in ep else 4 * p_in)
+        if worst > MAX_COST:
+            raise SystemExit(f"writer {model}: up to ${worst:.4f} per rewrite, above --max-cost ${MAX_COST}; nothing asked")
     async with httpx.AsyncClient(headers={"Authorization": f"Bearer {os.environ[ep['key']]}"}, timeout=300) as client:
         j = await post(client, asyncio.Semaphore(1), f"{ep['base']}/chat/completions", body)
     u = j["usage"]
@@ -2244,7 +2305,7 @@ def main() -> None:
     p = argparse.ArgumentParser(prog="hunch")
     p.add_argument("command", choices=list(commands))
     p.add_argument("path", type=Path, help="a spec file, or a directory of specs (a project)")
-    p.add_argument("--node", help="one judgment in a project (test, diff, review, compile)")
+    p.add_argument("--node", help="one judgment in a project (test, diff, review, compile; run: it and the judgments it reads from)")
     p.add_argument("--against", help="diff: old spec/project path, or git:REF; review: queue rows it answers differently first")
     p.add_argument("--source", type=Path, help="run the root judgments on this CSV instead (e.g. a holdout set)")
     p.add_argument("--question", help="suggest: the question to rewrite")

@@ -1,0 +1,91 @@
+---
+title: "Change a spec safely"
+description: "See what an edit does row by row before you ship it, control what happens to old answers, and let an LLM propose rewrites that must win on held-out gold."
+---
+
+Editing a question's wording changes answers you can't see from reading the diff in git. `hunch diff` shows you which rows flip, which way, and whether the change fixed more than it broke. `on_change` decides what a run does with answers from before the edit, and `suggest` proposes rewrites for you.
+
+## `diff`: what did the change do?
+
+```bash
+hunch diff intent.yml --against intent_bare.yml     # two files
+hunch diff intent.yml --against git:HEAD~1          # the committed version
+hunch diff evals/ --against git:origin/main         # a whole project
+hunch diff evals/ --against git:main --node claims  # one judgment in it
+```
+
+`--against` takes a path (a spec or a folder) or `git:REF`. With `git:REF`, hunch reads the specs as committed at that ref from the same file or folder. Either way the old version runs on **today's rows**: its sources are replaced by the new spec's, so the comparison is row by row on the same data. If the old version reads columns today's rows don't have, `diff` stops and says so.
+
+Real output, BANKING77, bare labels (`intent_bare.yml`) vs labels with one-line descriptions (`intent.yml`):
+
+```text
+══ intent  vs  intent_bare
+
+intent: 77/770 rows flip (15 within noise band)
+  probabilities moved: mean |Δ| 0.102, mean Δ p(old answer) -0.021
+  gold accuracy on the 770 shared rows with gold 79.0% → 85.5%  (✓ 58 fixed, ✗ 8 broken, 11 wrong both times, 0 without gold)
+  paired sign test p=0.000 → significant
+  ✓ #  76                activate_my_card 0.92 → card_linking 0.84                           Could you help me reactivate my card? I…
+  ✗ # 255           fiat_currency_support 0.66 → exchange_via_app 0.91                       How do I change currencies to euros?
+```
+
+Read it as: 77 rows changed answer; with gold, 58 got fixed and 8 got broken, and a sign test says that is not chance. The flip list shows each one, fixed first marked ✓, broken ✗. Every line is explained in [CLI › diff](/reference/cli#diff).
+
+- **Only the rows that flip matter for the comparison.** Rows where both versions agree can't tell them apart. `hunch review --against OLD` puts exactly those rows first, so a few minutes of review can settle a `NOT significant` result.
+- **It costs only the new answers.** Old answers are cached; a question whose text didn't change reports `unchanged (same keys, 0 calls)`.
+- **Both sides use today's reviews.** Gold belongs to the rows, not to a spec version.
+- **Renamed a question?** `diff` matches it by its answers and prints `renamed from 'old_name'`.
+- **With `--traffic`**, both versions run on the rows your app logged with `judge(..., shadow=...)`. See [Shadow a new spec](/guides/shadow).
+- **With `--model`**, `diff` compares engines instead of wordings: `hunch diff intent.yml --against intent.yml --model deepseek:deepseek-flash`.
+
+## `on_change`: what happens to old answers
+
+An answer is cached under a key made from the engine, the row's state and the question as sent. Edit the question and every row gets a new key. What `run` does next is set per judgment:
+
+```yaml
+on_change: reask        # default
+```
+
+| Value | After an edit, `run`… | Use when |
+| --- | --- | --- |
+| `reask` | Asks every row again under the new spec | The default. Results always match the spec as written |
+| `new_rows_only` | Keeps each old row's previous answer as long as its id and its state are unchanged; asks only new rows. A row whose text changed counts as new | Historical results must not move, for example numbers already reported |
+| `freeze` | Refuses to run if the spec changed since the last complete run, and asks nothing | Production judgments that must not change by accident |
+
+- `new_rows_only` applies to `run` and `compile` (so `compile` shows the real cost). `test`, `diff`, `review` and `judge()` always use the spec as written, so they show what the edit would do.
+- Under `freeze`, `compile` warns and `run` stops:
+
+  ```text
+  on_change: freeze, and ['intent'] changed since the last complete run: nothing asked. `hunch diff` shows what the change does; `hunch run --allow-change` accepts it
+  ```
+
+  Check with `diff`, then accept with `hunch run --allow-change`.
+- "Changed" means the spec's hash differs from the last complete run's. The hash covers everything in the spec except `on_change` itself and `source`, so pointing a spec at new data (or running it with `--source` or `--traffic`) is not a change, while editing a question, `state`, `act`, `gold` or `tests:` is.
+
+## `suggest`: let an LLM propose rewrites
+
+```bash
+export DEEPSEEK_API_KEY=...
+hunch suggest intent_bare.yml --question intent --n 3
+```
+
+`suggest` rewrites one question (its instructions and option descriptions; the option labels must stay the same) and keeps a rewrite only if it wins on gold it never saw:
+
+1. Rows with gold are split in two by a hash of their id.
+2. The writer (default `deepseek:deepseek-flash`, change with `--writer`) sees the current spec's mistakes on the first half and writes `--n` rewrites (default 3).
+3. Each rewrite answers the second half, and is compared with the current answers on the same rows: fixed vs broken, paired sign test.
+4. A rewrite is **KEPT** only if it fixes more than it breaks and `p < 0.05 / n`. Dividing by the number tried (Bonferroni) is needed because the best of several rewrites looks better than it is.
+
+Every rewrite, kept or rejected, is saved as a full spec in a `suggest/` folder next to the store (usually `.hunch/suggest/<judgment>.<question>.<k>.yml`), and the output lists each one's accuracy, fixed/broken counts, p-value and cost. A rewrite that renames, adds, drops or reorders options is rejected as unusable.
+
+**Before adopting a kept rewrite, check it on a holdout**, rows neither half came from:
+
+```bash
+hunch diff .hunch/suggest/intent_bare.intent.0.yml --against intent_bare.yml --source banking77_holdout.csv
+```
+
+Measured on BANKING77 (bare labels, 770 dev rows): the kept rewrite scored +5.1 points on the judging half (p = 0.008), but only +2.4 points on the untouched holdout (p = 0.23, not significant). Hand-written descriptions reached 88.3% on the same holdout. Treat `suggest` as a source of candidates, not a verdict.
+
+<Note>
+`suggest` needs gold rows with mistakes to learn from; with none it stops with `no mistakes to learn from`. `--max-cost` also caps each writer call, at its worst case (the prompt plus the whole 32,000-token reply allowance), so `--max-cost 0` refuses before the writer is called. The BANKING77 run above cost $0.22 in all for three rewrites of a 77-option question.
+</Note>

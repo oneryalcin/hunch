@@ -1,0 +1,123 @@
+---
+title: "Judge in your app"
+description: "Call a spec from application code, one row at a time, with the same answers and cache as batch runs."
+---
+
+The spec you test with `hunch run` and `hunch test` is the same spec your app calls. `judge()` answers one row with the same cache keys as a batch run, so a row the batch already judged costs nothing, and a row your app judged is already answered for the next batch.
+
+## One call
+
+```python
+import hunch
+
+answers = hunch.judge("prototype/examples/banking77/intent.yml",
+                      text="I still have not received my new card, I ordered over a week ago.")
+```
+
+```python
+{'intent': {'label': 'card_arrival', 'p': 1.0, 'margin': 1.0, 'route': 'act', 'cached': True}}
+```
+
+The row's columns are keyword arguments. They must include every column the spec's `state` lists. If a column is named `node`, `shadow` or `log`, pass the row as a dict instead: `hunch.judge(spec, {"text": ...})`.
+
+Each question gives `label`, `p` (its probability), `margin`, `route` and `cached`. See [`judge`](/reference/python#judge) for the full return shape, including projects with several judgments.
+
+This row was in the batch run, so it came from the store: about 11 ms for the first call in a fresh process, spec loading included. A row the store has never seen makes one engine call, and is stored for every later caller.
+
+## Act on `route`, not on `label`
+
+Give the question an `act` threshold in the spec:
+
+```yaml
+questions:
+  intent:
+    type: choice
+    instructions: What is this bank customer asking about?
+    criteria: { ... }
+    act: 0.90
+```
+
+Then `route` tells your code what to do:
+
+| `route` | Meaning | Typical handling |
+|---|---|---|
+| `act` | `p` is at or above `act` | Use the answer automatically. |
+| `review` | `p` is below `act` | Send to a person, a fallback, or a slower model. |
+| `""` | The question has no `act` | Your code decides. |
+
+`act` lives in the spec, not in your code, so `hunch test` checks it: the dial shows how many rows `act` automates and how many of those are wrong, and with `min_act_accuracy` under `tests:` the test fails if accuracy among auto-acted rows drops below it. Changing `act` asks nothing new: it is not part of the cache key.
+
+For yes/no questions the two answers can need different confidence: `act: {yes: 0.95, no: 0.8}`.
+
+## In async code
+
+In FastAPI, Starlette or any event loop, use `ajudge`. `judge` starts its own event loop and cannot run inside one.
+
+```python
+from fastapi import FastAPI
+import hunch
+
+app = FastAPI()
+SPEC = "prototype/examples/features/triage.yml"
+
+
+@app.post("/tickets")
+async def new_ticket(subject: str, body: str):
+    answers = await hunch.ajudge(SPEC, subject=subject, body=body)
+    dept = answers["dept"]
+    if dept["route"] == "act":
+        return {"team": dept["label"]}
+    return {"team": "human-triage", "model_thought": dept["label"], "p": dept["p"]}
+```
+
+Posting `subject="Charged twice"` and `body="I see two identical charges for March. Please refund one."` returns `{'team': 'billing'}`.
+
+## Escalate the uncertain answers
+
+A question can hand its uncertain answers to a second engine:
+
+```yaml
+dept:
+  type: choice
+  instructions: Which team should handle this support message?
+  criteria: { billing: ..., technical: ..., sales: ... }
+  none: The message needs no team (thanks, spam, chit-chat)
+  act: 0.95
+  escalate: {model: "deepseek:deepseek-flash"}
+```
+
+When the first engine's answer is below `act`, the same question is asked of the `escalate` model. Its answer replaces the first one only if it clears `act` itself; otherwise the first answer stays and routes to `review`. Both answers are kept in the store. In `prototype/examples/features/`, one of six messages ("Login broken … I was also charged for a plan I cancelled") was escalated and came back `technical` at 0.998.
+
+`judge()` returns the answer that was kept. The batch table's `dept_by` column records which engine gave it.
+
+## Keep rows for later
+
+```python
+hunch.judge(SPEC, log=True, subject=subject, body=body)
+```
+
+`log=True` stores the row (after the live spec's `redact` rules) in the store's `traffic` table. A spec written later can then be run on real traffic with `hunch diff CANDIDATE --against LIVE --traffic`. Passing `shadow=` does this too; see [Shadow mode](/guides/shadow).
+
+## Cap the cost
+
+Set a cap so a burst of new rows cannot run up a bill:
+
+```sh
+export HUNCH_MAX_COST=0.01   # USD, per judgment per call, estimated before asking
+```
+
+or at runtime, `hunch.core.MAX_COST = 0.01`. `HUNCH_MAX_COST` is read when `hunch` is imported. If the missing answers would cost more than the cap, nothing is asked and `judge` raises `SystemExit`:
+
+```
+intent: would ask 1 answers in 1 requests (~$0.0001), above --max-cost $0.0; nothing asked
+```
+
+Spec errors raise `SystemExit` too, and a row missing a state column raises `KeyError`. Catch both around `judge` in a long-running service.
+
+## What the cache means for you
+
+- Warm the cache with a batch: `hunch run` over past rows makes every repeat of them free and instant online.
+- `judge` loads each spec once per process. Restart the process after editing a spec.
+- Editing a question's `instructions` or `criteria`, or changing the model, gives new keys: the next call for each row asks again. `act`, `gold`, `escalate` and `tests` are not in the key.
+
+The full walk-through is `prototype/examples/banking77/online_demo.py`. Its second step judges a new sentence, so it makes one engine call (about $0.0001).

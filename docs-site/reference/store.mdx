@@ -1,0 +1,124 @@
+---
+title: "Store"
+description: "The SQLite file that holds every answer, every judgment's table and the history of runs."
+---
+
+Everything hunch knows lives in one SQLite file: every answer the engine gave, each judgment's latest table, the history of runs and the traffic logged by shadow mode. It runs in WAL mode, so batch runs and apps calling `judge()` can use it at the same time.
+
+## Where it lives
+
+hunch picks the store for a spec in this order:
+
+1. `HUNCH_STORE`, if set.
+2. The nearest `.hunch/store.sqlite` in the spec's folder or any folder above it.
+3. Otherwise a new `.hunch/store.sqlite` at the root of the git repository, or in the spec's folder outside a repository.
+
+When it creates a new store it says so on stderr:
+
+```
+new answer store: /path/to/.hunch/store.sqlite (no store in this folder or above; HUNCH_STORE=... to share one)
+```
+
+If you see that line for a project you have run before, the spec is outside the workspace where its answers were cached, and every answer will be asked and paid for again. Set `HUNCH_STORE` to share one store.
+
+Keep `.hunch/` out of git. The store can be large (about 80 MB per 100,000 rows) and may contain the text of your rows.
+
+## The answer cache
+
+The `answers` table is a content-addressed cache: each answer is filed under a hash of exactly what was asked.
+
+| Column | Meaning |
+|---|---|
+| `key` | SHA-256 of the request: the model, the state (the row's `state` columns after `redact` and `clip`), and the question as sent. For an LLM engine it also includes the adapter version `logprobs-v1`. |
+| `model` | The engine that answered. |
+| `answer` | The engine's answer as JSON. |
+| `input_tokens` | Input tokens billed for it (shared equally when one request answered several questions). |
+| `created_at` | When it was stored. |
+
+What goes into the key decides when you pay again:
+
+- The same row, question and model anywhere in any project is a cache hit, whether it came from a batch run, `judge()` or the server.
+- Changing a question's `instructions` or `criteria`, the order of its options, the model, or any state column's text makes a new key.
+- `act`, `gold`, `escalate`, `tests`, `where`, the spec's name and its `source` are not part of the key. Changing them asks nothing.
+
+Answer shapes:
+
+```json
+{"type": "choice", "choice": "billing", "confidence": 1.0,
+ "probabilities": {"none_of_these": 0.0, "sales": 0.0, "billing": 1.0, "technical": 0.0}}
+{"type": "noul", "noul": 0.1}
+{"type": "score", "score": 0.35, "confidence": 0.65,
+ "legend": {"0": "Calm", "1": "Mildly annoyed", "2": "Frustrated", "3": "Very angry"},
+ "probabilities": {"0": 0.65, "1": 0.35, "2": 0.0, "3": 0.0}}
+```
+
+`noul` is the probability of yes.
+
+## Judgment tables
+
+`hunch run` writes one table per judgment, named after it, like a dbt model. It is replaced in one transaction, so a reader always sees one complete run. A run that fails leaves the previous table in place.
+
+Each row has every input column, then for each question:
+
+| Column | Meaning |
+|---|---|
+| `<question>` | The answer's label. |
+| `<question>_p` | Its probability (for a `chain: true` judgment, times the probability of the routing). |
+| `<question>_pyes` | Yes/no questions only: the probability of yes. |
+| `<question>_route` | Questions with `act` only: `act` or `review`. |
+| `<question>_by` | Questions with `escalate` only: the engine whose answer was kept. |
+| `<question>_key` | The answer's `key` in `answers`. |
+
+and for the row:
+
+| Column | Meaning |
+|---|---|
+| `_path_p` | The probability that the row reached this judgment correctly, through upstream `where` clauses. `1.0` for a root judgment. |
+| `_hunch_run_id` | The run that wrote the row. |
+
+A `type: multi` question becomes one yes/no question per option, `<question>__<option>`, each with its own columns, plus a `<question>` column listing the options answered yes, joined with `|`.
+
+With `--model`, a judgment's table gets the engine as a suffix, for example `intent__deepseek_deepseek_flash`, so runs on a second engine never overwrite the spec's own.
+
+## Runs and lineage
+
+| Table | One row per | Columns |
+|---|---|---|
+| `_hunch_runs` | judgment per run | `run_id`, `judgment`, `spec_hash`, `git_sha`, `model`, `rows`, `asked`, `cost`, `status`, `started_at`, `finished_at` |
+| `_hunch_row_answers` | row, question and run | `judgment`, `row_id`, `qid`, `key`, `shash`, `run_id` |
+
+- `spec_hash` covers what the judgment asks, not its `on_change` policy or its `source`. `on_change: freeze` compares it with the last complete run's.
+- `status` is `complete`, or `failed: <error>`.
+- `shash` is a hash of the row's state. `on_change: new_rows_only` keeps a row's previous answer only when both the row id and `shash` match.
+- `/v1/drift` and the server's runs page compare label mixes across runs from `_hunch_row_answers`.
+
+## Traffic
+
+`judge(..., log=True)` and `judge(..., shadow=...)` keep each row in `traffic` (`judgment`, `rhash`, `row`, `n`, `first_at`, `last_at`), redacted by the live spec's rules. A repeated row increases `n`. `--traffic` exports it to `.hunch/traffic/<judgment>.csv` and runs on that file.
+
+## Reserved names
+
+A judgment cannot be named `answers` or `traffic`, or start with `_` or `sqlite_`: its table would replace one of the store's own.
+
+## Querying it
+
+It is a plain SQLite file. For example, which engine answered each row of the triage example, and when:
+
+```sh
+sqlite3 -header -column prototype/.hunch/store.sqlite \
+  "select t.id, t.dept, t.dept_p, t.dept_by, a.created_at
+   from triage t join answers a on a.key = t.dept_key order by t.id"
+```
+
+```
+id      dept       dept_p          dept_by              created_at
+--  -------------  ------  -----------------------  -------------------
+1   billing           1.0  jev-1.13.0               2026-09-24 17:16:27
+2   technical       0.998  deepseek:deepseek-flash  2026-09-24 17:16:27
+3   none_of_these     1.0  jev-1.13.0               2026-09-24 17:16:27
+4   sales             1.0  jev-1.13.0               2026-09-24 17:16:27
+5   technical         1.0  jev-1.13.0               2026-09-24 17:16:27
+6   billing           1.0  jev-1.13.0               2026-09-24 17:16:27
+```
+
+From Python, [`hunch.results`](/reference/python#results) returns a judgment's table as a list of dicts.

@@ -1,0 +1,166 @@
+---
+title: "Pydantic classes as specs"
+description: "Write a judgment as a Pydantic class, test it like any spec, and get typed instances back."
+---
+
+If your code already describes a decision as a Pydantic class, for example the `output_type` of a Pydantic AI agent, hunch can turn that class into a spec. The class your app runs is then the class you test, diff and review.
+
+This needs Pydantic 2 in the same environment: install hunch with its `pydantic` extra, or add `pydantic` yourself.
+
+## From class to spec
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+import hunch
+
+
+class Triage(BaseModel):
+    dept: Literal["billing", "technical", "sales"] | None = Field(
+        description="Which team should handle this support message?",
+        json_schema_extra={
+            "options": {"billing": "Money already charged or owed",
+                        "technical": "Something broken in the product or API",
+                        "sales": "Buying more or differently"},
+            "hunch": {"none": "The message needs no team (thanks, spam, chit-chat)", "act": 0.95,
+                      "escalate": {"model": "deepseek:deepseek-flash"}, "gold": "gold_dept"},
+        })
+    topics: list[Literal["refund", "duplicate_charge", "login", "pricing", "outage", "invoice"]] = Field(
+        description="Which of these topics does the message raise?",
+        json_schema_extra={
+            "options": {"refund": "asks for money back", "duplicate_charge": "charged more than once",
+                        "login": "cannot sign in", "pricing": "asks what something costs",
+                        "outage": "the service is down or erroring", "invoice": "invoice details are wrong"},
+            "hunch": {"gold": "gold_topics"},
+        })
+
+
+spec = hunch.spec_from_model(Triage, source="messages.csv", state=["subject", "body"])
+print(hunch.spec_yaml(spec))
+```
+
+This prints the same spec as `prototype/examples/features/triage.yml`:
+
+```yaml
+judgment: triage
+model: jev-1.13.0
+key: id
+state:
+- subject
+- body
+questions:
+  dept:
+    type: choice
+    instructions: Which team should handle this support message?
+    criteria:
+      billing: Money already charged or owed
+      technical: Something broken in the product or API
+      sales: Buying more or differently
+    none: The message needs no team (thanks, spam, chit-chat)
+    act: 0.95
+    escalate:
+      model: deepseek:deepseek-flash
+    gold: gold_dept
+  topics:
+    type: multi
+    instructions: Which of these topics does the message raise?
+    criteria:
+      refund: asks for money back
+      ...
+    gold: gold_topics
+source: messages.csv
+```
+
+Because the questions are identical, they share cache keys with the YAML spec: every answer the YAML spec already has is free here.
+
+## The mapping
+
+| Field type | Question | Answer in the instance |
+|---|---|---|
+| `bool` | yes/no (`noul`) | `True` / `False` |
+| `Literal[...]` or `Enum` | `choice` | the literal value or the enum member |
+| `X \| None` (X a `Literal` or `Enum`) | `choice` with a "none of these" option | the value, or `None` |
+| `list[Literal[...]]` or `list[Enum]` | `multi`: one yes/no question per option | the list of options answered yes |
+| `IntEnum` with values `0` to `n-1` | `score`, levels in value order | the `IntEnum` member |
+
+Anything else raises `TypeError`.
+
+Where each part of the question comes from:
+
+| Part | Source | Default |
+|---|---|---|
+| Instructions | `Field(description=...)` | The field name, capitalized, with a question mark: `urgency` → `Urgency?` |
+| Option descriptions | `json_schema_extra={"options": {label: description}}` | A member's `__doc__` if you set it, else empty |
+| `Enum` option labels | the member's value if it is a string, else its name | |
+| `IntEnum` level descriptions | `json_schema_extra={"options": {MEMBER_NAME: description}}`, or a member's `__doc__` | The member name in lower case: `LOW` → `low` |
+| hunch settings (`act`, `gold`, `escalate`, `none`) | `json_schema_extra={"hunch": {...}}` | None. They are never sent to the engine and never change the cache key. |
+| `none` text for `X \| None` | `"hunch": {"none": ...}` | `None of the options fits` |
+
+To describe enum levels, name them in `options` on the field (or set `__doc__` on each member after the class):
+
+```python
+import enum
+from pydantic import BaseModel, Field
+
+class Urgency(enum.IntEnum):
+    LOW = 0
+    HIGH = 1
+
+class Ticket(BaseModel):
+    urgency: Urgency = Field(description="How urgent is it for the customer?",
+                             json_schema_extra={"options": {"LOW": "Can wait a week", "HIGH": "Blocks the customer now"}})
+```
+
+A string written under a member inside the class body is not attached to the member by Python, so hunch does not see it.
+
+## Options to `spec_from_model`
+
+```python
+hunch.spec_from_model(Triage, judgment="triage", model="jev-1.13.0", source="messages.csv",
+                      key="id", state=["subject", "body"], tests={"topics": {"min_accuracy": 0.5}})
+```
+
+`judgment` defaults to the class name in snake case. Any other spec key (`tests`, `redact`, `clip`, `where`, `on_change`, …) passes straight through. See [Spec reference](/reference/spec).
+
+## Judge a row, get an instance
+
+```python
+ticket = hunch.judge_model(Triage, spec, base="prototype/examples/features",
+                           subject="Charged twice",
+                           body="I see two identical charges for March. Please refund one.")
+ticket
+# Triage(dept='billing', topics=['refund', 'duplicate_charge', 'invoice'])
+```
+
+`base` is the folder that relative paths in the spec (here `source`) resolve against. The answer goes through the same store as everything else. `judge_model` returns only the labels. If you need `p` and `route`, call [`hunch.judge`](/reference/python#judge) with a saved spec, or [`hunch.load`](/reference/python#load) the dict, and convert its answers with `hunch.to_model(Triage, answers)`.
+
+## Run, test and review it
+
+A spec dict works everywhere a spec file does:
+
+```python
+hunch.run(spec, base="prototype/examples/features")      # asks what the store lacks, writes the table
+rows = hunch.results(spec, base="prototype/examples/features")
+```
+
+For the CLI (`hunch test`, `hunch diff`, `hunch review`), save it once and commit the file:
+
+```python
+open("triage.yml", "w").write(hunch.spec_yaml(spec))
+```
+
+## Pydantic AI output types
+
+A Pydantic AI agent's `output_type` is either a `BaseModel` class, handled as above, or a bare type such as `Literal["spam", "ham"]` or `bool`. A bare type becomes a one-question spec whose question is named `output`:
+
+```python
+spec = hunch.spec_from_model(Literal["spam", "ham"], judgment="filter",
+                             description="Is this message spam?", state=["text"])
+spec["questions"]
+# {'output': {'type': 'choice', 'instructions': 'Is this message spam?',
+#             'criteria': {'spam': '', 'ham': ''}}}
+```
+
+For a bare type, `judge_model` and `to_model` return the value itself (`"ham"`), not a wrapper object.
+
+The mapping above was written to match how Pydantic AI's TypeSafe model turns an output type into Jev questions, so the definition your agent runs is the one hunch tests.

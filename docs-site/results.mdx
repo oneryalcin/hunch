@@ -1,0 +1,52 @@
+---
+title: "Results"
+description: "What hunch has measured on public data and on real agent sessions, with Jev (jev-1.13.0) unless noted, including what did not work."
+---
+
+Every number here comes from a run in the repository (`prototype/examples/`, details in `docs/04-design.md` and `prototype/README.md`). Where a result was checked by reviewers, it says who and how. Total API spend for everything on this page: about $3.
+
+## Intent classification: BANKING77
+
+77 banking intents, 385 held-out customer messages.
+
+- **Describing the options is what matters.** With bare labels the spec scored 82.3%; with every option described, 88.3% against the dataset's answer key (fixed 28, broke 5, p &lt; 0.001).
+- **The answer key is wrong more often than the model.** A blind panel of three AI reviewers (Claude, given no context beyond each row) checked all 45 disagreements plus random agreements: key wrong 20 times, Jev wrong 5, both acceptable 20. Estimated accuracy: **95.8%** (95% CI 88.7–97.9%), against 91.9% for the answer key.
+- **A tree was worse than a flat list.** Routing each message to a group of intents first, then choosing within the group, was 48% cheaper but scored 87.5% against 95.8% (fixed 3, broke 35): 33 messages went to a group that did not contain their answer. `diff` found this before it shipped.
+
+## Coding agents: SWE-agent runs
+
+200 SWE-agent runs, half of whose patches pass the project's hidden tests.
+
+- **Would this patch pass the tests?** AUROC 0.831. A confident "no" is reliable (52 of 55 runs below p = 0.2 did fail); a confident "yes" is not, so act on "no" only.
+- **Agents overclaim.** The agent claimed a fix in 160 of 200 runs; 66 of those (41%) failed the tests.
+- **The agent's claim does not sway the judge.** Without the agent's final messages, AUROC is 0.828 against 0.831.
+
+## Coding agents: Claude Code sessions
+
+- **Public sessions** ([Trace Commons](https://huggingface.co/datasets/trace-commons/agent-traces), 309 turns): `outcome` (how did the turn go, from the developer's next message) 90%, `claims` (did the agent say it was done) 88%, against a blind panel of three AI reviewers on 60 random turns. $0.02.
+- **The maintainer's own sessions** (533 turns): `outcome` an estimated 92.9% (95% CI 77–98%) from 28 random turns reviewed by the developer; 1 of 30 random turns needed more context than request, reply and next message. When the agent said it was done, the next message reported a failure or a redirect in 3% of turns. $0.04.
+
+See [Judge agent traces](/guides/agent-traces).
+
+## Engines
+
+The same specs on DeepSeek V4.1 Flash, read through token probabilities: 92.3% against Jev's 95.8% on BANKING77 (p = 0.001); no significant difference on SWE patches (AUROC 0.866 against 0.831) or Claude Code turns. About 1.5× Jev's cost as billed. See [Engines](/guides/engines).
+
+## Improving a spec automatically
+
+`hunch suggest` rewrote a bare-label BANKING77 question: +5.1 points on the half used to judge rewrites (p = 0.008), but only +2.4 points on an untouched holdout (not significant). Picking the best of several rewrites flatters the winner; `suggest` now corrects for it and says to confirm on a holdout. Hand-written option descriptions did better (+6.0 points on the holdout).
+
+## Scale
+
+100,000 Amazon reviews, one yes/no each: 57.5 requests per second, $1.55, 97.0% accurate (AUROC 0.993); a fully cached re-run takes 4 seconds. See [Large datasets](/guides/scale).
+
+## In an application
+
+A row already answered comes back from the store in 0.5–6 ms; new text takes about 600 ms and is then stored for everyone. While a batch run wrote 200 answers, 63 `judge()` calls from another process all hit the cache (p50 0.6 ms, p99 3.0 ms, no errors).
+
+## Not yet
+
+- No one outside the project has used hunch.
+- The review panels were AI reviewers following a blind protocol, and the maintainer's own-session reviews were by the person who wrote the sessions; neither is an independent human panel.
+- `suggest` has not produced a rewrite that beat hand-written option descriptions.
+- The server has run locally only.

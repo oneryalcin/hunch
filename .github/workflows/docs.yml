@@ -1,0 +1,26 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Every spec key, CLI flag and environment variable is documented
+        run: uv run docs-site/check.py
+      - name: The quickstart's recipe is a valid spec
+        run: uv run hunch lint src/hunch/recipes/tickets
+      - name: The site builds
+        working-directory: docs-site
+        run: npx -y mint@latest validate
+      - name: No broken links or anchors
+        working-directory: docs-site
+        run: npx -y mint@latest broken-links --check-anchors

@@ -1,0 +1,68 @@
+---
+title: "Engines"
+description: "Answer questions with TypeSafe's Jev or with an LLM read through its token probabilities, and compare them row by row."
+---
+
+The spec's `model` picks the engine. Both kinds return the same typed answers, so review, test and diff work the same whichever one answered.
+
+| `model` | Engine | Key |
+|---|---|---|
+| `jev-1.13.0` | TypeSafe's Jev: a small model trained for typed judgments with calibrated probabilities | `TYPESAFE_API_KEY` |
+| `deepseek:<model id>` | DeepSeek's API, thinking disabled | `DEEPSEEK_API_KEY` |
+| `openrouter:<model id>[@provider]` | Any model on OpenRouter that returns log-probabilities | `OPENROUTER_API_KEY` |
+
+## How an LLM answers
+
+An LLM has no typed output, so hunch asks for one token and reads its probabilities. The prompt puts the question and numbered options first (so providers can cache that part across rows), then the row as JSON, and asks for only the option number, `yes`/`no`, or the score level. hunch takes the top 20 log-probabilities of the first answer token and renormalises them over the valid answers.
+
+This needs a provider that returns log-probabilities with reasoning turned off. Some do not: they return no log-probabilities, or keep reasoning despite the request, which hides the first answer token. Pin a provider that works with `@provider`:
+
+```sh
+hunch run . --model openrouter:<vendor>/<model>@<provider>
+```
+
+Requests are sent at temperature 1. At temperature 0 some APIs return a probability of zero for every token but the top one, which would make every answer look certain.
+
+## Compare engines on your rows
+
+`--model` overrides the spec's engine for one command. Results go to a separate table (`<judgment>__<engine>`), and each engine's answers are cached under their own keys, so nothing is overwritten.
+
+```sh
+hunch run . --model deepseek:deepseek-flash --max-cost 0.50
+hunch test . --model deepseek:deepseek-flash
+hunch diff . --model deepseek:deepseek-flash      # row by row against the spec's own engine
+```
+
+BANKING77 holdout, Jev (the spec's engine) against DeepSeek, from cached answers:
+
+```
+intent: 36/385 rows flip (6 within noise band)
+  probabilities moved: mean |Δ| 0.103, mean Δ p(old answer) -0.033
+  gold accuracy on the 385 shared rows with gold 97.9% → 93.2%  (✓ 4 fixed, ✗ 22 broken, 10 wrong both times, 0 without gold)
+  paired sign test p=0.001 → significant
+```
+
+`diff` scores both against current gold (the answer key, corrected by reviews). The table below uses `test`'s estimated accuracy, which also counts random spot checks, so its numbers are lower and more honest.
+
+## What has been measured
+
+Jev against DeepSeek (`deepseek-flash`, logprobs), same specs and rows:
+
+| Task | Jev | DeepSeek | |
+|---|---|---|---|
+| BANKING77 intent, 77 options | 95.8% | 92.3% | Jev better, p = 0.001 |
+| SWE agent patches: would it pass the tests (AUROC) | 0.831 | 0.866 | no significant difference |
+| Claude Code turns: outcome / claims | 90% / 88% | 88% / 88% | no significant difference |
+
+As billed, DeepSeek cost about 1.5× Jev on these runs ($0.10 against $0.068); its prompt cache halves the cost of repeated question text. On the BANKING77 holdout both are well calibrated (calibration error 0.043 for Jev, 0.032 for DeepSeek). Neither is better everywhere; measure on your own rows with `diff`.
+
+## Escalate uncertain answers
+
+A question can send its uncertain answers to a second engine. Answers below `act` are asked again with the `escalate` model; the second answer is used if it clears `act` itself:
+
+```yaml
+    act: 0.95
+    escalate: {model: "deepseek:deepseek-flash"}
+```
+
+The table's `<question>_by` column names the engine whose answer was used, and `<question>_key` points at that answer in the store. See the [spec reference](/reference/spec).

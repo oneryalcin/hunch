@@ -1,0 +1,76 @@
+---
+title: "Shadow mode"
+description: "Run a candidate spec on live traffic next to the one in production, then compare them before switching."
+---
+
+You have a spec in production and a candidate you think is better. Before switching, run the candidate on the same live rows, unseen by users, and compare the two on that traffic. Your app only ever sees the live answer.
+
+## 1. Pass the candidate as `shadow`
+
+```python
+answers = hunch.judge(LIVE, shadow=CANDIDATE, text=message)
+```
+
+`LIVE` and `CANDIDATE` are each a spec file or a folder of specs. What happens:
+
+1. The live spec answers and `judge` returns that answer.
+2. The row is logged to the store's `traffic` table, redacted by the live spec's `redact` rules.
+3. The candidate answers the same row afterwards: in a separate thread for `judge`, or as a background task in the running event loop for `ajudge`. Its answers go into the store like any other.
+
+The candidate never delays or changes the live answer. If it fails, even if it will not load, the error is printed to stderr and the live answer is unaffected. With `judge`, the candidate's thread is not a daemon, so a script waits for it at exit.
+
+Through the server, the same thing is `"shadow": "<candidate path>"` in the body of [`POST /v1/judge`](/reference/server-api).
+
+## 2. Compare on the traffic
+
+Once some traffic has come in:
+
+```sh
+cd prototype/examples
+hunch diff banking77_tree --against banking77/intent.yml --node intent_tree --traffic --max-cost 0
+```
+
+`--traffic` runs both specs on the logged rows instead of their `source`. Every answer is already in the store, so this costs nothing. The output from `prototype/examples/banking77/shadow_demo.py`, which sends 40 messages through a flat 77-way spec (live) with a two-step tree as the candidate:
+
+```
+answers: 120 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
+
+══ intent_tree  vs  intent
+
+intent: 8/40 rows flip (1 within noise band)
+  probabilities moved: mean |Δ| 0.180, mean Δ p(old answer) -0.147
+    #t0c722aeb35e3ef3f            getting_virtual_card 0.51 → card_linking 0.63     The app doesn't show the card I receive…
+    #t1b08b0f1c82042c5              topping_up_by_card 0.76 → card_linking 0.97     Where do I need to go in the app to ent…
+    #te5ab3816dba2fcbb          card_delivery_estimate 0.98 → transfer_timing 1.00  Whats the delivery time to the United S…
+    ...
+    #t1fcfe8112df5bf7b        declined_cash_withdrawal 0.52 → pending_cash_withdrawal 0.58  ~noise  Hey, my card was declined at an ATM in …
+```
+
+Each flip shows the live answer, then the candidate's. `~noise` marks a flip where at least one of the two answers was a near tie (a margin below 0.10), so it may flip on a repeat run of the same spec. Logged rows get ids starting with `t`, taken from their content, so a review of one stays attached to it.
+
+Logged traffic has no answer key, so `diff` can say *where* the two specs disagree but not yet *which* one is right.
+
+## 3. Review only where they disagree
+
+```sh
+hunch review banking77_tree --node intent_tree --against banking77/intent.yml --traffic
+```
+
+With `--against`, the queue starts with the rows where the two specs give different answers (8 here), before the usual spot checks. Each of those rows marks both answers, `← --against` for the live one and `← this spec` for the candidate. Pick the number of the right answer, `b` if both are acceptable, or `c` if it cannot be told from the text shown.
+
+You only need verdicts where the specs disagree: where they agree, they are right or wrong together, so those rows cannot change which one is better.
+
+Then run the same `diff` again. With verdicts on the disagreements, it adds a line with each spec's accuracy on the reviewed rows, how many flips the candidate fixed (`✓`) and broke (`✗`), and a paired sign test saying whether the difference is more than chance.
+
+## Replaying traffic for a candidate written later
+
+A candidate does not have to exist before the traffic does. Call `judge(LIVE, log=True, ...)` in production, and any spec you write later can be compared on those rows with `--traffic`. The candidate's answers are asked the first time you run the `diff`.
+
+## Try it
+
+```sh
+cd prototype/examples/banking77
+uv run shadow_demo.py
+```
+
+The demo runs on answers already in the store and costs nothing.

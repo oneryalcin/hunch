@@ -132,7 +132,7 @@ async def api_judge(request: Request):
     except SystemExit as e:  # spec errors and the cost cap report by exiting
         raise Refused(422, str(e))
     except KeyError as e:
-        raise Refused(422, f"row is missing {e}")
+        raise Refused(422, e.args[0] if e.args and isinstance(e.args[0], str) else f"row is missing {e}")
     return JSONResponse(out)
 
 
@@ -295,7 +295,7 @@ async def review_post(request: Request):
                               "kind": form["kind"], "verdict": form["verdict"], "label": form.get("label", ""),
                               "reviewer": request.headers.get("x-reviewer") or form.get("reviewer") or "server",
                               "at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
-    q = urlencode({"path": rel, "node": node, **{k: form[k] for k in ("token", "reviewer") if form.get(k)}})
+    q = urlencode({"path": rel, "node": node, **{k: form[k] for k in ("token", "reviewer", "audit") if form.get(k)}})
     return RedirectResponse(f"/review?{q}", status_code=303)
 
 

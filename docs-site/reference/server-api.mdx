@@ -1,0 +1,127 @@
+---
+title: "Server API"
+description: "Every endpoint of hunch-server: parameters, responses, authentication and errors."
+---
+
+The server serves the same specs and store as the CLI. A row judged through `/v1/judge` is a cache hit for the next `hunch run`, and a verdict given on `/review` is a review that `hunch test` and `hunch diff` use. To install and run it, see [Run the server](/guides/server).
+
+## Paths
+
+Every `path` parameter is a spec file or a folder of specs, relative to `HUNCH_PROJECTS`. A path that resolves outside that folder (`..`, an absolute path, a symlink) is refused with `403`.
+
+## Authentication
+
+With `HUNCH_SERVER_TOKEN` set, every request needs the token, in any one of:
+
+- the header `Authorization: Bearer <token>`,
+- the query parameter `?token=<token>`,
+- a form field `token` (the review page's buttons send it this way).
+
+The comparison is constant-time (`hmac.compare_digest`). A missing or wrong token gets `401`.
+
+Without `HUNCH_SERVER_TOKEN` the server is open. Use that only on your own machine.
+
+## Errors
+
+JSON endpoints (`/v1/...`) answer errors as `{"error": "<message>"}`. Pages answer an HTML page with the message.
+
+| Status | When |
+|---|---|
+| `400` | Missing `path`, body not JSON, wrong body shape, unknown `node`, non-numeric `audit`, unknown verdict |
+| `401` | Missing or wrong token |
+| `403` | `path` outside `HUNCH_PROJECTS` |
+| `404` | `path` does not exist |
+| `409` | A review verdict for a row the queue does not offer as that kind |
+| `422` | Not a spec or folder of specs, a spec error, a row missing a state column, or the cost cap refusing to ask |
+
+## Cost cap
+
+The server sets the engine's cost cap from `HUNCH_SERVER_MAX_COST` (default `0.01` USD). It applies per judgment per request: if one judgment's missing answers for the row would cost more, nothing is asked and the request gets `422`. `HUNCH_MAX_COST` is ignored by the server.
+
+## JSON API
+
+### `POST /v1/judge`
+
+Judges one row, the same as [`ajudge`](/reference/python#ajudge).
+
+```json
+{
+  "path": "features/triage.yml",
+  "row": {"subject": "Charged twice", "body": "I see two identical charges for March. Please refund one."},
+  "node": "triage",
+  "shadow": "features_v2/",
+  "log": false
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `path` | yes | The live spec or folder. |
+| `row` | yes | Column → value. Must contain every column the spec's `state` lists. |
+| `node` | no | Return only this judgment's answers. |
+| `shadow` | no | A candidate spec or folder, also under `HUNCH_PROJECTS`. It answers the same row after the response is sent, as a task in the server's event loop. |
+| `log` | no | Keep the row so a candidate can be replayed on it later with `--traffic`. |
+
+The response is what `ajudge` returns: `label`, `p`, `margin`, `route` and `cached` for each question.
+
+```sh
+curl -s -H "Authorization: Bearer secret" -X POST localhost:8765/v1/judge \
+  -d '{"path": "features/triage.yml", "row": {"subject": "Charged twice", "body": "I see two identical charges for March. Please refund one."}}'
+```
+
+```json
+{"dept": {"label": "billing", "p": 1.0, "margin": 1.0, "route": "act", "cached": true},
+ "topics__refund": {"label": "yes", "p": 0.99, "margin": 0.98, "route": "", "cached": true},
+ "...": "one entry per question"}
+```
+
+### `GET /v1/runs?path=`
+
+The project's runs, newest first, at most 50, from the store's `_hunch_runs` table.
+
+```json
+[{"run_id": "2026-09-24T18:58:36-0bc797", "judgment": "triage", "spec_hash": "8fe15b24a108",
+  "git_sha": "3775349", "model": "jev-1.13.0", "rows": 6, "asked": 0, "cost": 0.0,
+  "status": "complete", "started_at": "2026-09-24T18:58:36", "finished_at": "2026-09-24T18:58:36"}]
+```
+
+`status` is `complete`, or `failed: <error>` for a run that raised.
+
+### `GET /v1/drift?path=&node=`
+
+For each question of one judgment (`node` may be left out for a one-judgment project), the label mix of every run and how much it changed from the previous run.
+
+```json
+{"dept": [{"run_id": "2026-09-24T18:58:36-0bc797", "rows": 6,
+           "shares": {"billing": 0.3333, "technical": 0.3333, "none_of_these": 0.1667, "sales": 0.1667},
+           "change": null, "alert": false}]}
+```
+
+`change` is the total variation distance between this run's shares and the previous run's: half the sum of the absolute differences, `0` for the same mix, `1` for no overlap. `alert` is `true` when it is above `0.10`. The first run has `change: null`.
+
+## Pages
+
+| Page | Shows |
+|---|---|
+| `GET /` | Every folder under `HUNCH_PROJECTS` that holds specs, its judgments and its last run, with links to review and runs. |
+| `GET /runs?path=` | The run table, and the latest label mix of each question with drift above 0.10 flagged. |
+| `GET /review?path=&node=&reviewer=&audit=` | The review queue: up to 25 rows at a time. |
+| `POST /review` | Records one verdict, then redirects back to the queue. Sent by the page's buttons. |
+
+### The review queue
+
+`GET /review` builds the same queue as [`hunch review`](/reference/cli) from answers already in the store. It asks nothing. `audit` (default `30`) is how many random rows per question to spot-check. Each card shows the row's state, the model's top three answers and one button per verdict:
+
+| Button | Verdict | Label saved |
+|---|---|---|
+| model is right | `model_right` | the model's answer (rows where it disagrees with the answer key) |
+| answer key is right | `key_right` | the answer key's label |
+| both acceptable | `both_ok` | both labels |
+| label is right | `confirmed` | the label being spot-checked: the answer key's, or the model's when there is no key |
+| it is `<label>` | `labeled` | that label |
+| needs more context | `needs_context` | none; the row leaves the accuracy estimate and counts toward the context gap |
+| ambiguous | `ambiguous` | none; the row leaves the accuracy estimate |
+
+Verdicts are appended to the judgment's reviews file: `<judgment>.reviews.csv` next to its spec, or the file its `reviews:` key names. The reviewer name is the `X-Reviewer` header, else the `reviewer` parameter, else `server`.
+
+`POST /review` accepts a verdict only for a row the current queue offers, with the same state hash and the same kind. Anything else gets `409`. This keeps spot checks a random sample: a row picked by hand cannot be filed as one.
