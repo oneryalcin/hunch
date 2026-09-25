@@ -103,48 +103,73 @@ def local(ts: str | None) -> str:
     return (t.astimezone() if t.tzinfo else t).strftime("%Y-%m-%d %H:%M")
 
 
-def accuracy_words(a: dict, gold: dict) -> str:
-    if a["basis"] == "estimate":
-        lo, hi = a["ci"]
-        reviewed = sum(v["reviewed"] for v in a.get("reviewed", {}).values())
-        return f"right on an estimated {pct(a['value'])} of rows ({pct(lo)}–{pct(hi)}), from {reviewed} reviewed rows"
-    return f"agrees with the answer key on {pct(a['value'])} of the {gold['rows']} rows that have one"
+CHECK_WORDS = {  # check → (what it measures, "min" or "max")
+    "min_accuracy": ("accuracy", "min"), "min_act_accuracy": ("accuracy among answers it acts on alone", "min"),
+    "max_calibration_error": ("calibration error", "max"), "min_auroc": ("AUROC", "min"),
+    "order_stability": ("answers that flip when options are reordered", "max"), "min_rate": ("rate", "min"),
+    "max_rate": ("rate", "max"), "max_missed": ("miss rate", "max"), "max_false_alarms": ("false-alarm rate", "max"),
+}
 
 
-def act_words(q: dict) -> str | None:
-    a = q.get("act")
-    if not a:
-        return None
-    t = a["threshold"]
-    t = " / ".join(f"{k} {v}" for k, v in t.items()) if isinstance(t, dict) else t
-    wrong = ("none of those has a known answer yet" if a["wrong"] is None
-             else f"none of the {a['judged']} with a known answer was wrong" if a["wrong"] == 0
-             else f"{pct(a['wrong'])} of the {a['judged']} with a known answer were wrong")
-    return f"at act {t} it acts alone on {pct(a['automated'])} of rows, and {wrong}"
+def check_words(c: dict) -> str:
+    """"billing_share rate is above its maximum: 35% observed, 20% allowed" rather than a raw check key."""
+    if c["check"] == "expected answer":
+        return f"{c['on']} did not give the expected answer"
+    what, side = CHECK_WORDS.get(c["check"], (c["check"], ""))
+    fmt = lambda v: pct(v) if c["check"] in SHARE_CHECKS and isinstance(v, (int, float)) else f"{v:.3f}" if isinstance(v, float) else str(v)
+    bound = {"min": ("below its minimum", "required"), "max": ("above its maximum", "allowed")}.get(side, ("outside its limit", "limit"))
+    tail = f": {fmt(c['value'])} observed, {fmt(c['limit'])} {bound[1]}" if c.get("value") is not None else ""
+    return f"{c['on']} {what} is {bound[0]}{tail}"
 
 
-def metric_words(name: str, x: dict) -> str:
-    out = f"{name} (metric): fires on {pct(x['rate'])} of {x['rows']} rows"
-    for k, what in (("missed", "missed"), ("false_alarms", "false alarms")):
-        if (v := x.get(k)) and v.get("rate") is not None:
-            out += f"; {what} {pct(v['rate'])} ({pct(v['ci'][0])}–{pct(v['ci'][1])}, {v['of']} rows with gold)"
-    return out + "."
+def count(share: float | None, of: int) -> int:
+    return round((share or 0) * of)
 
 
-def summary(r: dict | None) -> list[str]:
-    """The judgment in a few sentences, made only of what `test` measured."""
-    if r is None:
-        return []
-    lines = []
-    for qid, q in r["questions"].items():
-        parts = [accuracy_words(q["accuracy"], q["gold"])] if q.get("accuracy") else ["no answer key or reviews yet"]
-        if w := act_words(q):
-            parts.append(w)
-        lines.append(f"{qid}: " + "; ".join(parts) + ".")
-    lines += [metric_words(k, x) for k, x in (r.get("metrics") or {}).items() if x.get("rate") is not None]
-    if ex := r.get("examples"):
-        lines.append(f"Pinned examples: {sum(x['passed'] for x in ex)} of {len(ex)} give the expected answer.")
-    return lines
+def evidence(n: str, m: dict, r: dict | None) -> list[dict]:
+    """One row per question, metric and example set, all at the same weight: what was measured, on what basis,
+    and what failed. Failing rows first. Built only from results.json."""
+    rows = []
+    rq = (r or {}).get("questions", {})
+    for qid in (m.get("questions") or {}):
+        parts = [k for k in rq if k == qid or k.startswith(qid + "__")]  # a multi question is tested per option
+        q = rq.get(qid) or {}
+        failed = [c | {"on": qid} for k in parts for c in rq[k].get("checks", []) if not c["passed"]]
+        a = q.get("accuracy")
+        if a and a["basis"] == "estimate":
+            reviewed = sum(v["reviewed"] for v in a.get("reviewed", {}).values())
+            lo, hi = a["ci"]
+            what, fig = f"estimated from {reviewed} reviewed rows", (a["value"], a)
+            words = f"{pct(a['value'])} right, {pct(lo)}–{pct(hi)}"
+        elif a:
+            g = q["gold"]["rows"]
+            what, fig = "agree with the answer key", (a["value"], a)
+            words = f"{count(a['value'], g)} of {g} rows"
+        else:
+            what, fig = ("answered, not tested per question" if parts and not q else "no answer key or reviews"), None
+            words = "not measured"
+        act = q.get("act")
+        if act:
+            t = " / ".join(f"{k} {v}" for k, v in act["threshold"].items()) if isinstance(act["threshold"], dict) else act["threshold"]
+            done = count(act["automated"], q["rows"])
+            wrong = ("none checkable yet" if act["wrong"] is None else "none wrong" if act["wrong"] == 0
+                     else f"{count(act['wrong'], act['judged'])} of {act['judged']} checked wrong")
+            act = f"at act {t}: acts alone on {done} of {q['rows']} rows, {wrong}"
+        rows.append({"id": qid, "anchor": qanchor(n, qid), "kind": "question", "value": words, "basis": what,
+                     "act": act, "fig": fig, "failed": failed})
+    for k, x in ((r or {}).get("metrics") or {}).items():
+        failed = [c | {"on": k} for c in x.get("checks", []) if not c["passed"]]
+        extra = [f"{w} {count(v['rate'], v['of'])} of {v['of']} ({pct(v['ci'][0])}–{pct(v['ci'][1])})"
+                 for key, w in (("missed", "missed"), ("false_alarms", "false alarms")) if (v := x.get(key)) and v.get("rate") is not None]
+        rows.append({"id": k, "anchor": None, "kind": "metric", "value": f"{x['fired']} of {x['rows']} rows ({pct(x['rate'])})"
+                     if x.get("rate") is not None else "no rows", "basis": f"rule {x['rule']}", "act": "; ".join(extra) or None,
+                     "fig": None, "failed": failed})
+    if ex := (r or {}).get("examples"):
+        failed = [{"on": f"example {x['name']}", "check": "expected answer", "passed": False, "severity": x.get("severity", "error")}
+                  for x in ex if not x["passed"]]
+        rows.append({"id": "pinned examples", "anchor": None, "kind": "examples", "value": f"{sum(x['passed'] for x in ex)} of {len(ex)} pass",
+                     "basis": "rows whose answers are pinned in the spec", "act": None, "fig": None, "failed": failed})
+    return sorted(rows, key=lambda x: not x["failed"])
 
 
 # ---------- lineage ----------
@@ -242,46 +267,12 @@ def e(x) -> str:
     return html.escape("" if x is None else str(x))
 
 
-def href(n: str, tab: str = "") -> str:
-    return f"#/j/{quote(n, safe='')}" + (f"/{tab}" if tab else "")
-
-
-def link(n: str) -> str:
-    return f'<a href="{href(n)}" class="mono">{e(n)}</a>'
-
-
 def text_of(v) -> str:
     return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False, indent=1)
 
 
 def pill(st: str) -> str:
     return f'<span class="pill st-{st}" title="{e(STATUS[st][1])}">{e(STATUS[st][0])}</span>'
-
-
-def interval(a: dict) -> str:
-    """Accuracy as what it is, a range: the track is 0–100%, the band the 95% interval, the dot the estimate."""
-    v, ci = a["value"], a.get("ci")
-    x = lambda f: 4 + f * 152  # 160 wide, 4 of margin each side so the dot never clips
-    band = f'<rect class="band" x="{x(ci[0]):.1f}" y="3" width="{max(x(ci[1]) - x(ci[0]), 2):.1f}" height="8" rx="4"/>' if ci else ""
-    return (f'<svg class="iv" viewBox="0 0 160 14" role="img" aria-label="{e(pct(v))}'
-            + (f", 95% interval {e(pct(ci[0]))} to {e(pct(ci[1]))}" if ci else "") + '">'
-            f'<rect class="track" x="4" y="5" width="152" height="4" rx="2"/>{band}'
-            f'<line class="tick" x1="{x(.5)}" x2="{x(.5)}" y1="2" y2="12"/><circle class="pt" cx="{x(v):.1f}" cy="7" r="3.5"/></svg>')
-
-
-def acc_cell(r: dict | None, sample: int | None) -> str:
-    if not r:
-        return '<span class="muted">–</span>'
-    qs = [(qid, q) for qid, q in r["questions"].items() if q.get("accuracy")]
-    if not qs:
-        return '<span class="muted">not measured</span>'
-    qid, q = min(qs, key=lambda x: x[1]["accuracy"]["value"])  # the weakest question is the one to know about
-    a = q["accuracy"]
-    ci = f" <small>{pct(a['ci'][0])}–{pct(a['ci'][1])}</small>" if a.get("ci") else ""
-    more = f"lowest of {len(qs)} · " if len(qs) > 1 else ""
-    return (f'<div class="acc"><span class="v">{pct(a["value"])}{ci}</span>{interval(a)}'
-            f'<span class="muted" style="font-size:12px">{more}<span class="mono">{e(qid)}</span>'
-            + (f" · sample of {sample}" if sample else "") + "</span></div>")
 
 
 def decides(m: dict) -> str:
@@ -314,23 +305,6 @@ def ordered(js: dict, st: dict) -> list[str]:
     return sorted(js, key=lambda n: (list(STATUS).index(st[n]), n))
 
 
-def sidebar(man: dict, st: dict) -> str:
-    js = man["judgments"]
-    counts = {k: sum(v == k for v in st.values()) for k in STATUS}
-    chips = "".join(f'<button class="chip" type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span>'
-                    f'{e(STATUS[k][0])} <span class="n">{c}</span></button>' for k, c in counts.items() if c)
-    groups = []
-    for k in STATUS:
-        names = [n for n in ordered(js, st) if st[n] == k]
-        if names:
-            groups.append(f'<section><h4>{e(STATUS[k][0])}</h4>' + "".join(
-                f'<a href="{href(n)}" data-name="{e(n)}" data-st="{k}" data-search="{e(search_text(n, js[n]))}">'
-                f'<span class="dot st-{k}"></span>{e(n)}</a>' for n in names) + "</section>")
-    return (f'<div class="chips" role="group" aria-label="Filter by status">{chips}</div>'
-            f'<nav class="tree" aria-label="Judgments">{"".join(groups)}</nav>'
-            '<nav class="side-links"><a href="#/">Overview</a><a href="#/lineage">Lineage</a></nav>')
-
-
 def readme(project: dict) -> str:
     """The first paragraph of the folder's README, as plain text: the project's own words for the overview."""
     root = Path(project["path"])
@@ -340,83 +314,6 @@ def readme(project: dict) -> str:
     paras = [p.strip() for p in f.read_text().split("\n\n")]
     first = next((p for p in paras if p and not p.startswith(("#", "```", "|", "<", "!", "-", "*"))), "")
     return " ".join(first.split()).replace("**", "").replace("`", "")
-
-
-def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: str, at: str | None) -> str:
-    js = man["judgments"]
-    counts = {k: sum(v == k for v in st.values()) for k in STATUS}
-    bar = "".join(f'<span class="st-{k}" style="flex:{c}" title="{c} {e(STATUS[k][0])}"></span>' for k, c in counts.items() if c)
-    legend = "".join(f'<button type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span><b>{c}</b>'
-                     f'<span class="lab">{e(STATUS[k][0])}</span></button>' for k, c in counts.items() if c)
-    rows = []
-    for n in ordered(js, st):
-        m, r = js[n], res.get(n)
-        acted = [q["act"] for q in (r or {}).get("questions", {}).values() if q.get("act")]
-        auto = (f'{pct(min(a["automated"] for a in acted))}<div class="muted" style="font-size:12px">at its act</div>'
-                if acted else '<span class="muted">–</span>')
-        rows.append(
-            f'<tr class="st-{st[n]}" data-st="{st[n]}" data-search="{e(search_text(n, m))}">'
-            f'<td><a class="name" href="{href(n)}">{e(n)}</a><div style="margin-top:6px">{pill(st[n])}</div></td>'
-            f'<td class="decides">{e(decides(m))}<div class="why"></div></td>'
-            f'<td>{acc_cell(r, sample)}</td><td class="num hide-sm">{auto}</td>'
-            f'<td class="hide-sm">{e(", ".join(x["name"] for x in m.get("exposures") or [])) or "<span class=muted>–</span>"}</td></tr>')
-    tested = f"last test {e(local(at))}" + (f" · sample of {sample} rows" if sample else "") if at else "no test results for this path yet"
-    return f"""<section id="home" class="home">
-<p class="eyebrow">Project</p><h1>{e(man['project'])}</h1>
-{f'<p class="lede">{e(about)}</p>' if about else ''}
-<div class="meta"><span>{len(js)} judgment{'s' * (len(js) != 1)}</span><span>{tested}</span>{f"<span>git {e(man['git_sha'])}</span>" if man['git_sha'] else ''}</div>
-<div class="health"><div class="bar" role="img" aria-label="{e(', '.join(f'{c} {STATUS[k][0]}' for k, c in counts.items() if c))}">{bar}</div>
-<div class="legend" role="group" aria-label="Filter by status">{legend}</div></div>
-<div class="table-wrap"><table class="inv"><thead><tr><th>Judgment</th><th>Decides</th><th>Accuracy</th><th class="hide-sm">Acts alone</th><th class="hide-sm">Used by</th></tr></thead>
-<tbody>{''.join(rows)}</tbody></table><p class="empty" id="none" hidden>No judgment matches. Clear the search or the status filter.</p></div>
-</section>"""
-
-
-def attention(m: dict, r: dict | None, st: str, at: str | None, run: list[dict], sample: int | None) -> str:
-    """Why the status is what it is, at the top of the page: the failing checks, or what makes the numbers old,
-    partial or missing."""
-    notes = []
-    if st == "noresults":
-        ran = f" It last ran {e(local(run[0].get('finished_at')))}." if run else ""
-        notes.append(f"The last <code>hunch test</code> of this path did not include this judgment: never tested, tested alone "
-                     f"with <code>--node</code> or through another path, or a test stopped by <code>--max-cost</code>.{ran}")
-    if st == "stale":
-        notes.append(f"The spec changed after its last test ({e(local(at))}): tested as <code>{e(r['spec_hash'])}</code>, now "
-                     f"<code>{e(m['spec_hash'])}</code>. The numbers below describe the older version; run <code>hunch test</code>.")
-    if sample and r:
-        notes.append(f"Measured on a sample of {sample} rows (<code>--sample {sample}</code>), not on every row.")
-    bad = [c for c in checks_of(r or {}) if not c["passed"]]
-
-    def fmt(c: dict, k: str) -> str:
-        v = c.get(k)
-        return pct(v) if c["check"] in SHARE_CHECKS and isinstance(v, (int, float)) else e(v)
-    items = "".join(f"<li><b>{e(c['on'])}</b> {e(c['check'])}"
-                    + (f": {fmt(c, 'value')}, limit {fmt(c, 'limit')}" if c.get("value") is not None else "")
-                    + ("" if c.get("severity", "error") == "error" else " (warn only)") + "</li>" for c in bad)
-    if not notes and not items:
-        return ""
-    return (f'<div class="why-box st-{st}">' + "".join(f"<p>{x}</p>" for x in notes)
-            + (f"<p>Failing at the last test:</p><ul>{items}</ul>" if items else "") + "</div>")
-
-
-def figures(r: dict | None, sample: int | None) -> str:
-    """One card per measured question: the estimate with its range, and what acting at `act` does."""
-    if not r:
-        return ""
-    cards = []
-    for qid, q in r["questions"].items():
-        a = q.get("accuracy")
-        if not a:
-            continue
-        basis = (f"estimated from {sum(v['reviewed'] for v in a.get('reviewed', {}).values())} reviewed rows"
-                 if a["basis"] == "estimate" else f"agrees with the answer key on {q['gold']['rows']} rows")
-        act = q.get("act")
-        act_line = (f"at act {e(act['threshold'])}: acts alone on {pct(act['automated'])}"
-                    + ("" if act["wrong"] is None else f", {pct(act['wrong'])} of those wrong") if act else "no act threshold")
-        ci = f"<small>{pct(a['ci'][0])}–{pct(a['ci'][1])}</small>" if a.get("ci") else ""
-        cards.append(f'<div class="fig"><span class="q">{e(qid)}</span><b>{pct(a["value"])}{ci}</b>{interval(a)}'
-                     f'<span class="sub">{e(basis)}{" (sample)" if sample else ""}</span><span class="sub">{act_line}</span></div>')
-    return f'<div class="figs">{"".join(cards)}</div>' if cards else ""
 
 
 def output_columns(spec: dict) -> list[tuple[str, str]]:
@@ -482,15 +379,144 @@ def dial_table(q: dict) -> str:
             f"count every row. Pick <code>act</code> where the wrong share is one you can live with.</p><table class='data num'>{head}{body}</table>")
 
 
-def question_block(qid: str, q: dict, r: dict | None) -> str:
+def anchor_href(anchor: str) -> str:
+    return "#" + quote(anchor, safe="")
+
+
+def href(n: str) -> str:
+    return anchor_href("j-" + n)
+
+
+def qanchor(n: str, qid: str) -> str:
+    return f"q-{n}--{qid}"
+
+
+def link(n: str) -> str:
+    return f'<a href="{href(n)}" class="mono">{e(n)}</a>'
+
+
+def interval(a: dict) -> str:
+    """Drawn only when there is a range: the track is 0–100%, the band the 95% interval, the dot the estimate."""
+    ci = a.get("ci")
+    if not ci:
+        return ""
+    x = lambda f: 4 + f * 152  # 160 wide, 4 of margin each side so the dot never clips
+    return (f'<svg class="iv" viewBox="0 0 160 14" role="img" aria-label="95% interval {e(pct(ci[0]))} to {e(pct(ci[1]))}">'
+            f'<rect class="track" x="4" y="5" width="152" height="4" rx="2"/>'
+            f'<rect class="band" x="{x(ci[0]):.1f}" y="3" width="{max(x(ci[1]) - x(ci[0]), 2):.1f}" height="8" rx="4"/>'
+            f'<circle class="pt" cx="{x(a["value"]):.1f}" cy="7" r="3.5"/></svg>')
+
+
+def acc_cell(r: dict | None, sample: int | None) -> str:
+    """The weakest measured question, with its basis: the one a reader should know about."""
+    if not r:
+        return '<span class="muted">–</span>'
+    qs = [(qid, q) for qid, q in r["questions"].items() if q.get("accuracy")]
+    if not qs:
+        return '<span class="muted">not measured</span>'
+    qid, q = min(qs, key=lambda x: x[1]["accuracy"]["value"])
+    a = q["accuracy"]
+    basis = (f"{pct(a['ci'][0])}–{pct(a['ci'][1])}, reviewed" if a["basis"] == "estimate"
+             else f"{count(a['value'], q['gold']['rows'])} of {q['gold']['rows']} agree with key")
+    more = f" · lowest of {len(qs)}" if len(qs) > 1 else ""
+    return (f'<div class="acc"><span class="v">{pct(a["value"])} <small>{e(basis)}</small></span>{interval(a)}'
+            f'<span class="muted" style="font-size:12px"><span class="mono">{e(qid)}</span>{more}'
+            + (f" · sample of {sample}" if sample else "") + "</span></div>")
+
+
+def sidebar(man: dict, st: dict) -> str:
+    """Every judgment, grouped by status, on every screen. Search narrows it; status filters never do."""
+    js = man["judgments"]
+    groups = []
+    for k in STATUS:
+        names = [n for n in ordered(js, st) if st[n] == k]
+        if names:
+            groups.append(f'<section><h4>{e(STATUS[k][0])}</h4>' + "".join(
+                f'<a href="{href(n)}" data-name="{e(n)}" data-search="{e(search_text(n, js[n]))}">'
+                f'<span class="dot st-{k}"></span>{e(n)}</a>' for n in names) + "</section>")
+    return (f'<nav class="tree" aria-label="Judgments">{"".join(groups)}</nav><p class="empty-side" id="none-side" hidden>No match.</p>'
+            '<nav class="side-links" aria-label="Views"><a href="#home">Overview</a><a href="#lineage">Lineage</a></nav>')
+
+
+def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: str, at: str | None) -> str:
+    js = man["judgments"]
+    counts = {k: sum(v == k for v in st.values()) for k in STATUS}
+    bar = "".join(f'<span class="st-{k}" style="flex:{c}" title="{c} {e(STATUS[k][0])}"></span>' for k, c in counts.items() if c)
+    legend = "".join(f'<button type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span><b>{c}</b>'
+                     f'<span class="lab">{e(STATUS[k][0])}</span></button>' for k, c in counts.items() if c)
+    rows = []
+    for n in ordered(js, st):
+        m, r = js[n], res.get(n)
+        failing = [check_words(c) for c in checks_of(r or {}) if not c["passed"]] if st[n] in ("fail", "warn") else []
+        reason = failing[0] + (f" (+{len(failing) - 1} more)" if len(failing) > 1 else "") if failing else ""
+        rows.append(
+            f'<tr class="st-{st[n]}" data-st="{st[n]}" data-search="{e(search_text(n, m))}">'
+            f'<td><a class="name" href="{href(n)}">{e(n)}</a><div style="margin-top:6px">{pill(st[n])}</div></td>'
+            f'<td class="decides">{e(decides(m))}' + (f'<div class="reason">{e(reason)}</div>' if reason else "")
+            + f'<div class="why"></div></td><td>{acc_cell(r, sample)}</td>'
+            f'<td class="hide-sm">{e(", ".join(x["name"] for x in m.get("exposures") or [])) or "<span class=muted>–</span>"}</td></tr>')
+    tested = f"last test {e(local(at))}" + (f" · sample of {sample} rows" if sample else "") if at else "no test results for this path yet"
+    return f"""<section id="home" class="home">
+<p class="eyebrow">Project</p><h1>{e(man['project'])}</h1>
+{f'<p class="lede">{e(about)}</p>' if about else ''}
+<div class="meta"><span>{len(js)} judgment{'s' * (len(js) != 1)}</span><span>{tested}</span>{f"<span>git {e(man['git_sha'])}</span>" if man['git_sha'] else ''}</div>
+<div class="health"><div class="bar" role="img" aria-label="{e(', '.join(f'{c} {STATUS[k][0]}' for k, c in counts.items() if c))}">{bar}</div>
+<div class="legend" role="group" aria-label="Show only one status">{legend}<button type="button" class="reset" hidden>Show all</button></div></div>
+<div class="table-wrap"><table class="inv"><thead><tr><th>Judgment</th><th>Decides</th><th>Accuracy</th><th class="hide-sm">Used by</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table><p class="empty" id="none" hidden>No judgment matches. <button type="button" class="reset linkish">Clear search and filter</button></p></div>
+</section>"""
+
+
+def status_summary(m: dict, r: dict | None, st: str, at: str | None, run: list[dict], sample: int | None, ev: list[dict]) -> str:
+    """One short statement of the current result and the next useful step; the numbers live in the evidence list."""
+    if st in ("fail", "warn"):
+        bad = [(row, c) for row in ev for c in row["failed"]]  # named and linked here; the numbers are in the evidence row
+        what = ", ".join(f'<a href="{anchor_href("ev-" + row["id"])}">{e(c["on"])}</a>' for row, c in bad)
+        head = "Failing at the last test" if st == "fail" else "A check marked warn failed at the last test"
+        body = f"<p><b>{head}:</b> {what}. The evidence below has the observed values and limits.</p>"
+    elif st == "stale":
+        body = (f"<p><b>The spec changed after its last test</b> ({e(local(at))}). The evidence below describes the older "
+                f"version (<code>{e(r['spec_hash'])}</code>; now <code>{e(m['spec_hash'])}</code>). Run <code>hunch test</code>.</p>")
+    elif st == "noresults":
+        ran = f" It last ran {e(local(run[0].get('finished_at')))}." if run else ""
+        body = ("<p><b>No test results for this judgment.</b> The last <code>hunch test</code> of this path did not include it: "
+                f"never tested, tested alone with <code>--node</code> or through another path, or stopped by <code>--max-cost</code>.{ran}</p>")
+    elif st == "nogold":
+        body = ("<p><b>Tested, but nothing to measure against.</b> Add an answer key column (<code>gold:</code>) or review rows "
+                "with <code>hunch review</code>.</p>")
+    else:
+        body = "<p><b>Passing</b> every configured check. That says the checks hold, not that every answer is right.</p>"
+    if sample and r:
+        body += f"<p>Measured on a sample of {sample} rows (<code>--sample {sample}</code>), not on every row.</p>"
+    return f'<div class="status st-{st}" role="status">{body}</div>'
+
+
+def evidence_html(ev: list[dict], stale: bool) -> str:
+    if not ev:
+        return ""
+    rows = []
+    for x in ev:
+        name = f'<a href="{anchor_href(x["anchor"])}" class="mono">{e(x["id"])}</a>' if x["anchor"] else f'<span class="mono">{e(x["id"])}</span>'
+        kind = "" if x["kind"] == "question" else f' <span class="muted">{e(x["kind"])}</span>'
+        mark = "✗" if any(c.get("severity", "error") == "error" for c in x["failed"]) else "!" if x["failed"] else ""
+        fails = "".join(f'<div class="fail">{e(check_words(c))}</div>' for c in x["failed"])
+        rows.append(f'<li id="ev-{e(x["id"])}" class="{"bad" if x["failed"] else ""}"><div class="ev-name">{f"<span class=mk>{mark}</span>" if mark else ""}{name}{kind}</div>'
+                    f'<div class="ev-val"><b>{e(x["value"])}</b> <span class="muted">{e(x["basis"])}</span>'
+                    + (interval(x["fig"][1]) if x["fig"] else "")
+                    + (f'<div class="muted">{e(x["act"])}</div>' if x["act"] else "") + f"{fails}</div></li>")
+    title = "Evidence from the older version" if stale else "Evidence"
+    return f'<div><h2>{title}</h2><ul class="evidence">{"".join(rows)}</ul></div>'
+
+
+def question_block(n: str, qid: str, q: dict, r: dict | None) -> str:
     opts = options_of(q)
-    parts = [f"<h3>{e(qid)}</h3><p class='qtext'>{e(text_of(q.get('instructions')))}</p>"]
+    parts = [f"<h3 id='{e(qanchor(n, qid))}'>{e(qid)}</h3><p class='qtext'>{e(text_of(q.get('instructions')))}</p>"]
     if opts:
-        parts.append("<table class='data opts'>" + "".join(f"<tr><td><code>{e(k)}</code></td><td>{e(text_of(v))}</td></tr>"
-                                                           for k, v in opts) + "</table>")
+        parts.append("<div class='scroll'><table class='data opts'>" + "".join(
+            f"<tr><td><code>{e(k)}</code></td><td>{e(text_of(v))}</td></tr>" for k, v in opts) + "</table></div>")
     esc = (q.get("escalate") or {}).get("model")
-    meta = [f"type <code>{e(q.get('type'))}</code>"] + ([f"act <code>{e(q['act'])}</code>"] if "act" in q else []) \
-        + ([f"gold column <code>{e(q['gold'])}</code>"] if q.get("gold") else []) \
+    meta = [f"type <code>{e(q.get('type'))}</code>"] + ([f"acts alone at confidence <code>{e(q['act'])}</code>"] if "act" in q else []) \
+        + ([f"answer key column <code>{e(q['gold'])}</code>"] if q.get("gold") else []) \
         + ([f"uncertain answers re-asked of <code>{e(esc)}</code>"] if esc else [])
     parts.append(f"<p class='note'>{' · '.join(meta)}</p>")
     if r:
@@ -501,79 +527,63 @@ def question_block(qid: str, q: dict, r: dict | None) -> str:
         cal += [f"AUROC {r['auroc']:.3f}: how well p(yes) separates yes from no; 0.5 is a coin toss."] if r.get("auroc") is not None else []
         if cal:
             parts.append(f"<details><summary>Calibration</summary><p class='note'>{'<br>'.join(e(c) for c in cal)}</p></details>")
-        if r.get("checks"):
-            parts.append("<details><summary>Checks</summary><table class='data num'><tr><th></th><th>check</th><th>value</th><th>limit</th></tr>"
-                         + "".join(f"<tr><td>{'✓' if c['passed'] else '✗' if c.get('severity') == 'error' else '!'}</td>"
-                                   f"<td><code>{e(c['check'])}</code></td><td>{e(c.get('value'))}</td><td>{e(c.get('limit'))}</td></tr>"
-                                   for c in r["checks"]) + "</table></details>")
         mk = r.get("mistakes") or {}
         if mk.get("total"):
             parts.append(f"<details><summary>Most confident mistakes ({mk['total']})</summary><p class='note'>Wrong with high "
                          "confidence: a dangerous mistake, or a wrong answer key. <code>hunch review</code> shows them first.</p>"
-                         "<table class='data'><tr><th>row</th><th>got</th><th>p</th><th>gold</th></tr>" + "".join(
+                         "<div class='scroll'><table class='data'><tr><th>row</th><th>got</th><th>p</th><th>key says</th></tr>" + "".join(
                              f"<tr><td class='mono'>{e(x['id'])}</td><td>{e(x['got'])}</td><td class='num'>{e(x['p'])}</td>"
-                             f"<td>{e(' | '.join(x['gold']))}</td></tr>" for x in mk["most_confident"]) + "</table></details>")
-    return "<div>" + "".join(parts) + "</div>"
+                             f"<td>{e(' | '.join(x['gold']))}</td></tr>" for x in mk["most_confident"]) + "</table></div></details>")
+    return "<div class='question'>" + "".join(parts) + "</div>"
 
 
 def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: list[dict], at: str | None, sample: int | None,
                   downstream: list[str], mini: str) -> str:
+    ev = evidence(n, m, r)
     reads = f"<code>{e(src[2])}</code>" if (src := source_node(m)) else " + ".join(link(u) for u in m["upstream"])
-    exposures = "<br>".join(
-        f"{e(x['name'])} <span class='muted'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
+    exposures = "".join(
+        f"<li>{e(x['name'])} <span class='muted'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
         f"{' · reads ' + e(', '.join(x['uses'])) if x.get('uses') else ' · reads every answer'}</span>"
         + (f" <a href='{e(x['url'])}' rel='noopener'>open</a>" if str(x.get("url", "")).startswith(("https://", "http://")) else "")
-        + (f"<br><span class='muted'>{e(x['description'])}</span>" if x.get("description") else "")
+        + (f"<div class='muted'>{e(x['description'])}</div>" if x.get("description") else "") + "</li>"
         for x in m.get("exposures") or [])
-    facts = (f"<dt>Reads</dt><dd>{reads}" + (f" where <code>{e(m['where'])}</code>" if m.get("where") else "") + "</dd>"
-             f"<dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in m.get('state', [])) or '–'}"
-             + (f"<br><span class='muted'>removed first: {e(', '.join(m['redact']))}</span>" if m.get("redact") else "") + "</dd>"
-             f"<dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>"
-             f"<dt>Used by</dt><dd>{exposures or '–'}</dd>"
-             f"<dt>Engine</dt><dd><code>{e(m.get('model'))}</code></dd>")
-    sums = "".join(f"<li>{e(x)}</li>" for x in summary(r))
-    union = (f"<p>Merges the answers to <code>{e(m.get('question'))}</code> from "
-             f"{', '.join(link(u) for u in m['union'])}.</p>") if "union" in m else ""
-    rmetrics = (r or {}).get("metrics") or {}
-    metrics = "".join(f"<li><code>{e(k)}</code>: <code>{e((v or {}).get('rule'))}</code>"
-                      + (f", fires on {pct(rmetrics[k]['rate'])}" if rmetrics.get(k, {}).get("rate") is not None else "") + "</li>"
-                      for k, v in (m.get("metrics") or {}).items())
-    examples = "".join(f"<li>{'✓' if x['passed'] else '✗'} {e(x['name'])}</li>" for x in (r or {}).get("examples") or [])
+    rail = (f"<dl class='facts'><dt>Reads</dt><dd>{reads}" + (f"<div class='muted'>where <code>{e(m['where'])}</code></div>" if m.get("where") else "")
+            + f"</dd><dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in m.get('state', [])) or '–'}"
+            + (f"<div class='muted'>removed first: {e(', '.join(m['redact']))}</div>" if m.get("redact") else "")
+            + f"</dd><dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>"
+            f"<dt>Used by</dt><dd>{f'<ul class=plain>{exposures}</ul>' if exposures else '–'}</dd>"
+            f"<dt>Engine</dt><dd><code>{e(m.get('model'))}</code></dd></dl>"
+            f"<div class='dagbox mini'>{mini}</div><a href='#lineage/{quote(n, safe='')}' class='small'>Open in the full lineage</a>")
+    union = (f"<p>Merges the answers to <code>{e(m.get('question'))}</code> from {', '.join(link(u) for u in m['union'])}.</p>"
+             if "union" in m else "")
+    qs = "".join(question_block(n, qid, q, (r or {}).get("questions", {}).get(qid)) for qid, q in (m.get("questions") or {}).items())
+    metrics = "".join(f"<li><code>{e(k)}</code>: <code>{e((v or {}).get('rule'))}</code></li>" for k, v in (m.get("metrics") or {}).items())
     runs_html = "".join(f"<tr><td>{e((x.get('finished_at') or '')[:16].replace('T', ' '))}</td><td>{e(x.get('rows'))}</td>"
                         f"<td>{e(x.get('asked'))}</td><td>${(x.get('cost') or 0):.4f}</td><td class='muted'>{e(x.get('status'))}</td></tr>"
                         for x in run)
-    qs = "".join(question_block(qid, q, (r or {}).get("questions", {}).get(qid)) for qid, q in (m.get("questions") or {}).items())
     cols = "".join(f"<tr><td><code>{e(c)}</code></td><td>{e(w)}</td></tr>" for c, w in output_columns(spec))
     f = spec.get("_file")
     note, req = request_example(spec)
-    tabs = [("overview", "Overview"), ("questions", "Questions"), ("output", "Output columns"), ("spec", "Spec"), ("request", "Request")]
-    tested = f"tested {e(local(at))}" if r else "no test results"
-    overview = f"""<div class="two"><div style="display:grid;gap:18px">
-{f'<ul class="summary">{sums}</ul>' if sums else ''}<dl class="facts">{facts}</dl></div>
-<div style="display:grid;gap:8px"><p class="eyebrow">Lineage</p><div class="dagbox mini">{mini}</div>
-<a href="#/lineage/{quote(n, safe='')}" style="font-size:13px">Open in the full lineage</a></div></div>
-{f'<div><h2>Metrics</h2><ul class="summary">{metrics}</ul></div>' if metrics else ''}
-{f'<div><h2>Pinned examples</h2><ul class="summary">{examples}</ul></div>' if examples else ''}
-{f'<div><h2>Recent runs</h2><div style="overflow-x:auto"><table class="data num"><tr><th>finished</th><th>rows</th><th>asked</th><th>cost</th><th>status</th></tr>{runs_html}</table></div></div>' if runs_html else ''}"""
-    panes = {
-        "overview": overview,
-        "questions": union + (qs or "<p class='note'>No questions of its own.</p>"),
-        "output": ("<p class='note'>The table this judgment writes to the store: what an app or a downstream judgment reads. "
-                   f"Its name in the store is <code>{e(core.table_name(spec))}</code>.</p>"
-                   f"<div style='overflow-x:auto'><table class='data'><tr><th>column</th><th>holds</th></tr>{cols}</table></div>"),
-        "spec": (f"<p class='note'><code>{e(m['file'])}</code> · spec hash <code>{e(m['spec_hash'])}</code></p>"
-                 f"<pre>{yaml_html(Path(f).read_text()) if f and Path(f).exists() else ''}</pre>"),
-        "request": (f"<p class='note'>{e(note)} The row's fields are shown as placeholders; nothing from your data is on this page.</p>"
-                    + (f"<pre>{e(req)}</pre>" if req else "")),
-    }
-    return f"""<section id="j-{e(n)}" hidden>
-<p class="crumb"><a href="#/">Overview</a> / judgment</p>
-<div class="jhead"><h1>{e(n)}</h1>{pill(st)}</div>
-{f'<p class="desc">{e(m["description"])}</p>' if m.get("description") else ''}
-<div class="meta"><span>{tested}</span><span>spec <code>{e(m['file'])}</code></span></div>
-{attention(m, r, st, at, run, sample)}{figures(r, sample)}
-<nav class="tabs" role="tablist">{''.join(f'<a role="tab" data-tab="{k}" href="{href(n, k)}" aria-selected="false">{label}</a>' for k, label in tabs)}</nav>
-{''.join(f'<div class="pane" data-tab="{k}" role="tabpanel" hidden>{v}</div>' for k, v in panes.items())}
+    title = m.get("description") or n
+    tech = [("Output columns", f"<p class='note'>The table this judgment writes to the store, <code>{e(core.table_name(spec))}</code>: "
+             f"what an app or a downstream judgment reads.</p><div class='scroll'><table class='data'><tr><th>column</th><th>holds</th></tr>{cols}</table></div>"),
+            ("Spec", f"<p class='note'><code>{e(m['file'])}</code> · spec hash <code>{e(m['spec_hash'])}</code></p>"
+             f"<pre>{yaml_html(Path(f).read_text()) if f and Path(f).exists() else ''}</pre>"),
+            ("Request", f"<p class='note'>{e(note)} The row's fields are placeholders.</p>" + (f"<pre>{e(req)}</pre>" if req else ""))]
+    if runs_html:
+        tech.append(("Recent runs", f"<div class='scroll'><table class='data num'><tr><th>finished</th><th>rows</th><th>asked</th>"
+                                    f"<th>cost</th><th>status</th></tr>{runs_html}</table></div>"))
+    return f"""<section id="j-{e(n)}" class="judgment">
+<p class="crumb"><a href="#home">Overview</a> / judgment</p>
+<div class="jhead"><h1{' class="is-id"' if title == n else ''}>{e(title)}</h1></div>
+<div class="meta"><span class="mono id">{e(n)}</span>{pill(st)}<span>{f"tested {e(local(at))}" if r else "no test results"}</span><span>spec <code>{e(m['file'])}</code></span></div>
+<div class="grid"><div class="flow">
+{status_summary(m, r, st, at, run, sample, ev)}
+{evidence_html(ev, st == "stale")}
+<div><h2>Questions and criteria</h2>{union}{qs or "<p class='note'>No questions of its own.</p>"}</div>
+{f'<div><h2>Metrics</h2><ul class="summary">{metrics}</ul></div>' if metrics and not (r or {}).get("metrics") else ''}
+<div><h2>Technical reference</h2>{''.join(f'<details><summary>{k}</summary>{v}</details>' for k, v in tech)}</div>
+</div><aside class="rail" aria-label="Inputs and consumers"><p class="eyebrow">Inputs and consumers</p>{rail}</aside></div>
 </section>"""
 
 
@@ -583,12 +593,15 @@ def page(project: dict, man: dict, results: dict | None, run: dict, st: dict[str
     down = {n: [d for d, dm in js.items() if n in dm["upstream"]] for n in js}
     pages = "".join(judgment_page(n, m, project["nodes"][n], res.get(n), st[n], run.get(n, []), at, sample, down[n],
                                   lineage_svg(lineage(neighbourhood(man, n)), st, mini=True)) for n, m in js.items())
-    lin = ('<section id="lineage" hidden><p class="eyebrow">Project</p><h1 style="font-size:34px">Lineage</h1>'
+    lin = ('<section id="lineage"><p class="eyebrow">Project</p><h1 style="font-size:34px">Lineage</h1>'
            '<p class="lede">Sources on the left, then judgments, then what uses them. Select a judgment to light up what it reads '
            'from and what depends on it; select it again to open it. Scroll to zoom, drag to move.</p>'
            '<div class="dagbox big" style="margin-top:18px"><div class="tools"><button type="button" data-z="in">Zoom in</button>'
            '<button type="button" data-z="out">Zoom out</button><button type="button" data-z="fit">Fit</button></div>'
-           f'{lineage_svg(lineage(man), st)}</div></section>')
+           f'{lineage_svg(lineage(man), st)}</div>'
+           '<details class="edges"><summary>Every connection, as text</summary><ul class="plain">'
+           + "".join(f"<li>{e(a.split(':', 1)[-1])} → {e(b.split(':', 1)[-1])}</li>" for a, b in lineage(man)["edges"])
+           + '</ul></details></section>')
     made = "Generated " + datetime.now().astimezone().strftime("%Y-%m-%d %H:%M") + " by hunch docs from the last hunch test of this path."
     fill = {"{{title}}": e(man["project"]), "{{mark}}": MARK, "{{sidebar}}": sidebar(man, st), "{{generated}}": e(made),
             "{{body}}": home(man, res, st, run, sample, readme(project), at) + pages + lin}

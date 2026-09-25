@@ -19,7 +19,7 @@ It asks the engine nothing and costs nothing. It reads the specs, the results of
 
 ## Every judgment gets one status
 
-The page opens on the project: its README's first paragraph, a bar of statuses, and the judgments with the ones that need a look first. A sidebar lists every judgment by status on every screen, with a search box (press `/`) and a filter per status.
+The page opens on the project: its README's first paragraph, a bar of statuses, and the judgments with the ones that need a look first. A sidebar lists every judgment by status on every screen, with a search box (press `/`). Select a status in the bar to narrow the list to it; the sidebar keeps listing everything.
 
 | Status | Means |
 | --- | --- |
@@ -34,19 +34,13 @@ A test records a hash of each spec it measured. When the spec on disk no longer 
 
 ## A judgment's page starts with the answer
 
-Each judgment has a page that opens with a few sentences built from what `test` measured, for example:
+Each judgment's page reads top to bottom in the order a reviewer needs it: what the judgment decides, one line on its status (which check failed, or why the numbers are old or missing), then the evidence, the questions, and the technical detail.
 
-> department: agrees with the answer key on 100% of the 40 rows that have one; at act 0.8 it acts alone on 100% of rows, and none of the 40 with a known answer was wrong.
+The evidence is one list, a row per question and metric, each at the same weight: failing rows first, each number with its basis. For example, a question with an answer key reads *40 of 40 rows agree with the answer key; at act 0.8 it acts alone on 40 of 40 rows, none wrong*, and one without reads *not measured: no answer key or reviews*. When the accuracy comes from reviews it has a 95% interval, drawn as a band with its endpoints.
 
-Each measured question also gets a card with its accuracy drawn as a range: the band is the 95% interval, the dot the estimate. Below that, tabs:
+Next come the questions, word for word with their options, each with its dial, calibration and most confident mistakes folded under it. Last, the technical reference: the table the judgment writes to the store (the columns an app reads), the spec as written, the shape of one request with the row's fields as placeholders, and recent runs. Beside it all sit its inputs and consumers: where rows come from, what the model sees and what is removed first, what reads its answers and what uses them, and a small lineage.
 
-| Tab | Shows |
-| --- | --- |
-| Overview | The sentences, where rows come from, what the model sees and what is removed first, what reads its answers and what uses them, a small lineage, metrics, examples and recent runs. |
-| Questions | Each question word for word with its options, then the dial, calibration, every check and the most confident mistakes. |
-| Output columns | The table the judgment writes to the store, column by column: what an app or a downstream judgment reads. |
-| Spec | The YAML file as written. |
-| Request | The shape of one request the engine receives, with the row's fields as placeholders. The page never includes rows from your data, so it is safe to share. |
+The page includes no text from your rows. It does include the spec, exposure details, and for the most confident mistakes their row ids and answer-key labels, so share it as you would share the spec.
 
 ## Say what uses a judgment
 

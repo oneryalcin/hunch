@@ -60,7 +60,6 @@ h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: .005
 .search input::placeholder { color: var(--muted) }
 .search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 11px var(--mono); color: var(--muted);
   border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: var(--raise) }
-.chips { display: flex; flex-wrap: wrap; gap: 6px }
 .chip { font: 500 12px/1 var(--body); border: 1px solid var(--line); background: var(--paper); color: var(--soft);
   border-radius: 99px; padding: 5px 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px }
 .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent) }
@@ -124,10 +123,39 @@ table.inv .why { font-size: 12px; color: var(--accent) }
 .iv .track { fill: var(--hair) } .iv .band { fill: var(--mark); opacity: .45 } .iv .pt { fill: var(--ink) }
 .iv .tick { stroke: var(--line) }
 
-/* judgment page */
+/* judgment page: decision, status, evidence, questions, then reference; inputs and consumers in a rail */
+.jhead h1.is-id { font: 500 30px/1.15 var(--mono); letter-spacing: -.01em; overflow-wrap: anywhere }
+.meta .id { color: var(--soft); background: var(--hair); padding: 2px 7px; border-radius: 5px; user-select: all }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; margin-top: 22px; align-items: start }
+.flow { display: grid; gap: 30px; min-width: 0 }
+.flow h2 { font-size: 21px; margin-bottom: 10px }
+.rail { position: sticky; top: 20px; display: grid; gap: 12px }
+.rail .facts { grid-template-columns: 1fr; gap: 2px; padding: 14px 16px; font-size: 14px }
+.rail .facts dd { margin-bottom: 10px }
+.status { padding: 14px 18px; border-radius: 12px; background: var(--t); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent) }
+.status p, .status ul { margin: 0 } .status ul { padding-left: 18px; margin-top: 6px } .status p + p { margin-top: 6px }
+.st-ok.status { background: transparent; border-color: var(--line) }
+.evidence { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px }
+.evidence li { display: grid; grid-template-columns: minmax(120px, 200px) minmax(0, 1fr); gap: 6px 20px; padding: 14px 16px; border-top: 1px solid var(--hair) }
+.evidence li:first-child { border-top: 0 }
+.evidence li.bad { box-shadow: inset 3px 0 0 var(--fail) }
+.ev-name { font-size: 14px; overflow-wrap: anywhere } .ev-name .mk { color: var(--fail); font-weight: 700; margin-right: 6px }
+.ev-val { display: grid; gap: 4px; font-size: 14px } .ev-val b { font: 600 17px var(--display); margin-right: 6px }
+.ev-val .fail { color: var(--fail); font-weight: 500 }
+.question + .question { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--hair) }
+.question h3 { scroll-margin-top: 20px }
+.scroll { overflow-x: auto; max-width: 100% }
+.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
+.small { font-size: 13px }
+.reason { font-size: 13px; color: var(--fail); margin-top: 4px }
+.reset { font: 500 13px var(--body) } .linkish { all: unset; color: var(--accent); cursor: pointer; text-decoration: underline }
+.legend .reset { color: var(--accent) }
+.edges { margin-top: 14px }
+.empty-side { color: var(--muted); font-size: 13px; margin: 0 }
+
 .crumb { font-size: 13px; color: var(--muted) }
 .jhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px }
-.jhead h1 { font: 500 30px/1.15 var(--mono); letter-spacing: -.01em; overflow-wrap: anywhere }
+.jhead h1 { font: 600 32px/1.12 var(--display); max-width: 40ch }
 .desc { font-size: 17px; color: var(--soft); max-width: 66ch; margin: 10px 0 0 }
 .why-box { margin: 18px 0 0; padding: 12px 16px; border-radius: 10px; background: var(--t); color: var(--ink); display: grid; gap: 4px }
 .why-box p, .why-box ul { margin: 0 } .why-box ul { padding-left: 18px }
@@ -180,12 +208,14 @@ pre .k { color: var(--accent-ink); font-weight: 500 } pre .c { color: var(--mute
 .dag.focus .edge.on { stroke: var(--accent); stroke-opacity: 1; stroke-width: 2 }
 .dag .sel rect { stroke-width: 3 }
 
+@media (max-width: 1180px) { .grid { grid-template-columns: minmax(0, 1fr) 260px; gap: 24px } }
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr }
   .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line) }
   .menu { display: inline-flex; align-self: flex-start }
-  .side:not(.open) .tree, .side:not(.open) .chips, .side:not(.open) footer { display: none }
-  .two { grid-template-columns: 1fr }
+  .side:not(.open) .tree, .side:not(.open) footer { display: none }
+  .grid { grid-template-columns: 1fr } .rail { position: static }
+  .evidence li { grid-template-columns: 1fr }
   .home h1 { font-size: 32px }
   table.inv .hide-sm, table.inv thead { display: none }
   table.inv tr { display: grid; gap: 8px; padding: 14px; box-shadow: inset 3px 0 0 var(--c); border-bottom: 1px solid var(--hair) }
@@ -211,50 +241,47 @@ pre .k { color: var(--accent-ink); font-weight: 500 } pre .c { color: var(--mute
 <main id="main">{{body}}</main>
 </div>
 <script>
+// Every section is in the HTML and readable without this script: anchors scroll to it. The script only shows one
+// section at a time, narrows the lists, and lets the lineage pan, zoom and highlight.
 const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const store = { get(k) { try { return localStorage.getItem(k) } catch { return null } }, set(k, v) { try { localStorage.setItem(k, v) } catch {} } };
-let filter = null;  // a status the list is narrowed to
+let filter = null;  // a status the overview list is narrowed to (the sidebar always lists every judgment)
 
 function route() {
-  const h = decodeURIComponent(location.hash.slice(1) || "/");
-  $$("main > section").forEach(s => s.hidden = true);
-  $$(".tree a, .side-links a").forEach(a => a.removeAttribute("aria-current"));
-  let m;
-  if ((m = h.match(/^\/j\/(.+?)(?:\/(overview|questions|output|spec|request))?$/))) {
-    const s = document.getElementById("j-" + m[1]);
-    if (s) {
-      s.hidden = false;
-      const tab = m[2] || "overview";
-      $$(".tabs a", s).forEach(a => a.setAttribute("aria-selected", a.dataset.tab === tab));
-      $$(".pane", s).forEach(p => p.hidden = p.dataset.tab !== tab);
-      const cur = $$(".tree a").find(a => a.dataset.name === m[1]); if (cur) cur.setAttribute("aria-current", "page");
-      scrollTo(0, 0); return;
-    }
-  }
-  if ((m = h.match(/^\/lineage(?:\/(.+))?$/))) {
-    $("#lineage").hidden = false; $(".side-links a[href='#/lineage']").setAttribute("aria-current", "page");
-    focusNode($("#lineage .dag"), m[1] || null); if (!m[1]) fit(); return;
-  }
-  $("#home").hidden = false; $(".side-links a[href='#/']").setAttribute("aria-current", "page");
+  const h = decodeURIComponent(location.hash.slice(1));
+  let target = h ? document.getElementById(h) : null, focus = null;
+  if (!target && h.startsWith("lineage/")) { target = $("#lineage"); focus = h.slice(8); }
+  target = target || $("#home");
+  const sec = target.closest("main > section");
+  $$("main > section").forEach(s => s.hidden = s !== sec);
+  const cur = "#" + encodeURIComponent(sec.id);
+  $$(".tree a, .side-links a").forEach(a => a.getAttribute("href") === cur ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  if (sec.id === "lineage") { focusNode($("#lineage .dag"), focus); if (!focus) fit(); }
+  if (target !== sec) target.scrollIntoView(); else scrollTo(0, 0);
 }
 
-// search and status filter narrow both the sidebar and the table
 function apply() {
   const q = $("#q").value.trim().toLowerCase();
-  let shown = 0;
-  $$("[data-search]").forEach(el => {
-    const f = JSON.parse(el.dataset.search), hit = q ? Object.entries(f).find(([k, v]) => v.toLowerCase().includes(q)) : ["name"];
-    const ok = !!hit && (!filter || el.dataset.st === filter);
-    el.hidden = !ok;
-    if (el.tagName === "TR") { shown += ok; const w = $(".why", el); if (w) w.textContent = q && hit && hit[0] !== "name" ? "matches " + hit[0] : ""; }
-  });
+  const match = el => { const f = JSON.parse(el.dataset.search); return q ? Object.entries(f).find(([k, v]) => v.toLowerCase().includes(q)) : ["name"]; };
+  let shown = 0, side = 0;
+  $$(".tree a").forEach(a => { a.hidden = !match(a); side += !a.hidden; });
   $$(".tree section").forEach(g => g.hidden = !$$("a", g).some(a => !a.hidden));
-  $("#none").hidden = shown > 0;
-  $$(".chips .chip[data-st], .legend button").forEach(b => b.setAttribute("aria-pressed", b.dataset.st === filter));
+  $$("table.inv tbody tr").forEach(tr => {
+    const hit = match(tr), ok = !!hit && (!filter || tr.dataset.st === filter);
+    tr.hidden = !ok; shown += ok;
+    $(".why", tr).textContent = q && hit && hit[0] !== "name" ? "matches " + hit[0] : "";
+  });
+  $("#none").hidden = shown > 0; $("#none-side").hidden = side > 0;
+  $$(".legend button[data-st]").forEach(b => b.setAttribute("aria-pressed", b.dataset.st === filter));
+  $$(".legend .reset").forEach(b => b.hidden = !filter);
 }
-$("#q").addEventListener("input", () => { if (!/^#?\/?$/.test(location.hash) && $("#q").value) location.hash = "/"; apply(); });
-$$("[data-st].chip, .legend button").forEach(b => b.addEventListener("click", () => { filter = filter === b.dataset.st ? null : b.dataset.st; location.hash = "/"; apply(); }));
-addEventListener("keydown", e => { if (e.key === "/" && document.activeElement !== $("#q")) { e.preventDefault(); $("#q").focus(); } });
+$("#q").addEventListener("input", apply);
+$("#q").addEventListener("keydown", e => { if (e.key === "Enter") { const a = $$(".tree a").find(a => !a.hidden); if (a) location.hash = a.getAttribute("href"); } });
+$$(".legend button[data-st]").forEach(b => b.addEventListener("click", () => { filter = filter === b.dataset.st ? null : b.dataset.st; apply(); }));
+$$(".reset").forEach(b => b.addEventListener("click", () => { filter = null; $("#q").value = ""; apply(); }));
+addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (e.key === "/" && !typing) { e.preventDefault(); $("#q").focus(); }
+});
 $("#menu").addEventListener("click", () => { const o = $("#side").classList.toggle("open"); $("#menu").setAttribute("aria-expanded", o); });
 
 // lineage: highlight what a node reads from and what depends on it; the big graph pans and zooms
@@ -272,13 +299,17 @@ function focusNode(dag, id) {
   $$(".node", dag).forEach(n => { if (on.has(n.dataset.id)) n.classList.add("on"); if (n.dataset.id === id) n.classList.add("sel"); });
   $$(".edge", dag).forEach(e => { if (on.has(e.dataset.a) && on.has(e.dataset.b)) e.classList.add("on"); });
 }
-$$(".dag").forEach(dag => $$(".node.judgment", dag).forEach(n => n.addEventListener("click", ev => {
-  if (moved) return;
-  const id = n.dataset.id, big = dag.closest(".big");
-  location.hash = big && !n.classList.contains("sel") ? "/lineage/" + encodeURIComponent(id) : "/j/" + encodeURIComponent(id);
-})));
 const box = $("#lineage .dagbox"), svg = box && $("svg", box);
 let vb = null, drag = null, moved = false;
+$$(".dag").forEach(dag => $$(".node.judgment", dag).forEach(n => {
+  const go = () => {
+    if (moved) return;
+    const id = n.dataset.id, big = dag.closest(".big");
+    location.hash = big && !n.classList.contains("sel") ? "lineage/" + encodeURIComponent(id) : "j-" + encodeURIComponent(id);
+  };
+  n.addEventListener("click", go);
+  n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+}));
 function setVB(v) { vb = v; svg.setAttribute("viewBox", v.join(" ")); }
 function fit() { if (svg) setVB(svg.dataset.full.split(" ").map(Number)); }
 if (svg) {
