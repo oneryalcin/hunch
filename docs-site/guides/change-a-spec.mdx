@@ -34,6 +34,8 @@ hunch diff evals/ --against git:origin/main --node claims
 
 The old version always runs on today's rows, so the comparison is fair. Its answers are usually already in the store, and a question whose text didn't change reports `unchanged (same keys, 0 calls)`. Every line of the output is explained in [CLI › diff](/reference/cli#diff).
 
+A changed question has to be asked again on every row. To see what a change does before paying for all of them, add `--sample 200`: both versions are judged on the same 200 rows, and those answers are kept for the full run.
+
 ## Only the flips carry evidence
 
 Where both versions give the same answer, they are right or wrong together, so those rows can't tell you which is better. The flips can. When there is no answer key, or the key is thin, review just those:

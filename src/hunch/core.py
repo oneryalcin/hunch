@@ -1939,7 +1939,7 @@ def test_examples(spec: dict, check: "Checks", all_stats: list) -> list[dict]:
         check.severity = ex.get("severity", "error")
         check(ok, f"{name}: " + ", ".join(f"{g['question']} {g['got']} {g['p']:.2f}" + ("" if g["passed"] else f" (expected {g['expected']})")
                                            for g in got), "example")
-        out.append({"name": name, "passed": ok, "answers": got})
+        out.append({"name": name, "passed": ok, "severity": check.severity, "answers": got})
     return out
 
 
@@ -2009,6 +2009,32 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
            "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed, "sample": SAMPLE,
            "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    if os.environ.get("GITHUB_STEP_SUMMARY"):  # GitHub Actions: a table on the run's summary page
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write(summary_markdown(doc, path.relative_to(store_path(spec["_dir"]).parent / "target").with_suffix("")) + "\n")
+
+
+def summary_markdown(doc: dict, name: Path) -> str:
+    """results.json as a short Markdown table: per question accuracy, range and failed checks; metrics and examples."""
+    def failed(checks: list[dict]) -> str:
+        bad = [f"{c['check']}{' (warn)' if c['severity'] == 'warn' else ''}" for c in checks if not c["passed"]]
+        return "FAIL: " + ", ".join(bad) if bad else "pass"
+    lines = [f"### {name}: {'passed' if doc['passed'] else 'FAILED'}" + (f" (sample of {doc['sample']})" if doc["sample"] else ""),
+             "", "| | Accuracy | 95% range | Checks |", "|---|---|---|---|"]
+    for j, v in doc["judgments"].items():
+        for q, x in v["questions"].items():
+            a = x.get("accuracy")
+            ci = "–".join(f"{c:.1%}" for c in a["ci"]) if a and a["ci"] else ""
+            lines.append(f"| {j}.{q} | {a['value']:.1%} | {ci} | {failed(x['checks'])} |" if a else f"| {j}.{q} | no gold yet | | |")
+        for m, x in (v.get("metrics") or {}).items():
+            miss = x.get("missed")
+            extra = f", missed {miss['rate']:.1%} ({miss['ci'][0]:.1%}–{miss['ci'][1]:.1%})" if miss and miss["of"] else ""
+            lines.append(f"| {j}.{m} (metric) | fires on {x['rate']:.1%}{extra} | | {failed(x['checks'])} |" if x["rate"] is not None else f"| {j}.{m} (metric) | no rows | | |")
+        if v.get("examples"):
+            ok = sum(e["passed"] for e in v["examples"])
+            names = [e["name"] + (" (warn)" if e["severity"] == "warn" else "") for e in v["examples"] if not e["passed"]]
+            lines.append(f"| {j} examples | {ok} of {len(v['examples'])} pass | | {'not passing: ' + ', '.join(names) if names else 'pass'} |")
+    return "\n".join(lines) + "\n"
 
 
 def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Checks") -> dict:

@@ -17,7 +17,7 @@ tests:
     min_act_accuracy: 0.97
 ```
 
-`hunch test` checks each one, prints `PASS` or `FAIL`, and exits 1 if any fails.
+`hunch test` checks each one, prints `PASS` or `FAIL`, and exits 1 if any fails. A check marked `severity: warn` prints `WARN` instead and never fails the build: for something you want to see on every run without blocking on it.
 
 Here is the BANKING77 intent spec, run against its answer key:
 
@@ -33,6 +33,8 @@ intent (choice, 770 rows)
 Accuracy passes, yet the spec fails twice. The model is more confident than it should be. Of the answers it gave at confidence 0.9 or above, only 91.8% were right, and those are the ones the code acts on without a person looking. Accuracy alone would not have shown that.
 
 The other tests are `min_auroc` for yes/no questions and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no tests still gets its numbers printed; nothing can fail.
+
+Two more kinds of check live in the same spec. [Examples](/reference/spec#examples) pin rows whose answers must not change. [Metrics](/reference/spec#metrics) check a rule built from several answers, such as "stop the command if any question says yes", against gold, with limits like `max_missed`.
 
 <Note>
 Thresholds compare the point estimate, not the lower end of its interval. With 30 reviewed rows the interval is about ±15 points, so set `min_accuracy` a little below what you measured.
@@ -75,29 +77,9 @@ jobs:
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
         run: hunch test evals/ --max-cost 0.50
-      - name: Summary
-        if: always()
-        run: |
-          python3 - >> "$GITHUB_STEP_SUMMARY" <<'PY'
-          import json, pathlib
-          for f in sorted(pathlib.Path(".hunch/target").rglob("*.json")):
-              d = json.loads(f.read_text())
-              print(f"### {f.relative_to('.hunch/target').with_suffix('')}: {'passed' if d['passed'] else 'FAILED'}\n")
-              print("| Question | Accuracy | 95% range | Checks |\n|---|---|---|---|")
-              for j, v in d["judgments"].items():
-                  for q, x in v["questions"].items():
-                      a = x.get("accuracy")
-                      if not a:
-                          print(f"| {j}.{q} | no gold yet | | |")
-                          continue
-                      ci = "–".join(f"{c:.1%}" for c in a["ci"]) if a["ci"] else "no estimate"
-                      failed = [c["check"] for c in x["checks"] if not c["passed"]]
-                      print(f"| {j}.{q} | {a['value']:.1%} | {ci} | {'FAIL: ' + ', '.join(failed) if failed else 'pass'} |")
-              print()
-          PY
 ```
 
-The last step turns `test`'s [results file](/reference/cli#the-results-file) into a table on the run's summary page, one row per question with its accuracy and range. It runs even when `test` fails, and shows nothing when `test` stopped before finishing.
+On GitHub Actions, `test` also adds a table to the run's summary page: per question, accuracy, its range and any failed check, and a line for each metric and for the examples. The same numbers are in the [results file](/reference/cli#the-results-file) for any other CI.
 
 The cache key changes every run and `restore-keys` picks the newest store, so answers asked in one run are there for the next. hunch uses the nearest `.hunch/store.sqlite` at or above the spec's folder, or creates one at the repository root. Set `HUNCH_STORE` to choose another path.
 
