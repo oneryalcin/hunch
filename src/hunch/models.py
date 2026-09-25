@@ -4,11 +4,13 @@ Mapping (the same as Pydantic AI's TypeSafe model, so a class used as an agent's
 hunch tests, diffs and reviews):
 
     bool                      → noul       yes/no
-    Literal[...] / Enum       → choice     option descriptions: Field(json_schema_extra={"options": {...}}) or
-                                           enum member docstrings
+    Literal[...] / Enum       → choice     option descriptions: Field(json_schema_extra={"options": {...}}), or
+                                           Member.__doc__ = "..." set after the class (a string under a member
+                                           in the class body is not attached to it)
     X | None (Optional)       → choice with none_of_these
     list[Literal] / list[Enum]→ multi      one yes/no per option
-    IntEnum                   → score      levels in value order; a member's docstring describes its level
+    IntEnum                   → score      levels in value order; describe them with "options" by member
+                                           name, or Member.__doc__, else the member name
 
 A field's description is the question's instructions. hunch-only settings (act, gold, escalate, none) go in
 Field(json_schema_extra={"hunch": {...}}); they never reach the engine.
@@ -57,7 +59,8 @@ def question_of_field(name: str, field) -> dict:
         members = sorted(t, key=lambda m: m.value)
         if [m.value for m in members] != list(range(len(members))):
             raise TypeError(f"{name}: an IntEnum rubric needs levels 0..n-1, got {[m.value for m in members]}")
-        q = {"type": "score", "instructions": instructions, "criteria": [_member_doc(m) or m.name.replace("_", " ").lower() for m in members]}
+        q = {"type": "score", "instructions": instructions,
+             "criteria": [descs.get(m.name) or _member_doc(m) or m.name.replace("_", " ").lower() for m in members]}
     else:
         labels, docs = _options(t)
         q = {"type": "choice", "instructions": instructions, "criteria": {lab: descs.get(lab, docs.get(lab, "")) for lab in labels}}
