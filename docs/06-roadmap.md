@@ -159,6 +159,11 @@ Exact match was 66% (83/107 answerable, 49/93 unanswerable). Of the 68 errors, 4
 
 **Reopen when** a check reaches AUROC ≥ 0.8 on this sample (the 200 SQuAD v2 dev questions whose ids have the lowest SHA-256; prompts as described above), for example a newer Jev, a stronger verifier model, or asking the check to quote the supporting span. Until then, select instead of generate.
 
+**Ideas recorded, not scheduled (2026-09-25).**
+- *Typed-field test, skipped.* The same candidates (LLM checked by Jev, LLM self-check, GLiNER2.5, GLiFormer) on a public set of typed fields with gold (CUAD contract fields, receipts). Low value for now: typed fields are exactly where code can list candidates, so selection already covers them; a pass would land where hunch already works, a fail would teach nothing new.
+- *Cookbook: extract fields by selection.* Candidates from regexes, parsers or an entity model (GLiNER used only to find spans), then a `choice` with `none` picks one, with hunch's confidence, tests and dial. Shows typed extraction with what exists today.
+- *A local engine: GLiNER2.5-Decide (Apache 2.0, 0.3–1B, CPU).* A classifier with probabilities whose model card reports it ahead of a Jev model on Fastino's own benchmark. Measure against Jev on BANKING77 (95.8%, same gold and reviews, $0); if competitive, a `gliner:` engine as an optional extra (`hunch-ai[local]`), so the quickstart runs with no API key. As a check of extracted values it was no better than chance (AUROC 0.45 above).
+
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
 | Item | Question it answers | Done when |
