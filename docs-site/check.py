@@ -16,7 +16,8 @@ code = (SRC / "core.py").read_text()
 env_code = "\n".join(p.read_text() for p in [*SRC.glob("*.py"), *(HERE.parent / "server" / "hunch_server").glob("*.py")])
 checks = {
     "reference/spec.mdx": sorted(core.SPEC_KEYS | core.QUESTION_KEYS - {"_multi"} | core.TEST_KEYS | core.METRIC_TEST_KEYS | set(core.ON_CHANGE)),
-    "reference/cli.mdx": sorted(set(re.findall(r'"(\w+)": cmd_\w+', code)) | {"init"}
+    "reference/cli.mdx": sorted(set(re.findall(r'"(\w+)": cmd_\w+', code))
+                                | set(re.findall(r'sys\.argv\[1\] == "(\w+)"', (SRC / "cli.py").read_text()))
                                 | set(re.findall(r'add_argument\("(--[\w-]+)"', code))),
     "reference/environment.mdx": sorted(set(re.findall(r'environ(?:\.get\(|\[)"([A-Z_]+)"', env_code))
                                         | {e["key"] for e in core.ENDPOINTS.values()}),

@@ -28,6 +28,8 @@ hunch run . --max-cost 0.01        # about $0.001
 hunch test .
 ```
 
+Working with a coding agent? `hunch skill` teaches Claude Code, Codex or Cursor the same loop.
+
 A spec looks like this:
 
 ```yaml
