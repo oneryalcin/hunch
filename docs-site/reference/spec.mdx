@@ -401,24 +401,25 @@ exposures:
 
 #### Answers an exposure relies on
 
-An app that branches on `if department == "billing"` depends on an option's name as much as on the question. Rename `billing` to `payments` and every test still passes, since the model answers the new name correctly, while the app's branch quietly stops matching. To make that a failure instead, write `uses` as a mapping from each question to the answers the code compares against:
+`uses` as a mapping names, per question, the answers the exposure's code compares against:
 
 ```yaml
-exposures:
-  - name: support-router
-    uses:
-      department: [billing, technical]
-      urgent: [yes]
-      frustration: [3]      # a score level, by number or as written: "3:Very angry"
+uses:
+  department: [billing, technical]
+  urgent: [yes]
+  frustration: [3]      # a score level: 3 or "3:Very angry"
+  topics:               # read, relying on no particular answer
 ```
 
-Every command lints the spec first, so from then on any command fails while an answer it names is gone:
+| Question type | Values |
+| --- | --- |
+| `choice` | Option names, and `none_of_these` if the question has [`none`](#question-keys). |
+| `noul` | `yes`, `no`. |
+| `score` | `level:label` as the column holds it, or the level number. |
+| `multi` | Option names (the column joins those that apply with `\|`). A per-option column (`topics__refund`) takes `yes`, `no`. |
+| union | The values of the question on any branch. |
 
-```text
-lint error: exposures.support-router relies on department = 'billing', but department has no such answer (its answers: payments, technical, sales): if an answer was renamed or removed on purpose, change support-router first, then its uses
-```
-
-The values are what the answer column holds: an option's name (`none_of_these` too, with [`none`](#question-keys)), `yes` or `no`, a score's `level:label` (or just its level), or for a `multi` question one of its options. A question mapped to nothing (`urgent:`) is read without relying on particular answers. `hunch diff` also uses the mapping to count only the rows whose change the code can see: a row moving from `technical` to `sales` does not reach an app that only branches on `billing`.
+Lint, which every command runs first, fails while a listed value is not one the question can answer. `hunch diff` counts, per exposure, the rows whose answer moved into or out of a listed value. [Change a spec safely](/guides/change-a-spec#apps-depend-on-answer-names) shows both.
 
 ## Question keys
 

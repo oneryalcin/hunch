@@ -46,6 +46,47 @@ hunch review intent.yml --against intent_bare.yml
 
 The queue starts with the rows where the two versions disagree, marking one answer `← --against` and the other `← this spec`. Your verdicts become gold, so the next `diff` can count fixed and broken.
 
+## Apps depend on answer names
+
+`diff` says whether the new answers are better. It can't see the code that reads them. An app that freezes a card does something like this with the [answer from `judge`](/guides/use-in-your-app):
+
+```python
+if answers["intent"]["label"] == "lost_or_stolen_card":
+    freeze_card(customer)
+```
+
+That line depends on the option's name. Shorten it to `lost_card` in the spec and the model answers `lost_card` from then on. The branch never matches again, and nothing in hunch knows the app was looking for the old name. If the answer key was renamed along with the option, every test still passes.
+
+The spec can say which answers the app relies on. Name the app under `exposures`, and map each question it reads to the answers it compares against:
+
+```yaml intent.yml
+exposures:
+  - name: card-bot
+    kind: app
+    owner: cards-team
+    uses:
+      intent: [lost_or_stolen_card, card_arrival, activate_my_card]
+  - name: intent-dashboard
+    kind: dashboard
+```
+
+Every command lints the spec before it does anything, so after the rename `lint`, `test` and `diff` all stop, in CI too:
+
+```text
+lint error: exposures.card-bot relies on intent = 'lost_or_stolen_card', but intent has no such answer (it has 77; closest: lost_or_stolen_phone, visa_or_mastercard, lost_card): if an answer was renamed or removed on purpose, change card-bot first, then its uses
+```
+
+The rename is still possible. It now takes a second edit to `uses`, made by someone who has changed card-bot, and the owner is right there in the spec.
+
+The same list makes `diff` precise. At the end of the BANKING77 diff above, each exposure gets the rows it would see change:
+
+```text
+affects card-bot (app, reads intent = lost_or_stolen_card, card_arrival, activate_my_card): 10 rows
+affects intent-dashboard (dashboard, reads every answer): 77 rows
+```
+
+77 rows flipped, but only 10 moved into or out of the three intents card-bot branches on. The other 67 reach its default branch before and after the change. The dashboard shows every answer, so all 77 reach it. The values each question type accepts are in [the spec reference](/reference/spec#answers-an-exposure-relies-on).
+
 ## Trying a candidate on live traffic
 
 Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the tickets spec and the candidate folder holds the stricter `urgent` from the [quickstart](/quickstart):
