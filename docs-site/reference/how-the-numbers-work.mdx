@@ -4,6 +4,7 @@ description: "Where test's accuracy estimate, interval, calibration, dial and AU
 ---
 
 import { IntervalSlider } from "/snippets/interval.jsx";
+import { AccuracyGroups } from "/snippets/figures.jsx";
 
 `hunch test` might tell you a question is 91.7% accurate, somewhere between 74% and 98%. This page explains where each part of that comes from, so you can tell when to trust it.
 
@@ -17,6 +18,10 @@ You have reviewed a few dozen rows, but the number is about all of them. How it 
 
 - Where the model and the key **disagree**, either could be wrong. There are few of these rows, so you review them all.
 - Where they **agree**, both are almost always right. There are many of these rows, so you review a random sample: the spot checks, 30 per question by default (`--audit`). The sample catches rows where the model and the key make the same mistake.
+
+Here are the two groups on the [BANKING77](/cookbooks/banking-intents) holdout, one dot per message:
+
+<AccuracyGroups agree={340} disagree={45} sampled={60} />
 
 Each group's reviewed rows estimate that group's accuracy, and the two are weighted by group size. A group you reviewed in full is known exactly.
 

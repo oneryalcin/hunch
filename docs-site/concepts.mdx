@@ -5,6 +5,7 @@ description: "The ideas hunch is built from, each resting on the one before: row
 
 import { ActDial } from "/snippets/act-dial.jsx";
 import { DIAL_ROWS } from "/snippets/dial-rows.jsx";
+import { ReviewLoop } from "/snippets/figures.jsx";
 
 Each idea on this page rests on the one before it.
 
@@ -34,6 +35,21 @@ A folder of specs is a [project](/reference/projects), where one judgment can re
 ## Every answer is stored under its exact input
 
 When hunch asks a question, it stores the answer in `.hunch/store.sqlite`. The answer is filed under a key made from the exact request: the model, the state, and the question as sent. The same request is never paid for twice.
+
+Here is what goes into that key, and what stays out:
+
+```yaml
+model: jev-1.13.0             # in the key
+state: [subject, body]        # in the key: these columns' values, after redact and clip
+questions:
+  department:                 # the name: not sent, not in the key
+    type: choice              # in the key
+    instructions: Which team should handle this support ticket?   # in the key
+    criteria: {...}           # in the key, including the order of the options
+    act: 0.80                 # not sent, not in the key
+    gold: gold_department     # not sent, not in the key
+tests: {...}                  # not sent, not in the key
+```
 
 This one rule explains much of how hunch behaves:
 
@@ -77,4 +93,8 @@ The examples use TypeSafe's Jev, a model built to return typed answers with prob
 
 ## How the pieces meet
 
-Work goes round this loop: `run` a spec, `review` a sample, `test`, then change the spec and `diff` to see what flipped. Your application can call the same spec with [`hunch.judge(...)`](/guides/use-in-your-app).
+Work goes round this loop: `run` a spec, `review` a sample, `test`, then change the spec and `diff` to see what flipped.
+
+<ReviewLoop />
+
+Your application can call the same spec with [`hunch.judge(...)`](/guides/use-in-your-app).
