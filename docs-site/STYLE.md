@@ -32,7 +32,7 @@ Rules
 - Plain English. No "simply", "just", "blazingly", "powerful", "seamless".
 - Say what is measured and how sure it is; say what does not work yet.
 - No private data: results from anyone's own sessions are aggregate numbers only, never text from them.
-- Components: `<Steps>`, `<Tabs>`, `<Note>`, `<Warning>`, `<Card>`/`<CardGroup>`, mermaid. Nothing custom.
+- Components: `<Steps>`, `<Tabs>`, `<Note>`, `<Warning>`, `<Card>`/`<CardGroup>`, mermaid. Custom components only as interactive teaching aids in `snippets/`: one idea each, earning their place over a static picture (what does dragging show that a table can't?), real data, no autoplay, `prefers-reduced-motion` respected. The prose around a widget must still carry the idea (the `.md` export and agents don't see it). Data files are generated (`make_widget_data.py`), never hand-edited.
 - Frontmatter on every page: `title` and a one-sentence `description`.
 
 Where things live
