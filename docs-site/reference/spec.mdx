@@ -177,8 +177,11 @@ key: id
 The columns the model sees, sent as a JSON object. Nothing else is sent. The cache key is computed from exactly this, after `redact` and `clip`; `\r\n` and `\n` give the same key.
 
 ```yaml
-state: [subject, body]
+state: [subject, body]   # {"subject": …, "body": …}
+state: body              # the body alone, as a string
 ```
+
+One column name on its own is sent bare, as a string: the form a [Pydantic AI agent](/guides/use-in-your-app#from-a-pydantic-ai-agent) sends its prompt in. The two forms are different inputs, so they have different answers and keys.
 
 Limit: about 32,000 tokens for state plus the longest question. `run` and `compile` warn above 80% and name the largest column; use [`clip`](#clip).
 

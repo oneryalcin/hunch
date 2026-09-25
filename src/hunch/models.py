@@ -3,7 +3,7 @@
 Mapping (types as in Pydantic AI's decision models). The wording is not the same: Pydantic AI >= 2.50 sends each
 question as structured parts (field name, the class docstring as goal, the description as question, the agent's
 instructions as framing, BoolCriteria), while this sends the description alone, so the same class can get different
-answers here and in an agent. Exact parity is on the roadmap (`spec_from_agent`).
+answers here and in an agent. For the agent's exact wording, use `spec_from_agent` (below).
 
     bool                      → noul       yes/no
     Literal[...] / Enum       → choice     option descriptions: Field(json_schema_extra={"options": {...}}), or
@@ -17,6 +17,7 @@ answers here and in an agent. Exact parity is on the roadmap (`spec_from_agent`)
 A field's description is the question's instructions. hunch-only settings (act, gold, escalate, none) go in
 Field(json_schema_extra={"hunch": {...}}); they never reach the engine.
 """
+import concurrent.futures
 import enum
 import re
 import types
@@ -91,6 +92,105 @@ def spec_from_model(cls, *, judgment: str | None = None, model: str = "jev-1.13.
     if source is not None:
         out["source"] = source
     return out | spec
+
+
+def spec_from_agent(agent, *, state: str, judgment: str | None = None, model: str | None = None,
+                    source: str | None = None, key: str = "id", deps=None, **spec) -> dict:
+    """A hunch spec whose questions are the ones a Pydantic AI agent (>= 2.50, on a decision model) sends, recorded
+    from Pydantic AI itself: its first request is captured and the run stopped, so no model is called. Word for
+    word the same questions, and `state` (the column holding the agent's prompt) is sent bare, as the agent sends
+    it; on the same engine, hunch and the agent then make the same request for a row.
+
+    Question names are Pydantic AI's with "." as "__" (a list field's `topics.refund` is `topics__refund`).
+    hunch-only settings still go in Field(json_schema_extra={"hunch": {...}}), applied to the field's questions.
+    Refused, since hunch could not send what the agent sends: agents with several routes (tools, or a union of
+    output types: a route question comes first), a system_prompt (the state becomes a conversation), and
+    instructions that depend on the prompt (they would differ per row). Instructions may depend on `deps`."""
+    import dataclasses
+
+    if not isinstance(state, str):
+        raise TypeError("state: the one column holding the agent's prompt (a list would be sent as a dict, not as the agent sends it)")
+    first, second = (_record(agent, p, deps) for p in ("-", "a different prompt"))
+    seen = first[1]
+    if not isinstance(first[0], str):
+        raise ValueError("the agent sends more than its prompt (a system_prompt or history), which a spec's state can't express; "
+                         "move a system_prompt into instructions")
+    if {k: dataclasses.asdict(q) for k, q in seen.items()} != {k: dataclasses.asdict(q) for k, q in second[1].items()}:
+        raise ValueError("the agent's questions depend on the prompt (dynamic instructions), so each row would be asked "
+                         "differently; make them depend on deps, not on the prompt")
+    if "route" in seen:
+        raise ValueError(f"the agent picks between routes ({', '.join(q for q in seen['route'].criteria)}) before "
+                         f"it asks anything else; spec_from_agent reads agents with one output type and no tools")
+    questions = {name.replace(".", "__"): _plain(dataclasses.asdict(q)) for name, q in seen.items()}
+    for field, opts in _hunch_options(getattr(agent, "output_type", None)).items():
+        for qid in questions:
+            if qid == field or qid.startswith(field + "__"):
+                questions[qid] |= opts
+    name = getattr(getattr(agent, "output_type", None), "__name__", "agent")
+    out = {"judgment": judgment or re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower(), "model": model or _engine_of(agent.model), "key": key, "state": state,
+           "questions": questions}
+    if source is not None:
+        out["source"] = source
+    return out | spec
+
+
+def _record(agent, prompt: str, deps) -> tuple[object, dict]:
+    """(state, questions) of the agent's first decision request for this prompt, with no model call. On a thread
+    of its own, so it works from async code too (run_sync can't run inside a running loop)."""
+    from pydantic_ai.models.decision import DecisionModel
+
+    class Captured(Exception):
+        pass
+
+    seen = {}
+
+    class Recorder(DecisionModel[None]):
+        model_name = property(lambda self: "hunch-recorder")
+        system = property(lambda self: "hunch")
+        base_url = property(lambda self: "hunch://recorder")
+
+        async def decide(self, request, model_settings):
+            seen.update(state=request.state, questions=dict(request.questions))
+            raise Captured
+
+    def run():
+        try:
+            with agent.override(model=Recorder()):
+                agent.run_sync(prompt, deps=deps)
+        except Captured:
+            pass
+
+    with concurrent.futures.ThreadPoolExecutor(1) as pool:
+        pool.submit(run).result()
+    if not seen:
+        raise ValueError("the agent sent no decision request (does its output type need a language model?)")
+    return seen["state"], seen["questions"]
+
+
+def _plain(d: dict) -> dict:
+    """A recorded question as spec YAML: keys Pydantic AI left empty are not sent, so they are not written."""
+    q = {k: v for k, v in d.items() if v is not None}
+    if q.get("type") == "noul" and isinstance(q.get("criteria"), dict):  # a choice keeps its undescribed options
+        q["criteria"] = {k: v for k, v in q["criteria"].items() if v is not None} or None
+    order = ("type", "instructions", "criteria")  # as a person reads a question; key order is not sent meaning
+    return {k: q[k] for k in (*order, *q) if k in q and q[k] is not None}
+
+
+def _hunch_options(output_type) -> dict[str, dict]:
+    fields = getattr(output_type, "model_fields", None) or {}
+    extras = {n: f.json_schema_extra for n, f in fields.items() if isinstance(f.json_schema_extra, dict)}
+    return {n: dict(x["hunch"]) for n, x in extras.items() if x.get("hunch")}
+
+
+def _engine_of(m) -> str:
+    """hunch's name for the agent's model: TypeSafe's Jev by its version. Anything else: pass model=."""
+    name = m if isinstance(m, str) else (getattr(m, "model_name", None) if getattr(m, "system", None) == "typesafe" else None)
+    if isinstance(name, str) and name.startswith("typesafe:"):
+        name = name.split(":", 1)[1]
+    if not name or ":" in name:
+        raise ValueError(f"which engine should hunch ask? The agent's model is {m if isinstance(m, str) else type(m).__name__}; "
+                         f"pass model= (e.g. jev-1.13.0)")
+    return name
 
 
 def to_model(cls, answers: dict[str, dict]):
