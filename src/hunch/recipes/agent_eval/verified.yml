@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=spec.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
 # Step 2b, only for runs that claim success: did the agent check before claiming? No gold yet: review it.
 judgment: verified
 model: jev-1.13.0

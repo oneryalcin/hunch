@@ -1,0 +1,3 @@
+# uv settings for everyone working on hunch. .envrc points UV_CONFIG_FILE here, so a personal ~/.config/uv
+# (for example, exempt packages from other work) never leaks into uv.lock.
+exclude-newer = "5 days"  # supply-chain cooldown: install nothing published in the last 5 days
