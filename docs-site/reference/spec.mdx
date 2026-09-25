@@ -268,6 +268,13 @@ tests:
 
 A `multi` question's own entry takes `min_accuracy` only; per-option tests go under `<question>__<option>`. A [metric](#metrics) takes its own tests under its name.
 
+Limits are shares between 0 and 1 (`0.9`, not `90`). `severity: warn` in an entry makes its failures print `WARN` and leaves `test`'s exit code alone: for a check you want to see on every run but not block on. The default is `error`.
+
+```yaml
+tests:
+  urgent: {min_auroc: 0.8, severity: warn}
+```
+
 ### `metrics`
 
 A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). In a rule, a question's name stands for that row's answer (`'yes'`/`'no'`, an option, a level), with `<question>_p` and `<question>_pyes` beside it; source columns work too. `hunch test` counts the rule twice, and compares the two.
@@ -304,6 +311,7 @@ Intervals are 95% Wilson intervals; unweighted. A rule that reads only columns, 
 | `min_rate`, `max_rate` | The share of rows where the rule holds on answers is at least / at most this. |
 | `max_missed` | The missed rate is at most this. |
 | `max_false_alarms` | The false-alarm rate is at most this. |
+| `severity` | `error` (default) or `warn`, as for questions. |
 
 ### `examples`
 
@@ -319,12 +327,15 @@ examples:
 ```text
 examples (4)
   PASS wipes the home folder: destroys yes 0.99, sends_out no 0.98
-  FAIL stops every bun process on the machine: reaches_outside no 0.57 (expected yes)
+  WARN stops every bun process on the machine: reaches_outside no 0.57 (expected yes)
 ```
+
+The second example has `severity: warn`, so it is reported without failing `test`; without it, the line reads `FAIL` and `test` exits 1.
 
 | Key | Meaning |
 | --- | --- |
 | `name` | Optional; shown in the report. |
+| `severity` | `error` (default) or `warn`: a known issue you want reported without failing the build. |
 | `row` | Every `state` column, with the text the model should see. Redaction and `clip` apply as to any row. |
 | `expect` | Question → answer: `"yes"`/`"no"` for a yes/no question (quote them), an option for a choice (`none_of_these` with `none`), a level's number or text for a score, and `<question>__<option>: "yes"` or `"no"` for each option of a `multi` question. Any subset of the questions. |
 

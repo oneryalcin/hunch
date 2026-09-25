@@ -54,8 +54,10 @@ NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
              "weights", "chain", "view", "clip", "redact", "on_change"}
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
-TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability"}
-METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms"}  # tests on a metric, by its name
+TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability", "severity"}
+METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "severity"}  # tests on a metric, by its name
+SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN and does not fail `test`
+SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = int(os.environ.get("HUNCH_CONCURRENCY", 16))  # requests in flight per fill
 RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx, transport): the scale test reads it
@@ -521,7 +523,9 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
         if not isinstance(ex, dict) or not isinstance(ex.get("row"), dict) or not isinstance(ex.get("expect"), dict) or not ex["expect"]:
             errors.append(f"{where_}: needs row: {{column: value}} and expect: {{question: answer}}")
             continue
-        for k in set(ex) - {"name", "row", "expect"}:
+        if ex.get("severity", "error") not in SEVERITIES:
+            errors.append(f"{where_}: severity must be one of {SEVERITIES}")
+        for k in set(ex) - {"name", "row", "expect", "severity"}:
             warnings.append(f"{where_}: unknown key {k!r} (typo?)")
         if "union" in spec:
             errors.append(f"{where_}: a union has no questions of its own; put examples on its branches")
@@ -548,12 +552,17 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
         if name in spec["questions"] or name in spec.get("_multi", {}):
             errors.append(f"metrics.{name}: a question has the same name")
     for qid, conf in (spec.get("tests") or {}).items():
+        if isinstance(conf, dict) and conf.get("severity", "error") not in SEVERITIES:
+            errors.append(f"tests.{qid}: severity must be one of {SEVERITIES}")
+        for k, v in (conf.items() if isinstance(conf, dict) else []):
+            if k.startswith(("min_", "max_")) and not (isinstance(v, (int, float)) and 0 <= v <= 1):
+                errors.append(f"tests.{qid}.{k}: {v!r} must be a share between 0 and 1 (0.9 for 90%)")
         if qid in metrics:
             for k in set(conf) - METRIC_TEST_KEYS:
                 warnings.append(f"tests.{qid}: unknown metric test {k!r} (typo?)")
             continue
         if qid in spec.get("_multi", {}):
-            if set(conf) - {"min_accuracy"}:
+            if set(conf) - {"min_accuracy", "severity"}:
                 warnings.append(f"tests.{qid}: a multi question takes min_accuracy (exact set); per-option tests go "
                                 f"under {qid}__<option>")
             continue
@@ -1198,6 +1207,8 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
         inp = results[ups[0]]["rows"] if ups else (rows_in if rows_in is not None else rows(spec))
         if not ups and "weights" in spec and rows_in is None:
             inp = weigh(inp, spec["weights"])
+        if not ups and rows_in is None and SAMPLE is not None:
+            inp = sorted(inp, key=lambda r: hashlib.sha256(str(r.get(spec["key"], "")).encode()).hexdigest())[:SAMPLE]
         keep, unknown, known, passed, unknown_rows = inp, 0, 0, 0, []
         if "where" in spec:
             pred, _ = compile_where(spec["where"])
@@ -1522,6 +1533,12 @@ def cmd_run(project: dict, args) -> None:
     except BaseException as e:
         failed(project["order"], e)
         raise
+    if SAMPLE is not None:  # a sample must never replace a table that downstream readers take for the whole
+        for n in project["order"]:
+            print(f"{n}: --sample {SAMPLE}: {len(results[n]['rows'])} rows judged")
+        print_stats(merge_stats(*(r["stats"] for r in results.values())))
+        print("answers are cached; tables not replaced (run without --sample to write them)")
+        return
     for i_node, n in enumerate(project["order"]):
         res, spec = results[n], project["nodes"][n]
         db = open_store(spec)
@@ -1646,11 +1663,13 @@ class Checks:
 
     def __init__(self) -> None:
         self.log: list[dict] = []
+        self.severity = "error"  # set by the caller for a group of checks (a question's, a metric's, an example's)
 
     def __call__(self, ok: bool, text: str, check: str = "", value: float | None = None, limit: float | None = None) -> None:
-        self.failed |= not ok
-        self.log.append({"check": check, "passed": ok, "value": _r(value), "limit": limit})
-        print(f"  {'PASS' if ok else 'FAIL'} {text}")
+        warn = not ok and self.severity == "warn"
+        self.failed |= not ok and not warn
+        self.log.append({"check": check, "passed": ok, "value": _r(value), "limit": limit, "severity": self.severity})
+        print(f"  {'PASS' if ok else 'WARN' if warn else 'FAIL'} {text}")
 
 
 def _r(x: float | None) -> float | None:
@@ -1698,6 +1717,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     out: dict = {"type": q["type"], "rows": len(its), "gold": {"rows": len(gold_its), "source": src["source"],
                                                                "review": src["review"], "excluded": src["excluded"]}}
     first_check = len(check.log)
+    check.severity = conf.get("severity", "error")
     if not gold_its:
         return out | {"checks": []}
     both = sum(len(it["gold"]) > 1 for it in gold_its)
@@ -1845,6 +1865,7 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
     print(f"  on answers: {k} of {len(rows)} rows ({k / len(rows):.1%})" if rows else "  on answers: no rows")
     out: dict = {"rule": rule, "rows": len(rows), "fired": k, "rate": _r(k / len(rows)) if rows else None}
     first_check = len(check.log)
+    check.severity = conf.get("severity", "error")
     if "min_rate" in conf or "max_rate" in conf:
         rate = k / len(rows) if rows else 0.0
         if "min_rate" in conf:
@@ -1915,6 +1936,7 @@ def test_examples(spec: dict, check: "Checks", all_stats: list) -> list[dict]:
             got.append({"question": it["qid"], "expected": gold_str(it["expected"]), "got": label, "p": _r(p),
                         "passed": hit(it, a, "expected")})
         ok = all(g["passed"] for g in got)
+        check.severity = ex.get("severity", "error")
         check(ok, f"{name}: " + ", ".join(f"{g['question']} {g['got']} {g['p']:.2f}" + ("" if g["passed"] else f" (expected {g['expected']})")
                                            for g in got), "example")
         out.append({"name": name, "passed": ok, "answers": got})
@@ -1984,7 +2006,7 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     path = results_path(project)
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-           "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed,
+           "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed, "sample": SAMPLE,
            "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
 
@@ -2005,6 +2027,7 @@ def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Ch
     exact = sum(got == gold for _, got, gold in scored) / len(scored)
     jac = sum(len(got & gold) / len(got | gold) if got | gold else 1.0 for _, got, gold in scored) / len(scored)
     want = ((spec.get("tests") or {}).get(parent) or {}).get("min_accuracy", 0)
+    check.severity = ((spec.get("tests") or {}).get(parent) or {}).get("severity", "error")
     check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f}) (min {want:.0%})",
           "min_accuracy", exact, want)
     return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[-1:]}
@@ -2560,8 +2583,10 @@ def main() -> None:
     p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
     p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
     p.add_argument("--max-cost", type=float, help="refuse to ask if one judgment's missing answers would cost more (USD, estimated)")
+    p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
     args = p.parse_args()
-    global MAX_COST
+    global MAX_COST, SAMPLE
+    SAMPLE = args.sample
     MAX_COST = args.max_cost if args.max_cost is not None else MAX_COST  # else $HUNCH_MAX_COST, if set
     project = load_project(args.path)
     if args.model:  # another engine on the same specs: its tables get a suffix, the spec's own stay untouched

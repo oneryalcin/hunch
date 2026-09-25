@@ -45,6 +45,7 @@ The folder must not exist. Recipes: `agent-eval` (check a coding agent's work fr
 | `--traffic` | all | off | Run the root judgments on rows logged by `judge(..., shadow=...)`. Not with `--source` |
 | `--model ID` | all | the spec's `model` | Use this engine for every judgment. Its tables get a suffix (`intent__deepseek_deepseek_flash`), so the spec's own tables are untouched |
 | `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | Stop before asking if one judgment's missing answers would cost more than this (estimated) |
+| `--sample N` | `compile`, `run`, `test`, `diff` | all rows | Judge only N rows of each root source, the same N every time (chosen by a hash of the key), so repeated samples come from the store and a later full run asks only the rest. `run --sample` caches answers but does not replace any table |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
 | `--list` | `review` | off | Print the queue instead of prompting |
 | `--limit N` | `review` | no limit | At most N rows this session |
@@ -159,7 +160,8 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 | --- | --- |
 | `version` | Format version (1). Field names are stable within a version. |
 | `command`, `at`, `git_sha` | `test`, when it ran (UTC), the commit it ran on. |
-| `passed` | Every check passed (the exit code was 0). |
+| `passed` | Every check passed, or failed only with `severity: warn` (the exit code was 0). |
+| `sample` | N if `test` ran with `--sample N`, else `null`. |
 | `cost` | Spent by this run, in USD. |
 | `judgments.<name>` | `spec_hash`, `model`, `rows`, and `questions` (and `multi`, for `type: multi`). |
 | `questions.<q>.gold` | Rows with gold: `rows`, and by origin `source`, `review`, `excluded`. |
@@ -167,7 +169,7 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 | `questions.<q>.calibration_error`, `auroc` | As printed; `auroc` for yes/no questions with both answers in gold. |
 | `questions.<q>.dial` | Per threshold: `automated` and `wrong` (shares); yes/no questions have them under `yes` and `no`. |
 | `questions.<q>.mistakes` | `total`, and `most_confident`: `id`, `got`, `p`, `gold`. |
-| `questions.<q>.checks` | Each check: `check` (the test key, like `min_accuracy`), `passed`, `value`, `limit`. |
+| `questions.<q>.checks` | Each check: `check` (the test key, like `min_accuracy`), `passed`, `value`, `limit`, `severity`. |
 | `questions.<q>.spot_checks`, `needs_context` | Random spot checks, and how many of them needed more context. |
 | `judgments.<name>.metrics.<m>` | `rule`, `rows`, `fired`, `rate`; with gold, `gold` (`basis`, `rows`), and `gold_rate`, `missed`, `false_alarms` (each `count`, `of`, `rate`, `ci`); `checks`. See [metrics](/reference/spec#metrics). |
 | `judgments.<name>.examples` | Per example: `name`, `passed`, and `answers` (`question`, `expected`, `got`, `p`, `passed`). See [examples](/reference/spec#examples). |
