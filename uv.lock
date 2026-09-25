@@ -75,8 +75,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hunch"
-version = "0.1.0"
+name = "hunch-ai"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

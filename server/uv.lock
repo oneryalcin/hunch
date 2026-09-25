@@ -75,8 +75,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hunch"
-version = "0.1.0"
+name = "hunch-ai"
 source = { editable = "../" }
 dependencies = [
     { name = "httpx" },
@@ -96,7 +95,7 @@ name = "hunch-server"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "hunch" },
+    { name = "hunch-ai" },
     { name = "python-multipart" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -104,7 +103,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "hunch", editable = "../" },
+    { name = "hunch-ai", editable = "../" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "starlette", specifier = ">=0.40" },
     { name = "uvicorn", specifier = ">=0.30" },

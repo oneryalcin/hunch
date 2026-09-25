@@ -5,10 +5,10 @@ description = "hunch server: online judgments, the review queue, runs and drift 
 license = "Elastic-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["hunch", "starlette>=0.40", "uvicorn>=0.30", "python-multipart>=0.0.9"]
+dependencies = ["hunch-ai", "starlette>=0.40", "uvicorn>=0.30", "python-multipart>=0.0.9"]
 
 [tool.uv.sources]
-hunch = { path = "..", editable = true }
+hunch-ai = { path = "..", editable = true }
 
 [build-system]
 requires = ["hatchling"]

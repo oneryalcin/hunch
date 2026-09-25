@@ -1,0 +1,63 @@
+# Release to PyPI with trusted publishing (OIDC): no API tokens, no uploads from a laptop.
+# Push a version tag to release: git tag v0.1.0 && git push origin v0.1.0
+#
+# A tag must point at a commit on main, match hunch.__version__, and pass the same checks every push runs.
+#
+# One-time PyPI setup (maintainer): pypi.org → Account → Publishing → add a pending publisher:
+# project hunch-ai, owner oneryalcin, repository hunch, workflow release.yml, environment pypi.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Tag commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "tag $GITHUB_REF_NAME is not on main"; exit 1; }
+      - name: Tag matches the package version
+        run: |
+          PKG=$(uv run --no-project --with . python -c "import hunch; print(hunch.__version__)")
+          TAG="${GITHUB_REF_NAME#v}"
+          test "$PKG" = "$TAG" || { echo "tag v$TAG != package $PKG"; exit 1; }
+
+  verify:
+    needs: guard
+    uses: ./.github/workflows/docs.yml
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build
+        run: uv build
+      - name: Check the metadata PyPI will show
+        run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # OIDC for trusted publishing; attestations are on by default
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
