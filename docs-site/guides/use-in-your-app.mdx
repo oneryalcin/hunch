@@ -22,6 +22,8 @@ The row's columns are keyword arguments, and must include every column in the sp
 
 The cache works the other way too. Running `hunch run` over past rows warms it, so repeats of them in the app cost nothing.
 
+Code that compares a label with a name, like `== "card_arrival"`, breaks if the option is renamed. List those names in the spec's `exposures` and the rename fails lint instead: see [apps depend on answer names](/guides/change-a-spec#apps-depend-on-answer-names).
+
 ## Act on `route`, not on `label`
 
 A label on its own doesn't tell your code whether to trust it. Give the question an `act` threshold in the spec:

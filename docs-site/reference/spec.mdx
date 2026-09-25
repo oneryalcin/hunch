@@ -395,9 +395,31 @@ exposures:
 | `name` | yes | Unique within this judgment. |
 | `kind` | no | `app` (default), `hook`, `dashboard` or `job`. |
 | `owner` | no | Who to ask about it. |
-| `uses` | no | The questions it reads. Leave it out if it reads every answer. |
+| `uses` | no | The questions it reads, or the answers its code compares against (below). Leave it out if it reads every answer. |
 | `url` | no | A link to it; only `http` and `https` links are shown. |
 | `description` | no | A note for people. |
+
+#### Answers an exposure relies on
+
+`uses` as a mapping names, per question, the answers the exposure's code compares against:
+
+```yaml
+uses:
+  department: [billing, technical]
+  urgent: [yes]
+  frustration: [3]      # a score level: 3 or "3:Very angry"
+  topics:               # read, relying on no particular answer
+```
+
+| Question type | Values |
+| --- | --- |
+| `choice` | Option names, and `none_of_these` if the question has [`none`](#question-keys). |
+| `noul` | `yes`, `no`. |
+| `score` | `level:label` as the column holds it, or the level number. |
+| `multi` | Option names (the column joins those that apply with `\|`). A per-option column (`topics__refund`) takes `yes`, `no`. |
+| union | The values of the question on any branch. |
+
+Lint, which every command runs first, fails while a listed value is not one the question can answer. `hunch diff` counts, per exposure, the rows whose answer moved into or out of a listed value. [Change a spec safely](/guides/change-a-spec#apps-depend-on-answer-names) shows both.
 
 ## Question keys
 

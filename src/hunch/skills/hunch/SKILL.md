@@ -33,7 +33,7 @@ hunch diff PATH --against git:HEAD --max-cost 0.01
 
 After `test`, read `.hunch/target/<tested path>.json` rather than parsing the terminal: per question the accuracy estimate and its interval, each check with pass or fail, metrics, examples, cost and git sha. Exit codes: 0 done (for `test`, every check passed); 1 a `FAIL`, or stopped with a message such as the cost cap (read the last line to tell which); 2 lint error or bad arguments.
 
-`hunch docs PATH` writes a page people can read and search (each judgment's status, numbers and lineage) to `.hunch/target/`; it asks nothing. Name what uses a judgment under `exposures:` so `diff` can say what a change affects.
+`hunch docs PATH` writes a page people can read and search (each judgment's status, numbers and lineage) to `.hunch/target/`; it asks nothing. Name what uses a judgment under `exposures:` so `diff` can say what a change affects; when app code branches on particular answers, write `uses: {department: [billing]}` so renaming one fails lint. If lint says an exposure relies on an answer that is gone, the app needs changing first: tell the user, don't just edit `uses`.
 
 To start from a working example: `hunch init --list`, then `hunch init tickets DIR` (DIR must not exist yet).
 

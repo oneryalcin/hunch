@@ -297,7 +297,7 @@ def search_text(n: str, m: dict) -> str:
         "questions": " ".join(f"{qid} {text_of(q.get('instructions'))}" for qid, q in qs.items()),
         "options": " ".join(f"{k} {text_of(v)}" for q in qs.values() for k, v in options_of(q)),
         "columns": " ".join([*m.get("state", []), m.get("key") or ""]), "source": str(m.get("source", "")),
-        "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')}"
+        "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')} {core.uses_text(x)}"
                             for x in m.get("exposures") or [])})
 
 
@@ -543,7 +543,7 @@ def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: lis
     reads = f"<code>{e(src[2])}</code>" if (src := source_node(m)) else " + ".join(link(u) for u in m["upstream"])
     exposures = "".join(
         f"<li>{e(x['name'])} <span class='muted'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
-        f"{' · reads ' + e(', '.join(x['uses'])) if x.get('uses') else ' · reads every answer'}</span>"
+        f" · {e(core.uses_text(x))}</span>"
         + (f" <a href='{e(x['url'])}' rel='noopener'>open</a>" if str(x.get("url", "")).startswith(("https://", "http://")) else "")
         + (f"<div class='muted'>{e(x['description'])}</div>" if x.get("description") else "") + "</li>"
         for x in m.get("exposures") or [])

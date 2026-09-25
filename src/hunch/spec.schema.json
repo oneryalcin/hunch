@@ -197,12 +197,37 @@
             "description": "Who to ask about it."
           },
           "uses": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The questions it reads. Leave out if it reads every answer.",
-            "minItems": 1
+            "description": "The questions it reads, or a mapping from each to the answers its code compares against (its contract: lint fails if one of them goes away). Leave out if it reads every answer.",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "string",
+                          "integer"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  ]
+                }
+              }
+            ]
           },
           "url": {
             "type": "string",
