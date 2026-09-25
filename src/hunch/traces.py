@@ -4,15 +4,19 @@ Every format is read into one event stream per session, then viewed as rows:
 
     event: {"session", "role": "human" | "agent", "text", "tools": [names], "at"}
 
-    turns: one row per human message: the request, the agent's final reply, the human's next message
-           (their reaction: the closest thing to free gold), what the agent did in between.
-    runs:  one row per session: the first request, the agent's final messages, totals.
+    turns:    one row per human message: the request, the agent's final reply, the human's next message
+              (their reaction: the closest thing to free gold), what the agent did in between.
+    runs:     one row per session: the first request, the agent's final messages, totals.
+    commands: one row per shell command the agent ran: the request it served, the folder it ran in, the command,
+              the agent's own description, who refused it (`person`, `classifier` or `no`) and whether it failed
+              (Claude Code only). `request` is the last message the person typed before the command, including
+              across a context compaction or a background notification, which the reader does not count as requests.
 
 Formats (detected from the file): Claude Code session .jsonl, Cursor agent .jsonl, OpenCode session .json,
 OpenTelemetry GenAI spans (`gen_ai.input.messages` / `gen_ai.output.messages`, one trace per line or a
 list of spans; Langfuse and other OTel-based tools export this).
 
-In a spec:  source: traces(sessions/**/*.jsonl)     # view: turns (default) or runs
+In a spec:  source: traces(sessions/**/*.jsonl)     # view: turns (default), runs or commands
 """
 import glob
 import json
@@ -21,7 +25,7 @@ from pathlib import Path
 
 # Tool names differ by harness; these two families are what the views count.
 EDIT_TOOLS = {"edit", "write", "multiedit", "notebookedit", "strreplace", "str_replace", "apply_patch", "create_file"}
-RUN_TOOLS = {"bash", "shell", "run_terminal_cmd", "exec_command", "execute", "terminal", "run"}
+RUN_TOOLS = {"bash", "powershell", "shell", "run_terminal_cmd", "exec_command", "execute", "terminal", "run"}
 # Text the harness injects into a human message (IDE context, `!` shell I/O, reminders, Cursor's wrappers).
 INJECTED = re.compile(r"<(ide_\w+|bash-\w+|command-\w+|local-command-\w+|system-reminder|task-notification|"
                       r"teammate-message|cross-session-message|user-prompt-submit-hook|manually_attached_skills|attached_files)[^>]*>.*?</\1>", re.S)
@@ -31,6 +35,9 @@ UNWRAP = re.compile(r"</?user_query>")
 INTERRUPT = "[Request interrupted by user"
 TURN_COLUMNS = ["id", "session", "at", "request", "final_reply", "next_message", "tools", "edits", "ran_after_edit"]
 RUN_COLUMNS = ["id", "session", "at", "request", "final_messages", "human_messages", "tools", "edits", "ran_after_edit"]
+COMMAND_COLUMNS = ["id", "session", "at", "request", "cwd", "tool", "command", "description", "rejected", "failed"]
+REJECTED = {"person": "doesn't want to proceed with this tool use",  # the person refused it in the prompt
+            "classifier": "denied by the Claude Code auto mode classifier"}  # Claude Code's safety classifier refused it
 
 
 def human(text: str) -> str | None:
@@ -50,7 +57,14 @@ def text_of(content) -> str:
 # ---------- readers: file → [(session, [events])] ----------
 
 def claude_code(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
-    ev = []
+    ev, results = [], {}
+    for r in lines:
+        for b in (r.get("message") or {}).get("content") or []:
+            if isinstance(b, dict) and b.get("type") == "tool_result":
+                t = b.get("content")
+                t = t if isinstance(t, str) else " ".join(x.get("text", "") for x in t or [] if isinstance(x, dict))
+                by = next((who for who, mark in REJECTED.items() if mark in t), "")
+                results[b.get("tool_use_id")] = {"rejected": by or "no", "failed": "yes" if b.get("is_error") and not by else "no"}
     for r in lines:
         if r.get("isSidechain") or r.get("isMeta"):
             continue
@@ -64,8 +78,11 @@ def claude_code(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
                 ev.append({"role": "human", "text": h, "tools": [], "at": r.get("timestamp", "")})
         elif t == "assistant":
             blocks = content if isinstance(content, list) else [{"type": "text", "text": content or ""}]
+            uses = [b for b in blocks if b.get("type") == "tool_use"]
             ev.append({"role": "agent", "text": text_of(blocks).strip(), "at": r.get("timestamp", ""),
-                       "tools": [b["name"] for b in blocks if b.get("type") == "tool_use"]})
+                       "tools": [b["name"] for b in uses],
+                       "calls": [{"name": b["name"], "input": b.get("input") or {}, "cwd": r.get("cwd", ""),
+                                  **results.get(b.get("id"), {"rejected": "", "failed": ""})} for b in uses]})
     return [(path.stem, ev)]
 
 
@@ -195,7 +212,24 @@ def runs(session: str, ev: list[dict]) -> list[dict]:
              "final_messages": "\n---\n".join(tail), "human_messages": len(hum), **_did(agent)}]
 
 
-VIEWS = {"turns": (turns, TURN_COLUMNS), "runs": (runs, RUN_COLUMNS)}
+def commands(session: str, ev: list[dict]) -> list[dict]:
+    """Turn numbers count human messages as in `turns`; `.k` is the command's place in that turn."""
+    rows, request, n, k = [], "", -1, 0
+    for e in ev:
+        if e["role"] == "human":
+            request, n, k = e["text"], n + 1, 0
+            continue
+        for c in e.get("calls", []):
+            if c["name"].lower() in RUN_TOOLS and n >= 0:
+                rows.append({"id": f"{session[:8]}#{n}.{k}", "session": session, "at": e["at"], "request": request,
+                             "cwd": c.get("cwd", ""), "tool": c["name"], "command": str(c["input"].get("command", "")),
+                             "description": str(c["input"].get("description", "")),
+                             "rejected": c["rejected"], "failed": c["failed"]})
+                k += 1
+    return rows
+
+
+VIEWS = {"turns": (turns, TURN_COLUMNS), "runs": (runs, RUN_COLUMNS), "commands": (commands, COMMAND_COLUMNS)}
 
 
 def rows(pattern: str, base: Path = Path("."), view: str = "turns") -> list[dict]:
@@ -203,7 +237,10 @@ def rows(pattern: str, base: Path = Path("."), view: str = "turns") -> list[dict
     files = sorted(glob.glob(str(base / Path(pattern).expanduser()), recursive=True))
     if not files:
         raise FileNotFoundError(f"traces({pattern}): no files under {base}")
-    return [r for f in files for s, ev in read(f) for r in fn(s, ev)]
+    out = [r for f in files for s, ev in read(f) for r in fn(s, ev)]
+    if view == "commands" and not out:
+        raise ValueError(f"traces({pattern}): no shell commands found (the commands view reads Claude Code sessions only)")
+    return out
 
 
 if __name__ == "__main__":  # quick look: python traces.py 'glob' [turns|runs]

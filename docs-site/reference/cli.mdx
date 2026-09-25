@@ -204,3 +204,5 @@ Verdicts saved to `<judgment>.reviews.csv` (columns `qid,row_id,state_hash,verdi
 | `both_ok` | `b`: two answers are acceptable; both count as right |
 | `ambiguous` | `a`: no single right answer; left out of scoring |
 | `needs_context` | `c`: the text shown is not enough to judge; left out of scoring and counted in `test`'s context line |
+
+`kind` says why the row was reviewed: `disputed`, `audit` (a random spot check), `uncertain`, `shadow`, or any other name you write when importing verdicts (for example `flagged`). Only `audit` rows feed the accuracy estimate; every verdict counts as gold. `test` also marks a row `same_text` when it takes its gold from another row with identical text: gold, but not a spot check.

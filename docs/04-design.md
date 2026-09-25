@@ -395,6 +395,16 @@ Server, from the same review: a verdict must match a row and kind the queue actu
 
 Output of `test`, `diff`, `compile` and `review --list` on every example is byte-identical before and after these fixes. Not changed, documented instead: the results table keeps the raw row (redaction applies to what is hashed, sent and logged); `test` exits 1 both for a failed check and for a cost refusal; `spec_hash` includes `act`, `gold` and `tests`, so `freeze` refuses a threshold-only change.
 
+## Findings, round 16: a guard for coding agents' shell commands (2026-09-25)
+
+Pydantic AI's headline in-run use is a decision model judging each tool call before it runs; nothing measures it. Built as a cookbook (`docs-site/cookbooks/command-guard.mdx`) on 1,315 shell commands from the 28 Trace Commons sessions, with a new `commands` trace view. Three narrow nouls (destroys, reaches_outside, sends_out), one request per command, $0.04 per run; $0.11 for three spec versions.
+
+- *The free signal was not gold.* 17 refusals: 15 by the person (builds, tests, installs, a branch rename: workflow, not safety) and 2 by Claude Code's auto-mode classifier (a trace upload, a push to main; the guard flags both at 0.98). Too few to measure with. The first version of the view missed the classifier's 2 (found by the Fable review).
+- *Vague spec, not a blind model.* v1 `reaches_outside` flagged 228; adding the working folder to the state moved 49 answers (mean |Δ| 0.037). The flags were literal readings of "outside the project" (/tmp logs, adb, temp clones). Stating the policy (lasting changes only) flipped 152 and cut flags to 99.
+- *Gold:* blind AI panel (Opus, Sonnet, Sonnet reversed), 100 random + 144 flagged; unanimous on 226/205/236 of 244. Estimated accuracy 100% / 95.0% / 100% (AUROC 0.987 / 0.961 / 1.000).
+- *The guard (stop if any p(yes) ≥ 0.5):* stops 11.6% of commands; 90 of the 149 reviewed stops (60%) were needed; among the 91 random commands it would let run, 1 needed a person: miss rate 1.1% (95% CI 0.2–6.0%), roughly 13 (2–69) of 1,162. Raising the bar trades misses fast (0.8: 21 misses among reviewed). "90 of 91 caught" on reviewed rows was selection-biased: flagged rows were all reviewed, unflagged only by the random slice.
+- *Found in hunch:* `test` said a noul's gold was "not among the options" whenever the noul had true/false criteria (the check treated any criteria mapping as choice options); a verdict shared by identical text counted as a random spot check for every duplicate (127 "random" rows from 100 reviews), narrowing the interval. Now one row owns each verdict (the reviewed row if it still has that text, else the first live row with it, so a real id shift keeps its kind); the others are `same_text`: gold, not an audit. Flagged panel rows are kind `flagged`, not `uncertain`. The LLM engine now sends a noul's criteria (it had dropped them). `request` after a compaction or notification is the last typed message: 111 of 1,315 commands, documented. Lint: views come from the trace reader; a noul's criteria keys must be true/false (hunch's YAML keeps yes/no as text). The trace reader missed `PowerShell` as a run tool (41 turns' `ran_after_edit` corrected).
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

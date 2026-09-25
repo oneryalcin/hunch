@@ -62,6 +62,7 @@
             "pages": [
               "cookbooks/index",
               "cookbooks/claude-code-sessions",
+              "cookbooks/command-guard",
               "cookbooks/banking-intents",
               "cookbooks/swe-patches",
               "cookbooks/amazon-reviews"
