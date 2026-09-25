@@ -137,12 +137,14 @@ How `traces(...)` turns sessions into rows. Ignored for other sources.
 | --- | --- | --- |
 | `turns` (default) | human message that got a reply and a next message | `id`, `session`, `at`, `request`, `final_reply`, `next_message`, `tools`, `edits`, `ran_after_edit` |
 | `runs` | session | `id`, `session`, `at`, `request`, `final_messages`, `human_messages`, `tools`, `edits`, `ran_after_edit` |
+| `commands` | shell command the agent ran (Claude Code sessions) | `id`, `session`, `at`, `request`, `cwd`, `tool`, `command`, `description`, `rejected`, `failed` |
 
 - `next_message`: the developer's next message.
 - Injected text (IDE context, `!` shell output, reminders, messages from other agent sessions) is removed from user messages. A message that is only injected text, a slash command, a context-continuation summary or an interruption is not a turn.
 - A session's last turn has no next message, so it is not a row.
 - `ran_after_edit`: `yes` if the agent ran a command after its last edit, `no` if not, empty if it made no edits.
 - `final_messages` (`runs`): the agent's last three messages.
+- `commands`: `request` is the human message the command served; `cwd` the folder it ran in; `description` the agent's own note on it; `rejected` is `yes` if the person refused the call, `failed` if it returned an error. Ids are `<session>#<turn>.<n>`, the n-th command in that turn.
 
 ```yaml
 source: traces(sessions/*.jsonl)

@@ -66,6 +66,7 @@ RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that n
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
 # stand in for unreviewed agreeing rows; rows picked for any other reason are not a random sample of anything.
+# attach_gold also marks "same_text": a row given another live row's verdict because their text is identical.
 
 
 # ---------- spec ----------
@@ -285,7 +286,7 @@ SOURCE_CALL = re.compile(r"^(traces|py)\((.+)\)$")
 
 
 def source_kind(spec: dict) -> tuple[str, str]:
-    """source: a CSV path | traces(<glob>) (agent sessions, see traces.py; `view: turns|runs`) |
+    """source: a CSV path | traces(<glob>) (agent sessions, see traces.py; `view: turns|runs|commands`) |
     py(<file.py>:<function>) (any function returning dicts: a dlt resource, a query, a generator)."""
     m = SOURCE_CALL.match(str(spec["source"]).strip())
     return (m[1], m[2].strip()) if m else ("csv", str(spec["source"]))
@@ -462,6 +463,9 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
+        if q.get("type") == "noul" and "criteria" in q and (not isinstance(q["criteria"], dict)
+                                                            or not {str(k).lower() for k in q["criteria"]} <= {"true", "false"}):
+            errors.append(f"{qid}: a noul's criteria are {{\"true\": …, \"false\": …}} (what a yes and a no mean)")
         if "act" in q:
             act = q["act"]
             if isinstance(act, dict):
@@ -537,8 +541,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             errors += tag([f"missing {', '.join(missing)} (every judgment needs model, key, state and questions)"])
             columns[name] = None
             continue
-        if source_kind(spec)[0] == "traces" and spec.get("view", "turns") not in ("turns", "runs"):
-            errors += tag([f"view must be turns or runs, got {spec['view']!r}"])
+        from hunch import traces
+        if source_kind(spec)[0] == "traces" and spec.get("view", "turns") not in traces.VIEWS:
+            errors += tag([f"view must be one of {', '.join(traces.VIEWS)}, got {spec['view']!r}"])
             columns[name] = None
             continue
         if ups:
@@ -1072,14 +1077,18 @@ def attach_gold(items: list[dict], reviews: dict) -> None:
     from scoring. A verdict follows its text: matched by row id, else by the exact state it was made on (ids can
     shift, e.g. when the trace reader stops counting a kind of message); on text that has since changed, ignored."""
     by_text = {(r["qid"], r["state_hash"]): r for r in reviews.values()}
+    live = {(it["qid"], it["id"]) for it in items}
     for it in items:
         col = it["q"].get("gold")
         it["raw_gold"] = normalize_gold(it["q"], it["row"].get(col, "")) if col else None
-        r = reviews.get((it["qid"], it["id"]))
+        r, copied = reviews.get((it["qid"], it["id"])), False
         if not r or r["state_hash"] != it["shash"]:
             r = by_text.get((it["qid"], it["shash"]))
+            # Same text as a row that is still here under its own id: the verdict is right for this row too, but this
+            # row was not drawn at random, so it must not count as a spot check (it would narrow the interval).
+            copied = bool(r) and (r["qid"], r["row_id"]) in live
         it["verdict"] = r["verdict"] if r else None
-        it["review_kind"] = (r.get("kind") or "") if it["verdict"] else None
+        it["review_kind"] = ("same_text" if copied else r.get("kind") or "") if it["verdict"] else None
         if it["verdict"] in EXCLUDED:
             it["gold"], it["gold_src"] = None, "excluded"
         elif it["verdict"]:
@@ -1671,7 +1680,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
             check(auc >= conf.get("min_auroc", 0),
                   f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {conf.get('min_auroc', 0)})")
 
-    offered = [it for it in gold_its if it["aq"].get("criteria") and isinstance(it["aq"]["criteria"], dict)]
+    offered = [it for it in gold_its if it["aq"].get("type") == "choice" and isinstance(it["aq"].get("criteria"), dict)]
     lost = [it for it in offered if not it["gold"] & set(it["aq"]["criteria"])]
     if lost:
         print(f"       {len(lost)} of {len(offered)} rows' gold is not among the options this judgment offered "
