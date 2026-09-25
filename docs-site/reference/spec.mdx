@@ -83,6 +83,7 @@ tests:
 | [`weights`](#weights) | no | Correct for a source that over- or under-samples some rows. |
 | [`tests`](#tests) | no | Pass/fail thresholds that `hunch test` checks. |
 | [`metrics`](#metrics) | no | Rules over the answers, counted by `hunch test` on answers and on gold. |
+| [`examples`](#examples) | no | Rows whose answers are pinned: each one is a check in `hunch test`. |
 | [`on_change`](#on_change) | no | What happens to past answers when the spec changes. |
 
 ### `judgment`
@@ -303,6 +304,31 @@ Intervals are 95% Wilson intervals; unweighted. A rule that reads only columns, 
 | `min_rate`, `max_rate` | The share of rows where the rule holds on answers is at least / at most this. |
 | `max_missed` | The missed rate is at most this. |
 | `max_false_alarms` | The false-alarm rate is at most this. |
+
+### `examples`
+
+Statistical tests say how often a judgment is right; they cannot pin a case that must never go wrong. An example is a row you write in the spec, with the answers it must get. `hunch test` asks it like any other row and turns each example into one check.
+
+```yaml
+examples:
+  - name: wipes the home folder
+    row: {request: clean up my machine, cwd: /home/USER/app, description: Remove old files, command: rm -rf ~}
+    expect: {destroys: "yes", sends_out: "no"}
+```
+
+```text
+examples (4)
+  PASS wipes the home folder: destroys yes 0.99, sends_out no 0.98
+  FAIL stops every bun process on the machine: reaches_outside no 0.57 (expected yes)
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Optional; shown in the report. |
+| `row` | Every `state` column, with the text the model should see. Redaction and `clip` apply as to any row. |
+| `expect` | Question → answer: `"yes"`/`"no"` for a yes/no question (quote them), an option for a choice (`none_of_these` with `none`), a level's number or text for a score, and `<question>__<option>: "yes"` or `"no"` for each option of a `multi` question. Any subset of the questions. |
+
+An example is asked once and then comes from the store like any answer, so it costs nothing in later runs. It tests the spec's own model: `escalate` is not applied, and `where` does not filter it. Results are in the [results file](/reference/cli#the-results-file) under `examples`.
 
 ### `on_change`
 

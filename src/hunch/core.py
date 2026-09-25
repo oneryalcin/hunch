@@ -51,7 +51,7 @@ PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
 HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
 QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
-SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics",
+SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
              "weights", "chain", "view", "clip", "redact", "on_change"}
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
 TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability"}
@@ -512,6 +512,35 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             errors.append(f"{qid}: multi questions are expanded when the spec is loaded (internal error)")
         if q["type"] == "score" and not 2 <= len(q.get("criteria") or []) <= 10:
             errors.append(f"{qid}: score needs 2 to 10 levels")
+    examples = spec.get("examples") or []
+    if not isinstance(examples, list):
+        errors.append("examples: a list of {name, row, expect}")
+        examples = []
+    for i, ex in enumerate(examples, 1):
+        where_ = f"examples[{i}]" + (f" ({ex.get('name')})" if isinstance(ex, dict) and ex.get("name") else "")
+        if not isinstance(ex, dict) or not isinstance(ex.get("row"), dict) or not isinstance(ex.get("expect"), dict) or not ex["expect"]:
+            errors.append(f"{where_}: needs row: {{column: value}} and expect: {{question: answer}}")
+            continue
+        for k in set(ex) - {"name", "row", "expect"}:
+            warnings.append(f"{where_}: unknown key {k!r} (typo?)")
+        if "union" in spec:
+            errors.append(f"{where_}: a union has no questions of its own; put examples on its branches")
+        for col in spec.get("state", []):
+            if col not in ex["row"]:
+                errors.append(f"{where_}: row needs the state column {col!r}")
+        for qid, v in ex["expect"].items():
+            if qid in spec.get("_multi", {}):
+                errors.append(f"{where_}: {qid} is a multi question; expect each option as {qid}__<option>: yes or no")
+                continue
+            q = spec["questions"].get(qid)
+            if q is None:
+                errors.append(f"{where_}: no question {qid!r}")
+            elif q["type"] == "noul" and str(v).strip().lower() not in ("yes", "no", "true", "false"):
+                errors.append(f"{where_}: {qid} is yes/no, got {v!r}")
+            elif q["type"] == "choice" and str(v) not in {*q["criteria"], *([NONE] if q.get("none") else [])}:
+                errors.append(f"{where_}: {v!r} is not an option of {qid}")
+            elif q["type"] == "score" and next(iter(normalize_gold(q, str(v)))) not in {str(n) for n in range(len(q["criteria"]))}:
+                errors.append(f"{where_}: {v!r} is not a level of {qid} (0–{len(q['criteria']) - 1} or a level's text)")
     metrics = spec.get("metrics") or {}
     for name, m in metrics.items():
         if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule"}:
@@ -1858,6 +1887,40 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
     return out
 
 
+def test_examples(spec: dict, check: "Checks", all_stats: list) -> list[dict]:
+    """Golden examples: inline rows whose answers are pinned, asked like any row (same redaction, clip and keys, so
+    once cached they cost nothing). Each example is one check; a failure names what it got and what was expected."""
+    examples = spec.get("examples") or []
+    if not examples:
+        return []
+    items, owner = [], []
+    for i, ex in enumerate(examples):
+        row = {**ex["row"], spec["key"]: f"example-{i + 1}"}
+        for qid, v in ex["expect"].items():
+            it = item(spec, row, qid)
+            it["expected"] = (frozenset({"yes" if is_yes(str(v)) else "no"}) if it["q"]["type"] == "noul"
+                              else normalize_gold(it["q"], str(v)))
+            items.append(it)
+            owner.append(i)
+    answers, stats = asyncio.run(fill(spec, open_store(spec), items))
+    all_stats.append(stats)
+    print(f"\nexamples ({len(examples)})")
+    out = []
+    for i, ex in enumerate(examples):
+        name = ex.get("name") or f"example {i + 1}"
+        got = []
+        for it in (it for it, o in zip(items, owner) if o == i):
+            a = answers[it["key"]]
+            label, p, _ = decide(a)
+            got.append({"question": it["qid"], "expected": gold_str(it["expected"]), "got": label, "p": _r(p),
+                        "passed": hit(it, a, "expected")})
+        ok = all(g["passed"] for g in got)
+        check(ok, f"{name}: " + ", ".join(f"{g['question']} {g['got']} {g['p']:.2f}" + ("" if g["passed"] else f" (expected {g['expected']})")
+                                           for g in got), "example")
+        out.append({"name": name, "passed": ok, "answers": got})
+    return out
+
+
 def cmd_test(project: dict, args) -> None:
     results_path(project).unlink(missing_ok=True)  # never leave an older run's results looking current
     results = execute(project)
@@ -1889,6 +1952,8 @@ def cmd_test(project: dict, args) -> None:
             rep.setdefault("multi", {})[parent] = test_multi(spec, parent, labels, res, check)
         for mname, m in (spec.get("metrics") or {}).items():
             rep.setdefault("metrics", {})[mname] = test_metric(spec, mname, m["rule"], res, check)
+        if spec.get("examples"):
+            rep["examples"] = test_examples(spec, check, all_stats)
     print()
     stats = merge_stats(*all_stats)
     print_stats(stats)
