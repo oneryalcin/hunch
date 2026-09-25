@@ -154,7 +154,7 @@ Pre-v1, in this order (each one PR):
 
 Exact match was 66% (83/107 answerable, 49/93 unanswerable). Of the 68 errors, 44 are a plausible value given for a question the text does not answer, 14 an overlapping span that exact match rejects, 6 another wrong value, 4 NONE for an answerable question. Both checks mostly approve the first kind, which is the error that matters in real extraction: a value that looks right and is not in the text. The sequence probability of the proposed value is no help (DeepSeek at temperature 0 reports every generated token at p = 1). The first spike also showed how easily the check's wording inverts its meaning for NONE (AUROC 0.34 before the fix), a risk every user-written check would carry.
 
-**Reopen when** a check reaches AUROC ≥ 0.8 on this sample (script and data: the spike's SQuAD v2 hash sample, reproducible), for example a newer Jev, a stronger verifier model, or asking the check to quote the supporting span. Until then, select instead of generate.
+**Reopen when** a check reaches AUROC ≥ 0.8 on this sample (the 200 SQuAD v2 dev questions whose ids have the lowest SHA-256; prompts as described above), for example a newer Jev, a stronger verifier model, or asking the check to quote the supporting span. Until then, select instead of generate.
 
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
