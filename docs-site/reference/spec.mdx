@@ -269,11 +269,13 @@ A `multi` question's own entry takes `min_accuracy` only; per-option tests go un
 
 ### `metrics`
 
-A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). `hunch test` counts it twice, and compares the two.
+A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). In a rule, a question's name stands for that row's answer (`'yes'`/`'no'`, an option, a level), with `<question>_p` and `<question>_pyes` beside it; source columns work too. `hunch test` counts the rule twice, and compares the two.
+
+This example is from the [command guard](/cookbooks/command-guard), whose three yes/no questions are named `destroys`, `reaches_outside` and `sends_out`:
 
 ```yaml
 metrics:
-  stopped:                       # a person looks first if any question says yes
+  stopped:                       # a person looks first if any of the three questions says yes
     rule: destroys == 'yes' or reaches_outside == 'yes' or sends_out == 'yes'
 tests:
   stopped: {max_rate: 0.15, max_missed: 0.02}
