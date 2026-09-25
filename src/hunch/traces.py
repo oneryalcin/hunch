@@ -168,7 +168,8 @@ def _did(agent_events: list[dict]) -> dict:
 
 
 def turns(session: str, ev: list[dict]) -> list[dict]:
-    """Ids number every human message that got a next one (#n is stable when filtering rules change)."""
+    """Ids number the human messages the reader keeps, so a change in what counts as human shifts later ids in that
+    session. Reviews follow their text (core.attach_gold), so they survive the shift."""
     rows, cur, agent, n = [], None, [], 0
     for e in ev:
         if e["role"] == "human":

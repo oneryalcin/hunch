@@ -1069,12 +1069,16 @@ def attach_gold(items: list[dict], reviews: dict) -> None:
     """Effective gold = a review verdict on this exact row text if there is one, else the source column.
     Verdicts: model_right / key_right / labeled / confirmed / against_right / spec_right → that label; both_ok → both labels;
     ambiguous / needs_context (a reviewer could only decide it by knowing more than the state shows) → row dropped
-    from scoring. A verdict on text that has since changed is ignored."""
+    from scoring. A verdict follows its text: matched by row id, else by the exact state it was made on (ids can
+    shift, e.g. when the trace reader stops counting a kind of message); on text that has since changed, ignored."""
+    by_text = {(r["qid"], r["state_hash"]): r for r in reviews.values()}
     for it in items:
         col = it["q"].get("gold")
         it["raw_gold"] = normalize_gold(it["q"], it["row"].get(col, "")) if col else None
         r = reviews.get((it["qid"], it["id"]))
-        it["verdict"] = r["verdict"] if r and r["state_hash"] == it["shash"] else None
+        if not r or r["state_hash"] != it["shash"]:
+            r = by_text.get((it["qid"], it["shash"]))
+        it["verdict"] = r["verdict"] if r else None
         it["review_kind"] = (r.get("kind") or "") if it["verdict"] else None
         if it["verdict"] in EXCLUDED:
             it["gold"], it["gold_src"] = None, "excluded"

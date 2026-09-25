@@ -96,7 +96,7 @@ intent,537,ba84812c72c748ed,both_ok,pin_blocked|card_swallowed,oner,2026-09-25T0
 ```
 
 - **Commit this file.** It is your gold. The answer store is a cache and can be rebuilt; your verdicts can't.
-- **Verdicts are tied to the row's text.** `state_hash` is a hash of the state the model saw. If the row's text changes (new data, a different `redact` or `clip`), the old verdict no longer applies and the row comes back to the queue. Changing the question does not drop verdicts: gold is about the row.
+- **Verdicts are tied to the row's text.** `state_hash` is a hash of the state the model saw. A verdict is found by row id, or, if the id changed (for example, the trace reader started skipping a kind of message), by the same text. If the row's text changes (new data, a different `redact` or `clip`), the old verdict no longer applies and the row comes back to the queue. Changing the question does not drop verdicts: gold is about the row.
 - **The last verdict for a row wins.**
 - **Share verdicts between specs** that ask the same question of the same rows with the `reviews:` key. For example, a second version of a spec can point at the first one's file:
 
