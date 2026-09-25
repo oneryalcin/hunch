@@ -145,6 +145,17 @@ Pre-v1, in this order (each one PR):
 
 **Trigger.** A real use case that selection cannot cover (candidates cannot be listed by code), measured end to end the way the triage, agent-claim and command-guard cookbooks were. Cost when triggered: an engine method for structured output, one question type, normalised gold matching, and a cookbook with honest numbers.
 
+**Measured 2026-09-25: delayed, the confidence is not good enough yet.** The design that fits hunch best is one question type, `extract`, whose engine proposes a value and then reads p(yes) from a yes/no check of it; the value becomes the label and p(yes) the confidence, so gold, reviews, `act`, the dial and calibration would work unchanged. The gate set before building: the check must separate right values from wrong ones (AUROC ≥ 0.8) and be roughly calibrated. A spike on 200 SQuAD v2 dev questions (a hash sample, 107 answerable, 93 not; SQuAD exact match), deepseek-flash proposing at temperature 0, $0.03 in all:
+
+| Check | AUROC | Stated vs actual among p ≥ 0.9 | Right when acting at 0.9 |
+|---|---|---|---|
+| deepseek-flash checks its own value | 0.71 (0.81 on proposed values, 0.67 on NONE) | 1.00 vs 0.76 | 75.7% of 74% automated |
+| Jev (jev-1.13.0) checks deepseek's value, run as a hunch spec | 0.76 | 0.97 vs 0.81 | 80.7% of 60% automated |
+
+Exact match was 66% (83/107 answerable, 49/93 unanswerable). Of the 68 errors, 44 are a plausible value given for a question the text does not answer, 14 an overlapping span that exact match rejects, 6 another wrong value, 4 NONE for an answerable question. Both checks mostly approve the first kind, which is the error that matters in real extraction: a value that looks right and is not in the text. The sequence probability of the proposed value is no help (DeepSeek at temperature 0 reports every generated token at p = 1). The first spike also showed how easily the check's wording inverts its meaning for NONE (AUROC 0.34 before the fix), a risk every user-written check would carry.
+
+**Reopen when** a check reaches AUROC ≥ 0.8 on this sample (script and data: the spike's SQuAD v2 hash sample, reproducible), for example a newer Jev, a stronger verifier model, or asking the check to quote the supporting span. Until then, select instead of generate.
+
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
 | Item | Question it answers | Done when |
