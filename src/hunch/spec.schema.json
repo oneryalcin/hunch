@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json",
+  "title": "hunch spec",
+  "description": "A judgment: rows, what the model sees, the questions it answers, and how they are tested. Reference: https://fuguai.mintlify.site/reference/spec",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "judgment": {
+      "type": "string",
+      "description": "Name of the judgment; also the name of its results table."
+    },
+    "model": {
+      "type": "string",
+      "description": "The engine, pinned to an exact version: jev-1.13.0, deepseek:<id>, openrouter:<id>[@provider]."
+    },
+    "source": {
+      "type": "string",
+      "description": "Where rows come from: a CSV path, traces(<glob>), py(<file.py>:<function>) or ref(<judgment>)."
+    },
+    "key": {
+      "type": "string",
+      "description": "The column that identifies a row."
+    },
+    "state": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The columns the model sees, and nothing else."
+    },
+    "view": {
+      "enum": [
+        "turns",
+        "runs",
+        "commands"
+      ],
+      "description": "For traces(...): one row per turn (default), per session, or per shell command."
+    },
+    "redact": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Removed from the state before hashing and sending: secrets, emails, home, or a regex."
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "Per state column: keep the first N characters, or the last N with -N."
+    },
+    "where": {
+      "type": "string",
+      "description": "Keep only rows that match a condition over columns and upstream answers."
+    },
+    "chain": {
+      "type": "boolean",
+      "description": "With where: confidence becomes this judgment's own times the probability the row was routed here correctly."
+    },
+    "weights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by",
+        "population"
+      ],
+      "description": "How the source rows were sampled, so every number is weighted to the population.",
+      "properties": {
+        "by": {
+          "type": "string",
+          "description": "The column the sample was stratified by."
+        },
+        "population": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Each value's share of the population; shares sum to 1."
+        }
+      }
+    },
+    "union": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Combine one question's answers from these judgments into one table."
+    },
+    "question": {
+      "type": "string",
+      "description": "With union: the question the branches share."
+    },
+    "reviews": {
+      "type": "string",
+      "description": "Path of the reviews file, to share verdicts between judgments that ask the same question of the same rows."
+    },
+    "on_change": {
+      "enum": [
+        "reask",
+        "new_rows_only",
+        "freeze"
+      ],
+      "description": "What happens to past answers when the spec changes (default reask)."
+    },
+    "questions": {
+      "type": "object",
+      "description": "The questions, by name. The name is not sent to the model.",
+      "additionalProperties": {
+        "$ref": "#/definitions/question"
+      }
+    },
+    "tests": {
+      "type": "object",
+      "description": "Thresholds hunch test checks, per question or metric.",
+      "additionalProperties": {
+        "$ref": "#/definitions/tests"
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Rules over a row, counted on answers and on gold, with misses and false alarms.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule"
+        ],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "description": "A condition over answers and columns, as in where: destroys == 'yes' or sends_out == 'yes'."
+          }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "description": "Rows whose answers are pinned; each is one check in hunch test.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "expect"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Shown in the report."
+          },
+          "severity": {
+            "$ref": "#/definitions/severity"
+          },
+          "row": {
+            "type": "object",
+            "description": "Every state column, with the text the model should see."
+          },
+          "expect": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Question → answer. Quote \"yes\" and \"no\"; multi options as <question>__<option>."
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "share": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "severity": {
+      "enum": [
+        "error",
+        "warn"
+      ],
+      "description": "warn: a failure prints WARN and does not fail hunch test."
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "instructions"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "choice",
+            "noul",
+            "score",
+            "multi"
+          ],
+          "description": "choice: one option; noul: yes/no with p(yes); score: an ordered scale; multi: yes/no per option."
+        },
+        "instructions": {
+          "type": [
+            "string",
+            "object",
+            "array"
+          ],
+          "description": "The question, with its whole meaning (the model never sees the question's name)."
+        },
+        "criteria": {
+          "type": [
+            "object",
+            "array"
+          ],
+          "description": "choice/multi: option → description; score: levels, lowest first; noul (optional): {\"true\": …, \"false\": …}."
+        },
+        "none": {
+          "type": "string",
+          "description": "choice: adds a none_of_these option, described by this text."
+        },
+        "act": {
+          "description": "Below this confidence a person reviews the answer. For noul, one value or {yes: …, no: …}.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/share"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "yes": {
+                  "$ref": "#/definitions/share"
+                },
+                "no": {
+                  "$ref": "#/definitions/share"
+                }
+              }
+            }
+          ]
+        },
+        "gold": {
+          "type": "string",
+          "description": "The source column that holds the right answer, if there is one."
+        },
+        "escalate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model"
+          ],
+          "description": "Answers below act are asked again on this engine.",
+          "properties": {
+            "model": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "noul"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "criteria": {
+            "type": "object",
+            "propertyNames": {
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_accuracy": {
+          "$ref": "#/definitions/share",
+          "description": "Accuracy (with reviews, the estimate) is at least this."
+        },
+        "max_calibration_error": {
+          "$ref": "#/definitions/share",
+          "description": "Expected calibration error is at most this."
+        },
+        "min_act_accuracy": {
+          "$ref": "#/definitions/share",
+          "description": "Accuracy among answers confident enough to act on is at least this."
+        },
+        "min_auroc": {
+          "$ref": "#/definitions/share",
+          "description": "noul: p(yes) separates gold yes from no at least this well."
+        },
+        "order_stability": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "choice: re-ask a sample with options reordered; costs money.",
+          "properties": {
+            "sample": {
+              "type": "integer"
+            },
+            "permutations": {
+              "type": "integer"
+            },
+            "max_flip_rate": {
+              "$ref": "#/definitions/share"
+            }
+          }
+        },
+        "min_rate": {
+          "$ref": "#/definitions/share",
+          "description": "Metric: the rule holds on at least this share of rows."
+        },
+        "max_rate": {
+          "$ref": "#/definitions/share",
+          "description": "Metric: the rule holds on at most this share of rows."
+        },
+        "max_missed": {
+          "$ref": "#/definitions/share",
+          "description": "Metric: the missed rate is at most this."
+        },
+        "max_false_alarms": {
+          "$ref": "#/definitions/share",
+          "description": "Metric: the false-alarm rate is at most this."
+        },
+        "severity": {
+          "$ref": "#/definitions/severity"
+        }
+      }
+    }
+  }
+}

@@ -21,6 +21,7 @@ def init(argv: list[str]) -> None:
     if dest.exists():
         sys.exit(f"{dest} exists; pick another folder: hunch init {argv[0]} <DIR>")
     shutil.copytree(RECIPES / name, dest, ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(Path(__file__).parent / "spec.schema.json", dest)  # the specs' first line points editors at it
     print(f"{argv[0]} → {dest}/  next: point the source at your rows, then `hunch compile {dest}` (cost), "
           f"`hunch run {dest}`, `hunch review {dest}` (build gold), `hunch test {dest}`")
 

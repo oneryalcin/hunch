@@ -5,6 +5,14 @@ description: "Every key a hunch spec (YAML) accepts, what it does, and one examp
 
 One YAML file defines one judgment. A folder of specs is a [project](/reference/projects). `hunch lint` checks every key on this page; unknown keys are warnings, not errors.
 
+For completion and checks while you type, hunch ships a JSON Schema of this page, `spec.schema.json`. `hunch init` copies it into the new project, and each recipe spec's first line points to it:
+
+```yaml
+# yaml-language-server: $schema=spec.schema.json
+```
+
+VS Code and Cursor read that line through the YAML extension (`redhat.vscode-yaml`). For a spec you started by hand, copy the file from an `init`ed project, or from the installed package: `python -c "import hunch, pathlib; print(pathlib.Path(hunch.__file__).parent / 'spec.schema.json')"`. The schema covers keys and allowed values; `lint` also checks what it cannot, such as whether a column reaches the spec.
+
 ## A complete example
 
 Every root-judgment key except `where`, `chain`, `union`, `question`, `reviews` and `view`. Passes `hunch lint` against a CSV with columns `id, subject, body, sample, gold_department, gold_urgent, gold_topics`:

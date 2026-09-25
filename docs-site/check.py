@@ -28,4 +28,23 @@ for page, words in missing.items():
 total = sum(len(v) for v in checks.values())
 print(f"checked {total} names across {len(checks)} reference pages: "
       + ("all documented" if not any(missing.values()) else f"{sum(map(len, missing.values()))} missing"))
-sys.exit(1 if any(missing.values()) else 0)
+
+# The spec schema (for editors) must say what the code says: same keys, same allowed values.
+import json  # noqa: E402
+from hunch import traces  # noqa: E402
+
+schema = json.loads((SRC / "spec.schema.json").read_text())
+d = schema["definitions"]
+pairs = {
+    "spec keys": (set(schema["properties"]), core.SPEC_KEYS),
+    "question keys": (set(d["question"]["properties"]), core.QUESTION_KEYS - {"_multi"}),
+    "tests": (set(d["tests"]["properties"]), core.TEST_KEYS | core.METRIC_TEST_KEYS),
+    "on_change": (set(schema["properties"].get("on_change", {}).get("enum", [])), set(core.ON_CHANGE)),
+    "view": (set(schema["properties"].get("view", {}).get("enum", [])), set(traces.VIEWS)),
+    "severity": (set(d.get("severity", {}).get("enum", [])), set(core.SEVERITIES)),
+}
+drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}
+for name, (extra, absent) in drift.items():
+    print(f"spec.schema.json {name}: " + ", ".join([f"not in the code {sorted(extra)}"] * bool(extra) + [f"missing {sorted(absent)}"] * bool(absent)))
+print(f"schema: {len(pairs)} key sets " + ("match the code" if not drift else "differ from the code"))
+sys.exit(1 if any(missing.values()) or drift else 0)

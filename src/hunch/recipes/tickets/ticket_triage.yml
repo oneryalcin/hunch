@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=spec.schema.json
 judgment: ticket_triage
 model: jev-1.13.0
 source: tickets.csv
