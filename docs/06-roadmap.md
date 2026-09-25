@@ -151,8 +151,8 @@ Pre-v1, in this order (each one PR):
 |---|---|---|---|
 | deepseek-flash checks its own value | 0.71 (0.81 on proposed values, 0.67 on NONE) | 1.00 vs 0.76 | 75.7% of 74% automated |
 | Jev (jev-1.13.0) checks deepseek's value, run as a hunch spec | 0.76 | 0.97 vs 0.81 | 80.7% of 60% automated |
-| GLiNER2.5-Decide (local encoder, Apache 2.0) checks deepseek's value | 0.45 | about 0.96 vs 0.59 | 60.2% of 46% automated |
-| GLiNER2.5-base extracts the span itself (question as the field description, best candidate's confidence; 40% exact match) | 0.60 | 0.98 vs 0.46 (p ≥ 0.95) | 45.5% of 60% automated |
+| GLiNER2.5-Decide (local encoder, Apache 2.0) checks deepseek's value | 0.45 | 0.96 vs 0.60 | 60.2% of 46% automated |
+| GLiNER2.5-base extracts the span itself (question as the field description, best candidate's confidence; 40% exact match) | 0.60 | 0.98 vs 0.46 | 45.5% of 60% automated |
 
 Exact match was 66% (83/107 answerable, 49/93 unanswerable). Of the 68 errors, 44 are a plausible value given for a question the text does not answer, 14 an overlapping span that exact match rejects, 6 another wrong value, 4 NONE for an answerable question. Both checks mostly approve the first kind, which is the error that matters in real extraction: a value that looks right and is not in the text. Encoders that only select spans from the text (GLiNER2.5, GLiFormer) cannot write a value the text lacks, but SQuAD v2's unanswerable questions have plausible spans in the text, and GLiNER2.5 picked them confidently; SQuAD's free questions are also not the typed fields (names, amounts, dates) it is trained for, so a field-extraction set would be fairer to it. The sequence probability of the proposed value is no help (DeepSeek at temperature 0 reports every generated token at p = 1). The first spike also showed how easily the check's wording inverts its meaning for NONE (AUROC 0.34 before the fix), a risk every user-written check would carry.
 
