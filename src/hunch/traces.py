@@ -24,7 +24,9 @@ EDIT_TOOLS = {"edit", "write", "multiedit", "notebookedit", "strreplace", "str_r
 RUN_TOOLS = {"bash", "shell", "run_terminal_cmd", "exec_command", "execute", "terminal", "run"}
 # Text the harness injects into a human message (IDE context, `!` shell I/O, reminders, Cursor's wrappers).
 INJECTED = re.compile(r"<(ide_\w+|bash-\w+|command-\w+|local-command-\w+|system-reminder|task-notification|"
-                      r"teammate-message|user-prompt-submit-hook|manually_attached_skills|attached_files)[^>]*>.*?</\1>", re.S)
+                      r"teammate-message|cross-session-message|user-prompt-submit-hook|manually_attached_skills|attached_files)[^>]*>.*?</\1>", re.S)
+# Whole messages the harness delivers as the user's turn: another session's message, a system notification.
+NOT_HUMAN = ("Another Claude session sent a message", "A peer session sent a message", "[SYSTEM NOTIFICATION - NOT USER INPUT]")
 UNWRAP = re.compile(r"</?user_query>")
 INTERRUPT = "[Request interrupted by user"
 TURN_COLUMNS = ["id", "session", "at", "request", "final_reply", "next_message", "tools", "edits", "ran_after_edit"]
@@ -33,7 +35,7 @@ RUN_COLUMNS = ["id", "session", "at", "request", "final_messages", "human_messag
 
 def human(text: str) -> str | None:
     t = UNWRAP.sub("", INJECTED.sub("", text)).strip()
-    if not t or t.startswith(("<", "/", "This session is being continued")):
+    if not t or t.startswith(("<", "/", "This session is being continued") + NOT_HUMAN):
         return None
     return t
 
