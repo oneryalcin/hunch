@@ -78,7 +78,7 @@ Per question it returns:
 |---|---|
 | `label` | The answer: a choice option, `yes`/`no`, or `"<level>:<description>"` for a score. |
 | `p` | The probability of that label. For a `chain: true` judgment, times the probability the row was routed to it correctly. |
-| `margin` | Distance from the decision boundary: `abs(p - 0.5) * 2` for yes/no, top minus runner-up for a choice. This is what Pydantic AI calls `confidence`. |
+| `margin` | Distance from the decision boundary: `abs(p - 0.5) * 2` for yes/no, top minus runner-up for a choice. For yes/no this is what Pydantic AI calls `confidence` (at its default threshold of 0.5). |
 | `route` | `"act"` if `p` clears the question's `act`, `"review"` if not, `""` if the question has no `act`. |
 | `cached` | `True` if the answer came from the store. |
 

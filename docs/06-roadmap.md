@@ -79,6 +79,19 @@ Cheap, specific, and mostly prototype-sized; fold into Phases 3–4.
 | Decision inputs written by an LLM | SERV decision nodes judge LLM-written summaries; agent_eval judges the agent's own claims | The claim-contagion ablation (above) generalised. It worked with no new code (copy the spec, drop the column, `diff`), but `diff` reports label flips and accuracy, not *how far and which way* probabilities moved, or the re-ask noise floor; those came from a throwaway script. Add them to `diff` when a second ablation needs them |
 | Watch list | Measurement features may arrive inside runtimes | Track OpenServ Graph Sharding / Shadow Agents / Benchmark Tooling and Pydantic's evals library; re-check each quarter whether they add gold-based measurement |
 
+## Next up, from Pydantic AI's decision models (v2.50, read 2026-09-25, see 03 related work)
+
+Pydantic AI 2.50 generalises Jev into a `DecisionModel` interface and uses decision models inside agent runs (model routing, tool-call guards, tool preselection). Its own docs say those in-run classifiers need measuring and that "nothing in the run will tell you". Position unchanged and sharpened: **hunch does not execute routes, tools or hooks; it measures the decisions made there.** Pre-v1, in this order:
+
+| Item | Why | Done when |
+|---|---|---|
+| ~~Correct the parity claim~~ DONE 2026-09-25 | `spec_from_model` said it maps a class "the same as Pydantic AI". Since 2.50 Pydantic AI sends each question as structured parts (`field` name, class docstring as `goal`, description as `question`, agent `instructions`, `BoolCriteria`); hunch sends the description alone, so the same class can get different answers | `models.py` docstring and the Use-in-your-app guide say what differs |
+| `hunch.spec_from_agent(agent)` + a `pydantic:` engine | The class that runs live must be the class that is tested, word for word. Reimplementing their ~2,000 lines of question building would drift every release | Questions captured from Pydantic AI itself with a recording `DecisionModel` (no API call; probe written 2026-09-25) and stored as structured `instructions` (the spec already accepts them). `model: pydantic:<module>:<Class>` runs any `DecisionModel` through hunch's `ask(state, questions)`, which already has the same shape as `decide`. Optional extra; core stays `httpx` + `pyyaml`. Blocked until the uv cooldown admits 2.50 (~2026-09-30) |
+| Cookbook: guard a coding agent's tool calls | Their headline in-run use, and the one most in need of measurement; we already hold the data (Trace Commons, the maintainer's sessions as aggregates) | A spec over tool calls ("safe to run without a person looking?"), gold from review, `act` from the dial, then `hunch.judge()` in a hook. Publishes only if the numbers are honest |
+| Read Pydantic AI `decide` spans as rows | With tracing on, every decision request records the questions as sent, the state and the answers with probabilities. Hooks multiply decisions per run; this is how hunch sees them with no code in the app | A trace `view` over OpenTelemetry `decide` spans: review, `test` and shadow on real traffic. Build when a Pydantic AI user (or we) run one |
+| Parked: hunch's LLM engine as a Pydantic AI `DecisionModel` | Any LLM read through token probabilities as a decision model (measured: 92.3% vs Jev's 95.8% on BANKING77). A distribution channel, but an engine is a different product from measurement | Revisit if asked, or offer upstream |
+| Rejected | Pydantic AI as hunch's core engine dependency (API changed within a week, cache keys would move with their releases); implementing routes, tools, hooks, streaming or compaction (a second, weaker agent framework) | |
+
 ## Phase 3: engine independence and scale (prototype, ~$0.50–2)
 
 | Item | Question it answers | Done when |

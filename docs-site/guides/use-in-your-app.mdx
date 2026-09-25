@@ -94,7 +94,13 @@ If the missing answers would cost more, nothing is asked and `judge` raises `Sys
 
 ## From a Pydantic class
 
-If your code already describes the decision as a Pydantic class, for example a Pydantic AI agent's `output_type`, that class can be the spec. Install hunch with its `pydantic` extra:
+If your code already describes the decision as a Pydantic class, for example a Pydantic AI agent's `output_type`, that class can be the spec.
+
+<Warning>
+The types map as in Pydantic AI, but the wording does not yet. Pydantic AI 2.50 and later also sends the field's name, the class docstring, the agent's `instructions` and any `BoolCriteria` with each question; hunch sends the field's description alone. The same class can get different answers in hunch and in your agent until exact parity lands (on the roadmap).
+</Warning>
+
+Install hunch with its `pydantic` extra:
 
 ```sh
 uv add "hunch[pydantic] @ git+https://github.com/oneryalcin/hunch"

@@ -1,7 +1,9 @@
 """Pydantic classes as specs: the output type an agent returns is the judgment hunch tests.
 
-Mapping (the same as Pydantic AI's TypeSafe model, so a class used as an agent's `output_type` becomes the spec
-hunch tests, diffs and reviews):
+Mapping (types as in Pydantic AI's decision models). The wording is not the same: Pydantic AI >= 2.50 sends each
+question as structured parts (field name, the class docstring as goal, the description as question, the agent's
+instructions as framing, BoolCriteria), while this sends the description alone, so the same class can get different
+answers here and in an agent. Exact parity is on the roadmap (`spec_from_agent`).
 
     bool                      → noul       yes/no
     Literal[...] / Enum       → choice     option descriptions: Field(json_schema_extra={"options": {...}}), or
