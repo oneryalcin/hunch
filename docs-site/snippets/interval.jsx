@@ -18,13 +18,13 @@ export const IntervalSlider = ({ rate = 0.9, initial = 30 }) => {
       <label style={{ display: "block", fontSize: 14 }}>
         Reviewed rows: <b>{n}</b>
         <input type="range" min="0" max="100" step="0.5" value={s} onChange={(e) => setS(Number(e.target.value))}
-          style={{ width: "100%", accentColor: "#B45309" }} aria-label="reviewed rows" />
+          style={{ width: "100%", accentColor: "#7D969B" }} aria-label="reviewed rows" />
       </label>
       <svg viewBox={`-20 0 ${W + 40} 56`} style={{ width: "100%", display: "block", margin: "8px 0" }} role="img"
         aria-label={`${k} of ${n} right; 95% interval ${pct(lo)} to ${pct(hi)}`}>
         <line x1="0" x2={W} y1="20" y2="20" stroke="currentColor" strokeOpacity="0.25" />
-        <rect x={x(Math.max(lo, 0.5))} y="12" width={x(hi) - x(Math.max(lo, 0.5))} height="16" rx="8" fill="#F59E0B" fillOpacity="0.35" />
-        <circle cx={x(k / n)} cy="20" r="6" fill="#B45309" />
+        <rect x={x(Math.max(lo, 0.5))} y="12" width={x(hi) - x(Math.max(lo, 0.5))} height="16" rx="8" fill="#7D969B" fillOpacity="0.35" />
+        <circle cx={x(k / n)} cy="20" r="6" fill="#7D969B" />
         {[0.5, 0.6, 0.7, 0.8, 0.9, 1].map((v) => (
           <text key={v} x={x(v)} y="48" fontSize="11" textAnchor="middle" fill="currentColor" fillOpacity="0.6">{100 * v}%</text>
         ))}
