@@ -296,7 +296,7 @@ def search_text(n: str, m: dict) -> str:
         "name": n, "description": m.get("description") or "",
         "questions": " ".join(f"{qid} {text_of(q.get('instructions'))}" for qid, q in qs.items()),
         "options": " ".join(f"{k} {text_of(v)}" for q in qs.values() for k, v in options_of(q)),
-        "columns": " ".join([*m.get("state", []), m.get("key") or ""]), "source": str(m.get("source", "")),
+        "columns": " ".join([*core.state_columns(m), m.get("key") or ""]), "source": str(m.get("source", "")),
         "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')} {core.uses_text(x)}"
                             for x in m.get("exposures") or [])})
 
@@ -352,7 +352,7 @@ def yaml_html(text: str) -> str:
 def request_example(spec: dict) -> tuple[str, str]:
     """(note, text): the shape of one request, as `compile` would print it, with the row's fields as placeholders.
     No real row: the page is meant to be shared, and a row can hold customer text."""
-    state = {c: f"<{c}>" for c in spec.get("state", [])}
+    state = f"<{spec['state']}>" if isinstance(spec.get("state"), str) else {c: f"<{c}>" for c in core.state_columns(spec)}
     aqs = {qid: core.api_question(q) for qid, q in spec.get("questions", {}).items()}
     if not aqs:
         return "A union asks nothing: it merges its branches' answers.", ""
@@ -548,7 +548,7 @@ def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: lis
         + (f"<div class='muted'>{e(x['description'])}</div>" if x.get("description") else "") + "</li>"
         for x in m.get("exposures") or [])
     rail = (f"<dl class='facts'><dt>Reads</dt><dd>{reads}" + (f"<div class='muted'>where <code>{e(m['where'])}</code></div>" if m.get("where") else "")
-            + f"</dd><dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in m.get('state', [])) or '–'}"
+            + f"</dd><dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in core.state_columns(m)) or '–'}"
             + (f"<div class='muted'>removed first: {e(', '.join(m['redact']))}</div>" if m.get("redact") else "")
             + f"</dd><dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>"
             f"<dt>Used by</dt><dd>{f'<ul class=plain>{exposures}</ul>' if exposures else '–'}</dd>"

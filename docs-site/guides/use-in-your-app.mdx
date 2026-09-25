@@ -94,12 +94,93 @@ If the missing answers would cost more, nothing is asked and `judge` raises `Sys
 
 `judge` loads each spec once per process: restart after editing one. To keep rows so that a spec written later can be tried on them, pass `log=True`; see [Change a spec safely](/guides/change-a-spec#trying-a-candidate-on-live-traffic).
 
+## From a Pydantic AI agent
+
+If the decision already runs in production as a [Pydantic AI](https://pydantic.dev/docs/ai/models/decision/) agent on a decision model, test that agent, not a copy of it. A copy drifts: Pydantic AI builds each question from the field's name and description, the class docstring, the agent's `instructions`, enum member docstrings and `BoolCriteria`, and a hand-written spec would have to match all of it, release after release.
+
+`spec_from_agent` asks Pydantic AI itself. It starts one run of the agent on a model that records the request and stops, so nothing is sent anywhere, and writes the questions into a spec word for word:
+
+```python
+from enum import Enum
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict
+from pydantic_ai import Agent, BoolCriteria, UseEnumMemberDocstrings
+import hunch
+
+
+class Team(UseEnumMemberDocstrings, str, Enum):
+    billing = "billing"
+    """Money already charged or owed: charges, invoices, refunds."""
+    technical = "technical"
+    """Something is broken or misbehaving in the product or API."""
+    sales = "sales"
+    """Buying more or differently: pricing, discounts, seats."""
+
+
+class Ticket(BaseModel):
+    """Triage a support ticket."""
+    model_config = ConfigDict(use_attribute_docstrings=True)
+    team: Team
+    """Which team should handle this ticket?"""
+    urgent: Annotated[bool, BoolCriteria(true="Something is down or money is lost right now.",
+                                         false="It can wait its turn.")]
+    """Should this ticket jump the queue?"""
+
+
+agent = Agent("typesafe:jev-1.13.0", output_type=Ticket, instructions="You triage tickets for Acme.")
+spec = hunch.spec_from_agent(agent, judgment="triage", state="body", source="tickets.csv")
+open("triage.yml", "w").write(hunch.spec_yaml(spec))
+```
+
+```yaml triage.yml
+judgment: triage
+model: jev-1.13.0
+key: id
+state: body
+questions:
+  team:
+    type: choice
+    instructions:
+      field: team
+      question: Which team should handle this ticket?
+      goal: Triage a support ticket.
+      background: You triage tickets for Acme.
+    criteria:
+      billing: 'Money already charged or owed: charges, invoices, refunds.'
+      technical: Something is broken or misbehaving in the product or API.
+      sales: 'Buying more or differently: pricing, discounts, seats.'
+  urgent:
+    type: noul
+    instructions:
+      field: urgent
+      question: Should this ticket jump the queue?
+      goal: Triage a support ticket.
+      background: You triage tickets for Acme.
+    criteria:
+      'true': Something is down or money is lost right now.
+      'false': It can wait its turn.
+source: tickets.csv
+```
+
+The agent's prompt is the text it judges, so `state` names the one column that holds it, here `body`. A single column name, rather than a list, is sent as a bare string, which is how the agent sends its prompt. For each row, hunch then sends Jev the same state and the same questions as the agent; only the question names, which the model never sees, are written with `__` instead of `.`. On three tickets, both gave the same labels and the same team probabilities, and `urgent` differed by no more than asking Jev the same thing twice does.
+
+From here it is an ordinary spec: `hunch test`, `diff`, `review` and `docs` work on it. When the agent changes, record it again and `hunch diff triage.yml --against git:HEAD` shows what the new wording does. It needs Pydantic AI 2.50 or later, which your agent already has; hunch doesn't install it.
+
+This holds when the agent's request is a function of one text column. `spec_from_agent` records the agent twice with different prompts and refuses, rather than write a spec that asks something else, when:
+
+- it chooses between several output types or tools, which asks a route question first;
+- it has a `system_prompt`, which turns the state into a conversation (put that text in `instructions`);
+- its instructions change with the prompt. Instructions computed from `deps` are fine: pass the same `deps` as in production.
+
+Call it with the prompt as a single string; an agent run on message history or several prompt parts sends a different state.
+
 ## From a Pydantic class
 
-If your code already describes the decision as a Pydantic class, for example a Pydantic AI agent's `output_type`, that class can be the spec.
+If the decision is a Pydantic class but not an agent, for example an `output_type` you haven't wired up yet, the class itself can be the spec.
 
 <Warning>
-The types map as in Pydantic AI, but the wording does not yet. Pydantic AI 2.50 and later also sends the field's name, the class docstring, the agent's `instructions` and any `BoolCriteria` with each question; hunch sends the field's description alone. The same class can get different answers in hunch and in your agent until exact parity lands (on the roadmap).
+The types map as in Pydantic AI, but the wording does not. Pydantic AI 2.50 and later also sends the field's name, the class docstring, the agent's `instructions` and any `BoolCriteria` with each question; `spec_from_model` sends the field's description alone, so the same class can get different answers here and in an agent. For the agent's own wording, use [`spec_from_agent`](#from-a-pydantic-ai-agent).
 </Warning>
 
 Install hunch with its `pydantic` extra:

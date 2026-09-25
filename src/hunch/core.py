@@ -390,13 +390,26 @@ def canon(v):
     return v.replace("\r\n", "\n").replace("\r", "\n") if isinstance(v, str) else v
 
 
-def state_of(spec: dict, row: dict) -> dict:
-    missing = [c for c in spec["state"] if c not in row]
+def state_columns(spec: dict) -> list[str]:
+    """`state: [a, b]` sends {"a": …, "b": …}; `state: text` sends that one column bare, as a string, the way a
+    Pydantic AI agent sends its prompt."""
+    st = spec.get("state")
+    return [st] if isinstance(st, str) and st else [c for c in st if isinstance(c, str)] if isinstance(st, list) else []
+
+
+def state_parts(spec: dict, state) -> dict:
+    """A sent state as {column: value}, for showing it to people."""
+    return {spec["state"]: state} if isinstance(spec.get("state"), str) else state
+
+
+def state_of(spec: dict, row: dict) -> dict | str:
+    missing = [c for c in state_columns(spec) if c not in row]
     if missing:
         raise KeyError(f"{spec['judgment']}: state needs {missing}")
     rules, clips = redaction_rules(spec), spec.get("clip") or {}
-    return {col: clip(redact(canon(row[col]), rules), clips[col]) if col in clips else redact(canon(row[col]), rules)
-            for col in spec["state"]}
+    sent = {col: clip(redact(canon(row[col]), rules), clips[col]) if col in clips else redact(canon(row[col]), rules)
+            for col in state_columns(spec)}
+    return sent[spec["state"]] if isinstance(spec["state"], str) else sent
 
 
 def digest(obj) -> str:
@@ -423,7 +436,8 @@ def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:
 def label_of(it: dict, width: int = 60, cols: list[str] | None = None) -> str:
     """The item's input as shown to people and to suggest's writer: the state that is sent (redacted, clipped),
     never the raw row."""
-    text = " | ".join(str(it["state"][c]) for c in (cols or list(it["state"]))).replace("\n", " ")
+    parts = state_parts(it["spec"], it["state"])
+    text = " | ".join(str(parts[c]) for c in (cols or list(parts))).replace("\n", " ")
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
@@ -437,12 +451,15 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
         warnings.append(f"unknown spec key {k!r} (typo?)")
     if spec["judgment"] in RESERVED or spec["judgment"].startswith(("_", "sqlite_")):
         errors.append(f"judgment name {spec['judgment']!r} is reserved (the store uses it)")
+    st = spec.get("state")
+    if not (isinstance(st, str) and st or isinstance(st, list) and all(isinstance(c, str) and c for c in st)):
+        errors.append(f"state must be a column name (sent bare, as a string) or a list of them, got {st!r}")
     if spec.get("chain") and "where" not in spec:
         errors.append("chain: true needs a where-clause over an upstream judgment's answers (it is what gets chained)")
     if spec.get("on_change", "reask") not in ON_CHANGE:
         errors.append(f"on_change must be one of {ON_CHANGE}, got {spec['on_change']!r}")
     for col, n in (spec.get("clip") or {}).items():
-        if col not in spec.get("state", []):
+        if col not in state_columns(spec):
             errors.append(f"clip: {col!r} is not a state column")
         if not isinstance(n, int) or n == 0:
             errors.append(f"clip: {col}: {n!r} must be a nonzero integer (N keeps the head, -N the tail)")
@@ -457,7 +474,7 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             if col in header:
                 errors.append(f"answer column {col!r} would overwrite an input column of the same name "
                               f"(e.g. a question named like its gold column); rename the question")
-        for col in [spec["key"], *spec["state"]]:
+        for col in [spec["key"], *state_columns(spec)]:
             if col not in header:
                 errors.append(f"column {col!r} does not reach this judgment (has {header})")
         if "where" in spec:
@@ -509,7 +526,8 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             if len(crit) > 255:
                 errors.append(f"{qid}: {len(crit)} options; the API accepts at most 255")
             bare = [o for o, d in crit.items() if d in (None, "")]
-            if 0 < len(bare) < len(crit):
+            if 0 < len(bare) < len(crit) and not isinstance(q.get("instructions"), dict):  # dict: recorded from
+                # Pydantic AI (spec_from_agent), whose described "none" beside bare options is the agent's own wording
                 warnings.append(
                     f"{qid}: {len(crit) - len(bare)} of {len(crit)} options described, {len(bare)} bare "
                     f"(e.g. {', '.join(bare[:4])}). Describe all or none: described options pull answers "
@@ -533,7 +551,7 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             warnings.append(f"{where_}: unknown key {k!r} (typo?)")
         if "union" in spec:
             errors.append(f"{where_}: a union has no questions of its own; put examples on its branches")
-        for col in spec.get("state", []):
+        for col in state_columns(spec):
             if col not in ex["row"]:
                 errors.append(f"{where_}: row needs the state column {col!r}")
         for qid, v in ex["expect"].items():
@@ -1032,9 +1050,10 @@ def oversized(items: list[dict]) -> list[str]:
         seen.add(it["id"])
         tokens = (len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4
         if tokens > WARN_AT * STATE_LIMIT_TOKENS:
-            big = max(it["state"], key=lambda c: len(str(it["state"][c])))
+            parts = state_parts(it["spec"], it["state"])
+            big = max(parts, key=lambda c: len(str(parts[c])))
             out.append(f"row {it['id']}: ~{tokens:,.0f} tokens (limit {STATE_LIMIT_TOKENS:,}); largest column {big!r} "
-                       f"~{len(str(it['state'][big])) / 4:,.0f} → clip: {{{big}: N}}")
+                       f"~{len(str(parts[big])) / 4:,.0f} → clip: {{{big}: N}}")
     return out
 
 
@@ -2239,7 +2258,7 @@ def load_against(project: dict, args) -> dict:
         twin = twin_of(n, roots(project))
         if twin:
             header = source_header(project["nodes"][twin])
-            missing = [c for c in old["nodes"][n]["state"] if c not in header]
+            missing = [c for c in state_columns(old["nodes"][n]) if c not in header]
             if missing:
                 sys.exit(f"--against's {n!r} reads {missing}, which {twin!r}'s rows don't have: these projects don't "
                          f"judge the same data, so there is nothing to compare row by row")
@@ -2401,9 +2420,11 @@ def cmd_review(project: dict, args) -> None:
 
         rule = f"─── {n} of {len(queue)} · {it['qid']} · {REVIEW_KINDS[kind]} · #{it['id']} "
         print("\n" + bold(rule + "─" * max(0, width - len(rule))))
-        for col in it["spec"]["state"]:
+        for col in state_columns(it["spec"]):
             print(f"\n{bold(col.upper())}\n{wrap(label_of(it, 600, [col]))}")
-        instructions = " ".join(str(it["aq"].get("instructions", "")).split())
+        ins = it["aq"].get("instructions", "")  # structured (Pydantic AI's): the question and the option it asks about
+        ins = " · ".join(str(ins[k]) for k in ("question", "option") if k in ins) if isinstance(ins, dict) else ins
+        instructions = " ".join(str(ins).split())
         print("\n" + dim(wrap(instructions if len(instructions) <= 300 else instructions[:299] + "…")))
         for i, (lab, p) in enumerate(shown, 1):
             mark = f"  ← {marks[lab]}" if lab in marks else ""

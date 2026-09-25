@@ -25,7 +25,7 @@ from hunch.core import (  # noqa: F401  (the public surface)
     spec_yaml,
     table_name,
 )
-from hunch.models import spec_from_model, to_model  # noqa: F401
+from hunch.models import spec_from_agent, spec_from_model, to_model  # noqa: F401
 
 __version__ = "0.1.0"
 

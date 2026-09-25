@@ -142,6 +142,25 @@ hunch.spec_from_model(cls, *, judgment: str | None = None, model: str = "jev-1.1
 
 A spec dict whose questions are the class's fields. `cls` may also be a bare output type such as `Literal["spam", "ham"]` or `bool`. That becomes one question named `output`, asked with `description`. `judgment` defaults to the class name in snake case. Any other spec key (`tests`, `redact`, `where`, …) can be passed through `**spec`.
 
+### `spec_from_agent`
+
+```python
+hunch.spec_from_agent(agent, *, state: str, judgment: str | None = None, model: str | None = None,
+                      source: str | None = None, key: str = "id", deps=None, **spec) -> dict
+```
+
+A spec dict whose questions are the ones a Pydantic AI agent (2.50 or later, on a decision model) sends, recorded from Pydantic AI with no model call. The agent runs once on a recording model, with `deps` if its instructions need them, and stops at its first request.
+
+| Argument | Meaning |
+|---|---|
+| `state` | The column holding the agent's prompt. Sent bare, as a string (see [`state`](/reference/spec#state)). |
+| `model` | The engine. Default: the agent's model when it is TypeSafe's (`typesafe:jev-1.13.0` → `jev-1.13.0`); otherwise required. |
+| `judgment` | Default `agent`. |
+
+Question names are Pydantic AI's with `.` written as `__`: a `list` field `topics` becomes one yes/no question per option, `topics__refund`, `topics__login`. `act`, `gold` and `escalate` still go in `Field(json_schema_extra={"hunch": {...}})` and apply to every question of that field; they are not sent. `judgment` defaults to the output class name in snake case (`agent` for a bare output type).
+
+Raises `ValueError` when the agent asks a route question first (several output types, or tools), has a `system_prompt`, or has instructions that depend on the prompt (it is recorded twice, with different prompts, to tell), and `TypeError` when `state` is not a string. Works from async code: the recording runs on a thread of its own.
+
 ### `judge_model`
 
 ```python

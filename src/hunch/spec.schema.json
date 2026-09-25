@@ -27,11 +27,18 @@
       "description": "The column that identifies a row."
     },
     "state": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "The columns the model sees, and nothing else."
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "The columns the model sees, and nothing else: a list is sent as {column: value}; one column name alone is sent bare, as a string (the way a Pydantic AI agent sends its prompt)."
     },
     "view": {
       "enum": [
