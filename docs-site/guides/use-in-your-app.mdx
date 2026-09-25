@@ -175,6 +175,43 @@ This holds when the agent's request is a function of one text column. `spec_from
 
 Call it with the prompt as a single string; an agent run on message history or several prompt parts sends a different state.
 
+### Measure the decisions production made
+
+A spec on a CSV tells you how the agent does on rows you collected. What the agent decided last week in production is in its traces. With instrumentation on, Pydantic AI records every decision request as a `decide` span holding the prompt, the questions and the answers (it records content unless `include_content=False`).
+
+Export the spans as OTLP/JSON lines, which is what the OpenTelemetry Collector's `file` exporter writes, and read them with a [`py()` source](/reference/spec#source). This function yields one row per decision, keeping production's answers beside the prompt:
+
+```python decide_spans.py
+import glob
+import json
+from pathlib import Path
+
+SPANS = Path(__file__).parent / "traces" / "*.jsonl"
+
+
+def rows():
+    for path in glob.glob(str(SPANS)):
+        for line in open(path):
+            for rs in json.loads(line)["resourceSpans"]:
+                for ss in rs["scopeSpans"]:
+                    for span in ss["spans"]:
+                        attrs = {a["key"]: next(iter(a["value"].values())) for a in span.get("attributes", [])}
+                        if attrs.get("gen_ai.operation.name") != "decide" or "pydantic_ai.decision.state" not in attrs:
+                            continue  # not a decision, or recorded without content
+                        answers = json.loads(attrs.get("pydantic_ai.decision.answers", "{}"))
+                        yield {"id": span["spanId"], "prompt": attrs["pydantic_ai.decision.state"],
+                               **{f"live_{q}": ("yes" if a["noul"] >= 0.5 else "no") if a["type"] == "noul"
+                                  else a.get("choice") for q, a in answers.items()}}
+```
+
+Point the recorded spec at it, with the prompt as the state:
+
+```python
+spec = hunch.spec_from_agent(agent, judgment="guard", state="prompt", source="py(decide_spans.py:rows)")
+```
+
+Each production decision is now a row. `hunch run` asks it again on the same engine, which gives production's answers within Jev's run-to-run noise, at about $0.00002 a row. `hunch review` then builds gold from real traffic, `hunch test` says how often the agent is right on it, and `hunch diff` shows which of last week's decisions a new wording would change. The `live_` columns keep what production answered, for a `where` clause or to compare by hand.
+
 ## From a Pydantic class
 
 If the decision is a Pydantic class but not an agent, for example an `output_type` you haven't wired up yet, the class itself can be the spec.
