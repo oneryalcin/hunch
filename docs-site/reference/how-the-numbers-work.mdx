@@ -1,0 +1,74 @@
+---
+title: "How the numbers work"
+description: "Where test's accuracy estimate, interval, calibration, dial and AUROC come from, and how diff decides a change is real."
+---
+
+`hunch test` might tell you a question is 91.7% accurate, somewhere between 74% and 98%. This page explains where each part of that comes from, so you can tell when to trust it.
+
+## Estimated accuracy
+
+You have reviewed a few dozen rows, but the number is about all of them. How it gets from one to the other depends on whether your data has an answer key.
+
+**Without an answer key**, the estimate is the share of random spot checks the model got right. Only random spot checks count. Rows you reviewed because the model was unsure, or because two specs disagreed, were picked for a reason, so they would bias the number. They still count as gold everywhere else.
+
+**With an answer key**, the rows fall into two groups, and each needs different treatment.
+
+- Where the model and the key **disagree**, either could be wrong. There are few of these rows, so you review them all.
+- Where they **agree**, both are almost always right. There are many of these rows, so you review a random sample: the spot checks, 30 per question by default (`--audit`). The sample catches rows where the model and the key make the same mistake.
+
+Each group's reviewed rows estimate that group's accuracy, and the two are weighted by group size. A group you reviewed in full is known exactly.
+
+Until every disagreement is reviewed and there is at least one spot check, `test` shows plain accuracy against the key and says what is missing. Reviewing only disagreements can only raise the number, so on its own it would flatter the model.
+
+Rows you marked ambiguous or as needing more context are left out of both groups.
+
+## The interval
+
+The range is a 95% Wilson score interval on the reviewed rows. It behaves well with small samples and near 0% or 100%, where the textbook ±2 standard errors does not.
+
+Its width comes from how many rows you reviewed, not from how many rows there are:
+
+| Reviewed | Right | Accuracy | 95% interval |
+|---|---|---|---|
+| 30 | 27 | 90% | 74.4–96.5% |
+| 100 | 90 | 90% | 82.6–94.5% |
+
+With sampling weights (`weights:`), each row counts by its weight, and the interval uses the effective sample size, (Σw)² / Σw².
+
+## Calibration
+
+A model is calibrated if, of the answers it gives with confidence 0.8, about 80% are right.
+
+`test` sorts answers into ten equal-width bins of stated confidence. In each bin it compares the average confidence with how often the answer was right. The calibration error is that gap, averaged over bins and weighted by how many answers each holds (expected calibration error). For a yes/no question it compares the probability of yes with how often the answer was yes.
+
+This matters because `act` trusts the confidence. A model that says 0.9 and is right 70% of the time will automate mistakes.
+
+## The dial
+
+The dial asks: if you acted automatically at this confidence, how much would you automate, and how much of that would be wrong?
+
+For each threshold (0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99), it shows the share of rows at or above it and the error rate among them. A yes/no question gets one column for acting on yes and one for acting on no, since those are separate decisions.
+
+The dial is computed on rows with gold. If most of your reviews were of uncertain rows, those rows are not a random sample, and the dial will understate how much a threshold automates.
+
+## AUROC
+
+For a yes/no question, AUROC is the chance that a random row whose gold is yes gets a higher probability of yes than a random row whose gold is no. 0.5 is a coin toss; 1 separates them perfectly.
+
+It does not depend on how common yes is, which makes it the right measure when yes is rare. hunch computes it from ranks (the Mann–Whitney statistic), so it takes seconds on 100,000 rows.
+
+## Is a change real?
+
+`diff` runs two versions of a spec on the same rows. Most rows get the same answer both times, and they tell you nothing about which version is better. The information is in the rows that flip: the ones the new version fixed, and the ones it broke.
+
+A paired sign test asks whether that split could come from a coin toss. Below p = 0.05 it is reported as significant. Rows wrong both times, and rows without gold, do not count.
+
+Some flips are not evidence at all. Asking the same question twice moves answers on ambiguous rows by about 0.03, so a near tie can tip either way. A flip is marked `~noise` when either answer's margin is below 0.10. The margin runs from 0 (a tie) to 1: the gap between the top two options for a choice, twice the distance from 0.5 for yes/no, and how close the score sits to a whole level.
+
+`diff` also reports the mean change in probability. That catches a change that shifts every answer a little without flipping many.
+
+## suggest and the winner's curse
+
+`suggest` tries several rewrites of a question and keeps the best. The best of several looks better than it is by chance alone, so each rewrite must beat the current question at p below 0.05 divided by the number tried (Bonferroni). Rewrites are written from one half of the gold rows and judged on the other.
+
+Even so, confirm on a holdout. On BANKING77 the kept rewrite was +5.1 points on the judging half, which was significant, but +2.4 points on an untouched holdout, which was not.

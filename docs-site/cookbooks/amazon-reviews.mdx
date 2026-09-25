@@ -1,0 +1,64 @@
+---
+title: "100,000 product reviews"
+description: "What a 100,000-row run costs, how long it takes, and what sets its speed."
+---
+
+Every other cookbook runs on hundreds of rows. Does anything change at that size: the cost, the speed, the store, the time to re-run?
+
+To find out, hunch asked one yes/no question of 100,000 Amazon product reviews, sampled from the `amazon_polarity` dataset (Apache 2.0). Its label says whether a review gave 4–5 stars or 1–2, which makes it the answer key. The example is in `prototype/examples/scale/`.
+
+## The spec
+
+```yaml reviews.yml
+judgment: reviews
+model: jev-1.13.0
+source: .cache/reviews_100k.csv
+key: id
+state: [title, content]
+questions:
+  is_positive:
+    type: noul
+    instructions: Is this product review positive overall?
+    act: 0.9
+    gold: positive
+tests:
+  is_positive:
+    min_accuracy: 0.9
+    min_auroc: 0.95
+```
+
+## What the run measured
+
+| | |
+|---|---|
+| Throughput | 96,000 requests in 27.8 minutes: 57.5 per second with 32 in flight |
+| Failures | 32 network retries (0.03%), all recovered; nothing lost |
+| Cost | $1.55; `compile` had estimated $1.72 |
+| Store | +80 MB, about 840 bytes per answer plus the results table; peak memory 566 MB |
+| Re-run, all cached | `run` 4.1 s, `compile` 2.5 s |
+| `test` | 4.8 s |
+| Result | 97.0% accurate, AUROC 0.993; acting at 0.9 automates 76% of rows at about 0.5% error |
+
+At that rate, a million rows would take about five hours and cost about $16 with Jev.
+
+## The estimate ran high
+
+`compile` estimated $1.72; the run billed $1.55. The estimate counts characters and the engine bills tokens, so it errs high, which is the safe side for a `--max-cost` ceiling. Answers are saved as each request returns, so a run stopped partway keeps what it got.
+
+## Speed is concurrency, not a rate limit
+
+The first guess was that the API's rate limit would set the pace. It did not: no request was rate-limited at any setting. Throughput is simply how many requests are in flight divided by how long each one takes.
+
+`HUNCH_CONCURRENCY` sets the number in flight; the default is 16. On a 2,000-row probe, 16 gave 63 requests per second and 48 gave 84. The full run used 32 and averaged 57.5. Rate limits, server errors and network failures are retried with backoff.
+
+## Re-runs are cheap enough to skip incremental mode
+
+Every run hashes every row and looks each one up in the store. With everything cached, that took 4 seconds for 100,000 rows. So there is no incremental mode to configure: change the source, and only new or changed rows are asked. `on_change: new_rows_only` goes further and keeps answers for unchanged rows even after the spec changes; see [Change a spec](/guides/change-a-spec).
+
+## Cost is input tokens
+
+Jev bills input tokens at $0.042 per million, and output is free. Three settings keep input small: send only the columns the question needs (`state`), cut long text with `clip`, and ask all of a row's questions in one spec, since with Jev they share one request.
+
+## What did not work
+
+`test` first took 156 seconds on this run. Computing AUROC compared every positive review with every negative one, 2.5 billion pairs. It now ranks the answers instead and takes 4.8 seconds, with identical results.

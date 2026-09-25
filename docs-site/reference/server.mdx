@@ -1,0 +1,83 @@
+---
+title: "Server"
+description: "Serve judgments over HTTP, review in the browser, and watch runs and drift, from the same specs and store as the CLI."
+---
+
+`hunch-server` is a small web app over your specs. It reads the same spec files and the same store as the CLI: a row judged through the server is a cache hit for the next `hunch run`, and a verdict clicked in the browser counts in the next `hunch test`.
+
+| Page or endpoint | What it does |
+|---|---|
+| `POST /v1/judge` | Judge rows over HTTP, for apps not written in Python |
+| `/review` | The review queue in a browser, one click per verdict |
+| `/runs`, `GET /v1/drift` | Every run's cost and status, and whether a question's label mix changed |
+
+Full request and response shapes are in the [Server API](/reference/server-api).
+
+## Start
+
+From a checkout of the repository:
+
+```sh
+cd server
+HUNCH_PROJECTS=../prototype/examples HUNCH_SERVER_TOKEN=secret \
+  uv run uvicorn hunch_server.app:app --port 8765
+```
+
+Then open `http://localhost:8765/?token=secret` for the list of projects.
+
+| Variable | Meaning |
+|---|---|
+| `HUNCH_PROJECTS` | The folder of specs it serves. Every `path` in a request is relative to it; anything that resolves outside it is refused. |
+| `HUNCH_SERVER_TOKEN` | The token every request must carry. Unset, the server is open to anyone who can reach the port: use that only on your own machine. |
+| `HUNCH_SERVER_MAX_COST` | The most one request may spend per judgment, in USD. Default `0.01`. Above it nothing is asked and the request gets `422`. |
+| `HUNCH_STORE` | The store, as for the CLI; otherwise the nearest `.hunch/store.sqlite` above each spec. See [Store](/reference/store#where-it-lives). |
+| `TYPESAFE_API_KEY`, … | The engine's key, needed for rows the store has not seen. |
+
+## Judge a row
+
+```sh
+curl -H "Authorization: Bearer secret" -X POST localhost:8765/v1/judge \
+  -d '{"path": "features/triage.yml",
+       "row": {"subject": "Charged twice", "body": "I see two identical charges for March. Please refund one."}}'
+```
+
+```json
+{"dept": {"label": "billing", "p": 1.0, "margin": 1.0, "route": "act", "cached": true},
+ "topics__refund": {"label": "yes", "p": 0.99, "margin": 0.98, "route": "", "cached": true}, ...}
+```
+
+The answers are the same as [`hunch.judge`](/reference/python#judge). Add `"shadow": "<candidate path>"` to run a candidate spec on the same row after the response; see [Change a spec](/guides/change-a-spec).
+
+When a request would cost more than `HUNCH_SERVER_MAX_COST` (here set to `0`):
+
+```json
+{"error": "triage: would ask 7 answers in 1 requests (~$0.0000), above --max-cost $0.0; nothing asked"}
+```
+
+## Review in the browser
+
+`http://localhost:8765/review?path=features&token=secret&reviewer=alice`
+
+The page shows up to 25 rows from the same queue as `hunch review`: rows where the model disagrees with the answer key, then random spot checks, then rows the model was unsure of. Each card has one button per verdict, including **needs more context** for rows you could only decide by knowing more than the page shows.
+
+- Verdicts are appended to the judgment's `.reviews.csv` next to its spec, signed with `reviewer`.
+- A verdict is accepted only for a row the queue is offering, as the kind it offers it; anything else gets `409`. This keeps spot checks a random sample.
+- `reviewer` is a parameter, not a login.
+
+## Runs and drift
+
+`http://localhost:8765/runs?path=features&token=secret` lists every run of the project: rows, answers asked, cost, model, spec hash, git commit and status. Below that is the latest label mix of each question.
+
+A question is flagged when its mix moved by more than 0.10 since the previous run. The measure is total variation distance: the share of answers that would have to change label to turn one mix into the other. `GET /v1/drift?path=features&node=triage` returns the same numbers as JSON, for alerts.
+
+Drift tells you the data or the spec changed, not which answers are wrong. Review a sample to find out.
+
+## Limits
+
+- One store is SQLite in WAL mode; several server processes on it are limited by that.
+- No reviewer accounts.
+- No Postgres.
+
+## Licence
+
+The server (`server/`) is under the Elastic License 2.0: free to use, modify and self-host, but not to offer to others as a hosted or managed service. The `hunch` package it runs (`src/hunch`) is under the Apache License 2.0.

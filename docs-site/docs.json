@@ -11,53 +11,100 @@
   "favicon": "/favicon.svg",
   "navbar": {
     "links": [
-      { "label": "GitHub", "href": "https://github.com/oneryalcin/hunch" }
+      {
+        "label": "GitHub",
+        "href": "https://github.com/oneryalcin/hunch"
+      }
     ]
   },
   "contextual": {
-    "options": ["copy", "view", "claude", "chatgpt", "cursor", "mcp"]
+    "options": [
+      "copy",
+      "view",
+      "claude",
+      "chatgpt",
+      "cursor",
+      "mcp"
+    ]
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "Start",
-        "pages": ["index", "quickstart", "concepts"]
-      },
-      {
-        "group": "Guides",
-        "pages": [
-          "guides/write-a-spec",
-          "guides/agent-traces",
-          "guides/review",
-          "guides/test-in-ci",
-          "guides/change-a-spec",
-          "guides/projects",
-          "guides/judge-in-your-app",
-          "guides/shadow",
-          "guides/pydantic",
-          "guides/engines",
-          "guides/scale",
-          "guides/server"
+        "tab": "Documentation",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Start",
+            "pages": [
+              "index",
+              "quickstart",
+              "concepts"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/write-a-spec",
+              "guides/review",
+              "guides/test-in-ci",
+              "guides/change-a-spec",
+              "guides/use-in-your-app"
+            ]
+          }
         ]
       },
       {
-        "group": "Reference",
-        "pages": [
-          "reference/spec",
-          "reference/cli",
-          "reference/python",
-          "reference/server-api",
-          "reference/environment",
-          "reference/store"
+        "tab": "Cookbooks",
+        "icon": "flask",
+        "groups": [
+          {
+            "group": "Cookbooks",
+            "pages": [
+              "cookbooks/index",
+              "cookbooks/claude-code-sessions",
+              "cookbooks/banking-intents",
+              "cookbooks/swe-patches",
+              "cookbooks/amazon-reviews"
+            ]
+          }
         ]
       },
       {
-        "group": "More",
-        "pages": ["how-the-numbers-work", "results", "contribute"]
+        "tab": "Reference",
+        "icon": "code",
+        "groups": [
+          {
+            "group": "Files and commands",
+            "pages": [
+              "reference/spec",
+              "reference/cli",
+              "reference/python",
+              "reference/environment"
+            ]
+          },
+          {
+            "group": "Running hunch",
+            "pages": [
+              "reference/engines",
+              "reference/projects",
+              "reference/store",
+              "reference/server",
+              "reference/server-api"
+            ]
+          },
+          {
+            "group": "Statistics",
+            "pages": [
+              "reference/how-the-numbers-work"
+            ]
+          }
+        ]
       }
     ]
   },
   "footer": {
-    "socials": { "github": "https://github.com/oneryalcin/hunch" }
+    "socials": {
+      "github": "https://github.com/oneryalcin/hunch"
+    }
   }
 }

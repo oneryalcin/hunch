@@ -373,7 +373,9 @@ Server, from the same review: a verdict must match a row and kind the queue actu
 - *Messages from other agent sessions are not the developer's* (`<cross-session-message>` and its plain-text form): the trace reader skips them. Trace Commons rows unchanged.
 - *The review screen was unusable* (one long line per field, jargon, three of four options, different keys per kind): rewritten with the standard library; one key scheme for every row.
 - *A spot check without an answer key saved "-" as gold* (CLI and server): it now confirms the model's answer.
-- Proposed next version of `outcome`: a follow-up question is not a failure; `act` 0.60. Not yet diffed.
+- Proposed next version of `outcome` (a follow-up question is not a failure): **rejected by `diff`**. 108 of 475 turns flipped, mostly worked → unclear; on 21 turns graded under both, 95.2% → 71.4% (0 fixed, 5 broken). Kept the old wording with `act` 0.60.
+
+**After the trace-reader fix** (skipping other sessions' messages renumbers turn ids; reviews now fall back to matching by question and text hash, recovering 36 of 43 verdicts): 475 turns, 36 gold. `outcome` estimated 91.7% (95% CI 74.2–97.7%) from 24 random turns; at `act` 0.60, 58.3% of graded turns automated, none wrong. Remaining mistakes: follow-up questions read as failed or worked, confidence 0.43–0.57. These supersede the table above.
 
 **Writing the docs found eleven bugs.** Every example in the docs was run; that, and an adversarial review of the pages against the code (Fable, `--max-cost 0`), found:
 

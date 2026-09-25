@@ -3,29 +3,29 @@ title: "Store"
 description: "The SQLite file that holds every answer, every judgment's table and the history of runs."
 ---
 
-Everything hunch knows lives in one SQLite file: every answer the engine gave, each judgment's latest table, the history of runs and the traffic logged by shadow mode. It runs in WAL mode, so batch runs and apps calling `judge()` can use it at the same time.
+One SQLite file holds every answer, each judgment's latest table, the run history and logged traffic. WAL mode: batch runs and `judge()` callers can use it at the same time.
 
 ## Where it lives
 
-hunch picks the store for a spec in this order:
+In order:
 
 1. `HUNCH_STORE`, if set.
 2. The nearest `.hunch/store.sqlite` in the spec's folder or any folder above it.
 3. Otherwise a new `.hunch/store.sqlite` at the root of the git repository, or in the spec's folder outside a repository.
 
-When it creates a new store it says so on stderr:
+A new store is announced on stderr:
 
 ```
 new answer store: /path/to/.hunch/store.sqlite (no store in this folder or above; HUNCH_STORE=... to share one)
 ```
 
-If you see that line for a project you have run before, the spec is outside the workspace where its answers were cached, and every answer will be asked and paid for again. Set `HUNCH_STORE` to share one store.
+Seeing it for a project you have run before means every answer will be asked again; set `HUNCH_STORE` to the existing store.
 
-Keep `.hunch/` out of git. The store can be large (about 80 MB per 100,000 rows) and may contain the text of your rows.
+Keep `.hunch/` out of git: about 80 MB per 100,000 rows, and it holds your rows' text.
 
 ## The answer cache
 
-The `answers` table is a content-addressed cache: each answer is filed under a hash of exactly what was asked.
+`answers` is content-addressed: each answer is keyed by a hash of exactly what was asked.
 
 | Column | Meaning |
 |---|---|
@@ -35,11 +35,9 @@ The `answers` table is a content-addressed cache: each answer is filed under a h
 | `input_tokens` | Input tokens billed for it (shared equally when one request answered several questions). |
 | `created_at` | When it was stored. |
 
-What goes into the key decides when you pay again:
-
-- The same row, question and model anywhere in any project is a cache hit, whether it came from a batch run, `judge()` or the server.
-- Changing a question's `instructions` or `criteria`, the order of its options, the model, or any state column's text makes a new key.
-- `act`, `gold`, `escalate`, `tests`, `where`, the spec's name and its `source` are not part of the key. Changing them asks nothing.
+- Same row, question and model anywhere (batch, `judge()`, server): cache hit.
+- New key: a change to `instructions`, `criteria`, option order, model, or any state column's text.
+- Not in the key: `act`, `gold`, `escalate`, `tests`, `where`, the spec's name and `source`.
 
 Answer shapes:
 
@@ -52,33 +50,18 @@ Answer shapes:
  "probabilities": {"0": 0.65, "1": 0.35, "2": 0.0, "3": 0.0}}
 ```
 
-`noul` is the probability of yes.
+`noul` is p(yes).
 
 ## Judgment tables
 
-`hunch run` writes one table per judgment, named after it, like a dbt model. It is replaced in one transaction, so a reader always sees one complete run. A run that fails leaves the previous table in place.
-
-Each row has every input column, then for each question:
+`hunch run` writes one table per judgment, named after it, replaced in one transaction; a failed run leaves the previous table. Columns: the [answer columns](/reference/spec#columns-a-judgment-adds), plus:
 
 | Column | Meaning |
 |---|---|
-| `<question>` | The answer's label. |
-| `<question>_p` | Its probability (for a `chain: true` judgment, times the probability of the routing). |
-| `<question>_pyes` | Yes/no questions only: the probability of yes. |
-| `<question>_route` | Questions with `act` only: `act` or `review`. |
-| `<question>_by` | Questions with `escalate` only: the engine whose answer was kept. |
 | `<question>_key` | The answer's `key` in `answers`. |
-
-and for the row:
-
-| Column | Meaning |
-|---|---|
-| `_path_p` | The probability that the row reached this judgment correctly, through upstream `where` clauses. `1.0` for a root judgment. |
 | `_hunch_run_id` | The run that wrote the row. |
 
-A `type: multi` question becomes one yes/no question per option, `<question>__<option>`, each with its own columns, plus a `<question>` column listing the options answered yes, joined with `|`.
-
-With `--model`, a judgment's table gets the engine as a suffix, for example `intent__deepseek_deepseek_flash`, so runs on a second engine never overwrite the spec's own.
+Under `--model`, the table name gets the engine as a suffix (`intent__deepseek_deepseek_flash`), leaving the spec's own table untouched.
 
 ## Runs and lineage
 
@@ -87,22 +70,18 @@ With `--model`, a judgment's table gets the engine as a suffix, for example `int
 | `_hunch_runs` | judgment per run | `run_id`, `judgment`, `spec_hash`, `git_sha`, `model`, `rows`, `asked`, `cost`, `status`, `started_at`, `finished_at` |
 | `_hunch_row_answers` | row, question and run | `judgment`, `row_id`, `qid`, `key`, `shash`, `run_id` |
 
-- `spec_hash` covers what the judgment asks, not its `on_change` policy or its `source`. `on_change: freeze` compares it with the last complete run's.
+- `spec_hash` covers what the judgment asks, not `on_change` or `source`; `on_change: freeze` compares it with the last complete run's.
 - `status` is `complete`, or `failed: <error>`.
-- `shash` is a hash of the row's state. `on_change: new_rows_only` keeps a row's previous answer only when both the row id and `shash` match.
-- `/v1/drift` and the server's runs page compare label mixes across runs from `_hunch_row_answers`.
+- `shash`: hash of the row's state. `new_rows_only` reuses an answer only when row id and `shash` both match.
+- `/v1/drift` and the runs page read label mixes from `_hunch_row_answers`.
 
 ## Traffic
 
-`judge(..., log=True)` and `judge(..., shadow=...)` keep each row in `traffic` (`judgment`, `rhash`, `row`, `n`, `first_at`, `last_at`), redacted by the live spec's rules. A repeated row increases `n`. `--traffic` exports it to `.hunch/traffic/<judgment>.csv` and runs on that file.
-
-## Reserved names
-
-A judgment cannot be named `answers` or `traffic`, or start with `_` or `sqlite_`: its table would replace one of the store's own.
+`judge(..., log=True)` and `judge(..., shadow=...)` keep each row in `traffic` (`judgment`, `rhash`, `row`, `n`, `first_at`, `last_at`), redacted by the live spec's rules; a repeat increments `n`. `--traffic` exports it to `.hunch/traffic/<judgment>.csv` and runs on that.
 
 ## Querying it
 
-It is a plain SQLite file. For example, which engine answered each row of the triage example, and when:
+Plain SQLite. Which engine answered each row of the triage example, and when:
 
 ```sh
 sqlite3 -header -column prototype/.hunch/store.sqlite \

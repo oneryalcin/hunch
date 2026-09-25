@@ -1,67 +1,71 @@
 ---
 title: "Concepts"
-description: "Rows, specs, questions, answers, the store, gold, act and review: the eight ideas hunch is built from."
+description: "The ideas hunch is built from, each resting on the one before: rows, questions, specs, the store, gold, act and review."
 ---
 
-```mermaid
-flowchart TD
-  R["rows"] --> S["spec"]
-  S --> E["engine"]
-  E --> A[("store")]
-  A --> T["table"]
-  A --> X["test"]
-  A -->|"below act"| V["review"]
-  V --> G["gold"]
-  G --> X
-```
+Each idea on this page rests on the one before it.
 
-## Rows
+## A row is one thing you judge
 
-hunch works on rows: one ticket, one agent turn, one product review. A row comes from a CSV file, from agent session logs (`traces(...)`), or from a Python function that returns dicts (`py(file.py:fn)`). Each row has an id (the `key` column).
+A row is one ticket, one agent turn, or one product review, with an id named by the spec's `key`. Rows come from a CSV file, coding-agent session logs (`traces(...)`), or a Python function (`py(file.py:fn)`).
 
-## Spec and judgment
+## A question asks one thing of every row
 
-A **spec** is a YAML file that describes one **judgment**: the questions to ask, which columns of the row the model may see (`state`), and how to test the answers. Specs live in git next to your code. A folder of specs is a **project**; one judgment can read another's results, so a project is a small graph, like dbt models.
+A question has `instructions`, which say what is being asked, and usually `criteria`, which describe the possible answers. The model sees these together with the row's `state`, the columns you chose to show it. It never sees the question's name, so the instructions must carry the whole meaning.
 
-## Questions
+The answer is always typed, never free text. The type decides its shape:
 
-A judgment asks one or more questions of every row. Jev reads all of a row's questions in one request; an LLM engine gets one request per question. There are four types:
-
-| Type | Answer | Example |
+| Type | The answer | For example |
 |---|---|---|
-| `choice` | one option from a list, with a probability for each | which team handles this ticket |
-| `noul` | yes or no, with the probability of yes | is the customer's business blocked |
+| `choice` | one option, with a probability for each | which team handles this ticket |
+| `noul` | the probability that the answer is yes | is the customer's business blocked |
 | `score` | a level on a described scale | how frustrated, from calm to very angry |
-| `multi` | yes or no for each option (becomes one `noul` per option) | which topics does the review mention |
+| `multi` | yes or no for each option, asked as one `noul` per option | which topics does the review mention |
 
-The model reads the question's `instructions` and `criteria` and the row's `state`, not the question's name: Jev's API uses the name only as an identifier, and the LLM prompt leaves it out. The instructions carry the whole meaning. The name is not part of the cache key, so renaming a question asks nothing.
+## A spec writes the questions down
 
-## Answers and the store
+A spec is a YAML file for one judgment. It says where the rows come from, what the model sees, which questions to ask, and which tests the answers must pass. It lives in git beside your code.
 
-An **answer** is the engine's typed output: a label and probabilities, never free text. Every answer is stored in `.hunch/store.sqlite` under a key made from the exact request: the model, the state and the question as sent. The same request is never paid for twice. Change one question and only that question is asked again; change nothing and a re-run costs $0. Settings that are not sent (`act`, `gold`) are not part of the key, so tuning them is free.
+A folder of specs is a [project](/reference/projects), where one judgment can read another's results.
 
-After a run, each judgment's results are written to a **table** in the store: the row's columns, each answer and its probability, and which run produced it.
+## Every answer is stored under its exact input
 
-## Gold
+When hunch asks a question, it stores the answer in `.hunch/store.sqlite`. The answer is filed under a key made from the exact request: the model, the state, and the question as sent. The same request is never paid for twice.
 
-**Gold** is the answer you trust for a row. It comes from an answer-key column in your data (`gold:`) or from a person's **review**. With gold, `test` measures accuracy; without it, `test` estimates accuracy from random reviewed rows and says how sure it is.
+This one rule explains much of how hunch behaves:
 
-## act
+- A re-run with nothing changed costs nothing.
+- Changing one question asks only that question again.
+- Old answers stay in the store, so `diff` can compare two versions of a spec without asking anything.
 
-`act` is the confidence below which an answer should not be acted on automatically. Rows below it go to the review queue. It is a routing threshold, not part of the question, so changing it re-asks nothing. `test` prints a **dial**: for each threshold, how many rows would be automated and how many of those would be wrong.
+## Gold is the answer you trust
 
-## Review
+To say how often the model is right, you need rows where the right answer is known. hunch calls that gold. It comes from an answer-key column in your data (`gold:`), or from your own verdicts in review.
 
-`hunch review` shows rows to a person and records a verdict. The queue puts first the rows that matter most: where the model disagrees with the answer key, then a random sample of the rest (spot checks, which make the accuracy estimate honest), then rows below `act`. A verdict is tied to the exact text of the row, so if the input changes, the old verdict no longer counts. Judge only from what the screen shows; if you can only decide because you know more than the row shows, mark it as needing more context. That measures a gap in the input, not a model error.
+An answer key is someone else's judgment, and it can be wrong ([one public key](/cookbooks/banking-intents) was wrong four times as often as the model). So hunch treats a key as a starting point: the rows where the model and the key disagree are the first ones it asks you about.
 
-## Engine
+## act decides what a person sees
 
-The **engine** answers questions. The recipes and examples use TypeSafe's Jev, a small model built for typed judgments with probabilities; every spec names its engine in `model`. Any LLM that returns token probabilities works too (`--model deepseek:...`, `--model openrouter:...`); hunch reads the probability of each option from the first answer token. Answers from different engines are stored separately, so you can compare them row by row. See [Engines](/guides/engines).
+An answer given at 0.55 deserves less trust than one given at 0.99. `act` is the confidence below which an answer is not acted on automatically; those rows go to review instead.
 
-## How it fits together
+Choosing `act` is a trade. Set it higher and fewer rows are automated, but fewer of those are wrong. `hunch test` shows this trade as a dial, with one line per threshold, so you can pick with numbers. Neither `act` nor `gold` is sent to the model, so changing them asks nothing.
 
-1. Write a spec for a judgment you make today by hand or with an ad hoc prompt.
-2. `hunch compile` to see the exact request and cost, `hunch run` to answer every row.
-3. `hunch review` a sample, so there is gold; `hunch test` to measure.
-4. Change the spec, `hunch diff` to see what flips, keep the change if it wins.
-5. Call the same spec from your app with `hunch.judge(...)`; the answers it logs can be replayed against the next version of the spec.
+## Review turns your verdicts into gold
+
+`hunch review` shows you rows one at a time and records your verdict. It orders them by how much each verdict tells hunch:
+
+1. rows where the model and the answer key disagree
+2. a random sample of the rest
+3. rows below `act`
+
+The random sample matters. If you only reviewed disagreements, every verdict could only move the estimate up. Random rows let `test` estimate accuracy honestly, with a range around it.
+
+A verdict belongs to the exact text you judged. If the row's text changes, the old verdict no longer counts, and the row comes back to the queue.
+
+## An engine answers the questions
+
+The examples use TypeSafe's Jev, a model built to return typed answers with probabilities. Any LLM that exposes token probabilities also works. See [Engines](/reference/engines).
+
+## How the pieces meet
+
+Work goes round this loop: `run` a spec, `review` a sample, `test`, then change the spec and `diff` to see what flipped. Your application can call the same spec with [`hunch.judge(...)`](/guides/use-in-your-app).

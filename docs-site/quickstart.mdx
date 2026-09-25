@@ -1,9 +1,11 @@
 ---
 title: "Quickstart"
-description: "Run, test, change and review a judgment over 40 sample support tickets in five minutes, for about $0.001."
+description: "Run, test, change and review a judgment over 40 sample support tickets. About five minutes and a tenth of a cent."
 ---
 
-You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key (the recipe's engine is Jev). The whole quickstart asks about 160 questions and costs about $0.0015.
+This page takes one judgment through its whole life: asked, measured, changed, reviewed. The data is 40 made-up support tickets, each asked three questions. Which team should handle it? Is it urgent? How frustrated is the customer?
+
+You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key. Everything below costs about $0.0015.
 
 <Note>
 The repository is private until v0.2. If `uv tool install` fails with a 404, ask for access.
@@ -17,18 +19,16 @@ The repository is private until v0.2. If `uv tool install` fails with a 404, ask
     ```
   </Step>
 
-  <Step title="Get a project">
-    `hunch init` copies a recipe: a spec, sample rows and a README.
-
+  <Step title="Copy the example">
     ```sh
     hunch init tickets my-tickets
     cd my-tickets
     ```
 
-    `ticket_triage.yml` asks three questions of every ticket in `tickets.csv`: which team should handle it (a choice, with an answer key in `gold_department`), is it urgent (yes/no), and how frustrated the customer is (a score). Open it; it is short.
+    Open `ticket_triage.yml`; it is 29 lines. Only `department` has an answer key, the `gold_department` column.
   </Step>
 
-  <Step title="See what it will cost">
+  <Step title="See the cost before paying it">
     ```sh
     hunch compile .
     ```
@@ -37,7 +37,7 @@ The repository is private until v0.2. If `uv tool install` fails with a 404, ask
     # ticket_triage: 40 rows in; 120 answers planned, 0 cached, 120 to ask, ~18,620 input tokens, ~$0.00078 (jev-1.13.0)
     ```
 
-    `compile` prints the exact request for the first row and the cost. Nothing is sent.
+    `compile` sends nothing. Above that last line it prints the exact request for the first ticket, which is everything the model will see.
   </Step>
 
   <Step title="Run it">
@@ -51,59 +51,63 @@ The repository is private until v0.2. If `uv tool install` fails with a 404, ask
     materialized 1 table(s) in .hunch/store.sqlite
     ```
 
-    Every answer is now in `.hunch/store.sqlite`, cached by its exact input, and the results are in a `ticket_triage` table. Run it again: `120 cached, 0 asked, $0.00000`.
+    `act=0.8` comes from the spec: an answer less confident than that goes to a person for review. Here no ticket fell below it.
+
+    Run the same command again. This time it reports `120 cached, 0 asked` and `$0.00000`. Each answer was stored under its exact input, and that input has not changed.
   </Step>
 
-  <Step title="Test it">
+  <Step title="Measure it">
     ```sh
     hunch test .
     ```
-
-    Trimmed to `department`:
 
     ```
     department (choice, 40 rows)
       gold: 40 rows (40 from source, 0 from review)
       PASS accuracy 100.0% (min 90%)
       PASS calibration error 0.003 (max 1)
-               dial   automated   wrong among automated
-           …
-           0.80      100.0%                    0.0%  ← act
+             dial   automated   wrong among automated
+             …
+             0.80      100.0%                    0.0%  ← act
     ```
 
-    `department` is checked against the answer key and the `min_accuracy: 0.90` in the spec. The dial shows how many rows each confidence threshold would automate and how many of those would be wrong. `urgent` and `frustration` have no answer key yet, so there is nothing to score. The [review](/guides/review) step builds one.
+    `department` passes the `min_accuracy: 0.90` written in the spec. The dial answers a practical question: if you acted only on answers above a given confidence, how many tickets would that cover, and how many of those would be wrong?
+
+    `urgent` and `frustration` print nothing: without gold there is nothing to measure against. The last step makes some.
   </Step>
 
-  <Step title="Change a question and see what it changes">
-    Put the project in git, then make `urgent` stricter:
+  <Step title="Change a question, and see what it changes">
+    Put the folder in git, so there is a version to compare against:
 
     ```sh
     git init -q && echo .hunch/ > .gitignore && git add . && git commit -qm tickets
     ```
 
+    Now make `urgent` stricter in `ticket_triage.yml`:
+
     ```yaml ticket_triage.yml
       urgent:
-        type: noul
+        type: noul            # a yes/no question
         instructions: Does the customer say their business is blocked right now (an outage, a deadline today, money lost)?
     ```
 
     ```sh
-    hunch run . --max-cost 0.01              # 80 cached, 40 asked: only urgent changed
+    hunch run . --max-cost 0.01
     hunch diff . --against git:HEAD --max-cost 0
     ```
+
+    The run asks 40 questions, not 120: only `urgent` changed. The diff then compares the two versions from the store, so it costs nothing:
 
     ```
     department: unchanged (same keys, 0 calls)
 
     urgent: 2/40 rows flip (1 within noise band)
-      probabilities moved: mean |Δ| 0.106, mean Δ p(yes) -0.104
-        #  40    yes 0.92 → no 0.95          Cancel and refund | The product doesn't…
-        #  11     no 0.51 → yes 0.51  ~noise SSO broken | Okta login loops back to t…
-
-    frustration: unchanged (same keys, 0 calls)
+      probabilities moved: mean |Δ| 0.105, mean Δ p(yes) -0.100
+        #  40   yes 0.92 → no 0.95          Cancel and refund | The product doesn't…
+        #  11    no 0.51 → yes 0.54  ~noise SSO broken | Okta login loops back to t…
     ```
 
-    The diff is free: both versions' answers are in the store. It names the rows that flipped, marks flips too small to trust as noise, and shows the average move in probability, which catches a change that shifts every answer without flipping many.
+    Two tickets flipped, and ticket 11 was a near tie both times, so it is marked as noise. The mean shift shows what flips alone hide: the new wording lowered p(urgent) across the board, by 0.10 on average.
   </Step>
 
   <Step title="Review">
@@ -111,15 +115,13 @@ The repository is private until v0.2. If `uv tool install` fails with a 404, ask
     hunch review . --limit 5
     ```
 
-    Review shows rows one at a time: first where the model disagrees with the answer key, then random spot checks, then rows the model was unsure of. Pick the right answer by its number; on spot checks and unsure rows, Enter agrees with the marked answer. Your verdicts go to `ticket_triage.reviews.csv` and become gold for `test`. See [Review](/guides/review).
+    Review shows one ticket at a time and asks for the right answer. Here the model agrees with every key, so you get random spot checks, where Enter agrees with the marked answer. Verdicts go to `ticket_triage.reviews.csv`, and the next `hunch test` counts them as gold.
   </Step>
 </Steps>
 
-## Next
+## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Concepts" icon="lightbulb" href="/concepts">What a spec, answer, store, gold and act are.</Card>
-  <Card title="Write your own spec" icon="pen" href="/guides/write-a-spec">From your rows and your question.</Card>
-  <Card title="Judge agent traces" icon="robot" href="/guides/agent-traces">Your coding agent's sessions as rows.</Card>
-  <Card title="Test in CI" icon="circle-check" href="/guides/test-in-ci">Fail the build when accuracy drops.</Card>
+  <Card title="Concepts" icon="lightbulb" href="/concepts">The ideas behind what you just ran.</Card>
+  <Card title="Write a spec" icon="pen" href="/guides/write-a-spec">Your own rows and your own question.</Card>
 </CardGroup>

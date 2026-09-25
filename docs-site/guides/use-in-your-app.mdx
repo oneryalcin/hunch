@@ -1,0 +1,134 @@
+---
+title: "Use a spec in your app"
+description: "Call the spec you tested from application code, one row at a time, with the same answers and cache as batch runs."
+---
+
+You have tested a spec over thousands of rows. Now a single ticket arrives in your app. `judge()` answers it with the same spec and the same store as `hunch run`.
+
+## One row
+
+```python
+import hunch
+
+answers = hunch.judge("prototype/examples/banking77/intent.yml",
+                      text="I still have not received my new card, I ordered over a week ago.")
+```
+
+```python
+{'intent': {'label': 'card_arrival', 'p': 1.0, 'margin': 1.0, 'route': 'act', 'cached': True}}
+```
+
+The row's columns are keyword arguments, and must include every column in the spec's `state`. This row was in the batch run, so the answer came from the store in a few milliseconds. A row the store has never seen makes one engine call, and its answer is then stored for every later caller, batch or app.
+
+The cache works the other way too. Running `hunch run` over past rows warms it, so repeats of them in the app cost nothing.
+
+## Act on `route`, not on `label`
+
+A label on its own doesn't tell your code whether to trust it. Give the question an `act` threshold in the spec:
+
+```yaml
+questions:
+  intent:
+    type: choice
+    instructions: What is this bank customer asking about?
+    criteria: { ... }
+    act: 0.90
+```
+
+Then each answer carries a `route`:
+
+| `route` | Meaning | Typical handling |
+|---|---|---|
+| `act` | `p` is at or above `act` | Use the answer |
+| `review` | `p` is below `act` | Send to a person, a fallback, or a slower model |
+| `""` | The question has no `act` | Your code decides |
+
+Because `act` lives in the spec rather than in your code, `hunch test` can check it. Its dial shows how many rows a threshold automates and how many of those are wrong. Changing `act` asks nothing new, since it is not part of the cache key.
+
+## In async code
+
+Inside FastAPI or any event loop, use `ajudge`. `judge` starts its own loop and cannot run inside one.
+
+```python
+from fastapi import FastAPI
+import hunch
+
+app = FastAPI()
+SPEC = "prototype/examples/features/triage.yml"
+
+
+@app.post("/tickets")
+async def new_ticket(subject: str, body: str):
+    dept = (await hunch.ajudge(SPEC, subject=subject, body=body))["dept"]
+    if dept["route"] == "act":
+        return {"team": dept["label"]}
+    return {"team": "human-triage", "model_thought": dept["label"], "p": dept["p"]}
+```
+
+## Sending uncertain answers to a second engine
+
+A `review` route doesn't have to mean a person. A question can hand its uncertain answers to another engine first:
+
+```yaml
+dept:
+  type: choice
+  instructions: Which team should handle this support message?
+  criteria: { billing: ..., technical: ..., sales: ... }
+  act: 0.95
+  escalate: {model: "deepseek:deepseek-flash"}
+```
+
+When the first answer is below `act`, the same question goes to the `escalate` model. Its answer replaces the first only if it clears `act` itself; otherwise the first stays and routes to `review`. Both are kept in the store, and the batch table's `dept_by` column records which engine answered.
+
+## Capping the cost
+
+A burst of new rows shouldn't be able to run up a bill:
+
+```sh
+export HUNCH_MAX_COST=0.01   # USD, per judgment per call, estimated before asking
+```
+
+If the missing answers would cost more, nothing is asked and `judge` raises `SystemExit`. A spec error raises `SystemExit` too, and a row missing a state column raises `KeyError`, so catch both in a long-running service.
+
+`judge` loads each spec once per process: restart after editing one. To keep rows so that a spec written later can be tried on them, pass `log=True`; see [Change a spec safely](/guides/change-a-spec#trying-a-candidate-on-live-traffic).
+
+## From a Pydantic class
+
+If your code already describes the decision as a Pydantic class, for example a Pydantic AI agent's `output_type`, that class can be the spec. Install hunch with its `pydantic` extra:
+
+```sh
+uv add "hunch[pydantic] @ git+https://github.com/oneryalcin/hunch"
+```
+
+Then:
+
+```python
+from typing import Literal
+from pydantic import BaseModel, Field
+import hunch
+
+
+class Triage(BaseModel):
+    dept: Literal["billing", "technical", "sales"] | None = Field(
+        description="Which team should handle this support message?",
+        json_schema_extra={
+            "options": {"billing": "Money already charged or owed",
+                        "technical": "Something broken in the product or API",
+                        "sales": "Buying more or differently"},
+            "hunch": {"none": "The message needs no team (thanks, spam, chit-chat)",
+                      "act": 0.95, "gold": "gold_dept"},
+        })
+
+
+spec = hunch.spec_from_model(Triage, source="messages.csv", state=["subject", "body"])
+ticket = hunch.judge_model(Triage, spec, base="prototype/examples/features",
+                           subject="Charged twice",
+                           body="I see two identical charges for March. Please refund one.")
+# Triage(dept='billing')
+```
+
+`spec_from_model` produces an ordinary spec dict; `hunch.spec_yaml(spec)` prints it as YAML. The questions are identical to the YAML version's, so they share its cached answers. Save the YAML and commit it to use `hunch test`, `diff` and `review` on it.
+
+Each field becomes a question: `bool` a yes/no, `Literal` or `Enum` a choice, `IntEnum` a score. The [Python reference](/reference/python#pydantic-classes-as-specs) has the full mapping and where descriptions and `act` go.
+
+`judge_model` returns labels only. For `p` and `route`, save the spec, call `hunch.judge` on the file, and convert with `hunch.to_model(Triage, answers)`.
