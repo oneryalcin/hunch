@@ -1,35 +1,40 @@
 ---
 title: "Write a spec"
-description: "Turn a judgment you make today into a spec: pick the rows, the question, what the model sees, and how to test it."
+description: "Turn a judgment you make today into a spec: the rows, what the model sees, the question, and how to test it."
 ---
 
-Start from a decision your software or your team already makes, and write down the question a careful person would answer for each row. The [spec reference](/reference/spec) lists every key; this page is about getting the first version right.
+Start from a decision your software or your team already makes. Write down the question a careful person would answer for each row. The rest of the spec follows from that question: which rows it applies to, what someone needs to see to answer it, and how you would know the answer is right.
 
-## 1. The rows
+This page builds a spec in that order. The [spec reference](/reference/spec) lists every key.
 
-One row per thing you judge. Name a stable id column in `key`; hunch uses it to match answers, reviews and diffs.
+## The rows
+
+A spec needs one row per thing you judge, and a stable id for each row. hunch uses the id to match answers, reviews and diffs across runs.
 
 ```yaml
 judgment: triage
-source: messages.csv          # or traces(<glob>) for agent sessions, or py(rows.py:load) for anything else
+model: jev-1.13.0
+source: messages.csv
 key: id
 ```
 
-## 2. What the model sees
+`model` names the [engine](/reference/engines) that answers. `source` can also read coding-agent sessions (`traces(<glob>)`) or call a Python function (`py(rows.py:load)`).
 
-`state` lists the columns sent with each question. Send what a person would need to decide, and nothing else: extra columns cost tokens and give the model something to be distracted by.
+## What the model sees
+
+`state` lists the columns sent with each question. Send what a person would need to decide, and nothing more. Extra columns cost tokens and give the model something to be distracted by.
 
 ```yaml
 state: [subject, body]
 ```
 
-Two keys keep the input safe and small: `redact` (remove secrets, emails, home paths or your own patterns before anything is hashed or sent) and `clip` (keep the first or last N characters of a long column). Both are in the [reference](/reference/spec).
+To remove secrets or shorten long columns before they are sent, see `redact` and `clip` in the [spec reference](/reference/spec).
 
-## 3. The question
+## The question
 
-Write `instructions` as the full question. The model does not read the question's name, so `dept` means nothing to it; "Which team should handle this support message?" does.
+The model never sees the question's name. To it, `dept` means nothing, while "Which team should handle this support message?" means everything. Write `instructions` as the full question.
 
-Describe each option in `criteria`, including where the line between two options falls. Most mistakes are between neighbouring options, so the descriptions matter more than the instructions.
+Then describe each option in `criteria`, including where the line between two options falls. These descriptions often matter more than the instructions do.
 
 ```yaml
 questions:
@@ -43,24 +48,25 @@ questions:
     none: The message needs no team (thanks, spam, chit-chat)
 ```
 
-<Tip>
-If some rows fit no option, add `none:` with a description of when nothing fits. Without it, the model has to pick one of your options and will do so confidently.
-</Tip>
+The `none` line covers rows that fit no option. Without it, the model must pick one of your options, and it will pick one confidently.
 
-Pick the type by what the answer means:
+Choose the type by what the answer means:
 
-- **`choice`**: exactly one option applies.
-- **`noul`**: a yes/no condition. The answer is the probability of yes; 0.5 means "can't tell", not "somewhat".
-- **`score`**: a position on an ordered scale. `criteria` is a list of levels, each described as a concrete situation.
-- **`multi`**: any number of options can apply. hunch asks one yes/no per option.
+- `choice`: exactly one option applies.
+- `noul`: a yes/no condition. The answer is the probability of yes, so 0.5 means "can't tell", not "somewhat".
+- `score`: a position on an ordered scale. `criteria` is a list of levels, each described as a concrete situation.
+- `multi`: any number of options can apply. hunch asks one yes/no question per option.
 
 Ask one thing per question. "Is it urgent and about billing?" is two questions.
 
-## 4. How to test it
+## How you will know it is right
 
-If your data has an answer key, name the column in `gold`. Set `act`, the confidence below which a person should look. Add thresholds under `tests` so `hunch test` fails when accuracy drops.
+If your data has an answer key, name its column in `gold`. Set `act`, the confidence below which a person should look. Put thresholds under `tests`, and `hunch test` fails when accuracy drops below them.
 
 ```yaml
+questions:
+  dept:
+    # type, instructions, criteria as above
     act: 0.80
     gold: gold_dept
 tests:
@@ -68,23 +74,23 @@ tests:
     min_accuracy: 0.90
 ```
 
-No answer key? Leave `gold` out and review a random sample instead; `test` estimates accuracy from it. See [Review](/guides/review).
+Without an answer key, leave `gold` out. You will review a random sample instead, and `test` estimates accuracy from it. See [Review](/guides/review).
 
-## 5. Check it before it costs anything
+## Check it before it costs anything
 
 ```sh
 hunch lint triage.yml       # structure, columns, limits
 hunch compile triage.yml    # the exact request for the first row, and the cost
 ```
 
-`lint` catches mistakes before any request is sent. For example, a `state` column that is not in the source:
+`lint` catches mistakes before any request is sent. Here, `state` lists `bdy` instead of `body`:
 
 ```
-lint error: column 'text' does not reach this judgment (has ['id', 'subject', 'body', 'gold_dept', 'gold_topics'])
+lint error: column 'bdy' does not reach this judgment (has ['id', 'subject', 'body', 'gold_dept'])
 ```
 
-Read the request `compile` prints. It is exactly what the model will see; if you could not answer the question from it, neither can the model.
+Then read the request that `compile` prints. It is exactly what the model will see. If you could not answer the question from it, the model cannot either.
 
-## 6. Run a sample first
+## Start small
 
-Run, review twenty rows, and test before running everything. The first version of a question is rarely the best one, and every row you run twice under a changed question is paid twice. [Change a spec](/guides/change-a-spec) shows how to compare versions.
+The first version of a question is rarely the best one, and every row asked under a changed question is paid for again. So run a sample first, review twenty rows, and test before you run everything. [Change a spec](/guides/change-a-spec) shows how to compare versions.

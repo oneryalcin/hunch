@@ -1,20 +1,27 @@
 ---
-title: "hunch"
-sidebarTitle: "Overview"
-description: "Specs, tests and reviews for the judgments your software makes with a model."
+title: "Introduction"
+description: "The problem hunch works on, and the three ideas it is built from."
 ---
 
-Your software makes small judgments with a model: which team gets this ticket, did the agent's fix work, is this review positive. Each one is a hunch. hunch writes them down as specs, runs them over your rows, and tells you how often they are right.
+Suppose your program sends each support ticket to a model with one question: which team should handle this? The model answers *billing*, with confidence 0.93.
 
-## The idea in one paragraph
+Is that right? For one ticket, you can read it and check. But the program asks the same question of thousands of tickets a week, and you cannot read them all. What you want to know is how often the answer is right, and whether that changes when someone edits the question.
 
-dbt turned SQL scattered across dashboards into models: files in git, tested, reviewed, rebuilt only when something changed. hunch does the same for model judgments. A judgment is a YAML spec (the question, the options, which columns the model sees). `hunch run` answers it for every row and caches each answer by its exact input, so re-runs are free and only changed questions are asked again. `hunch test` measures accuracy against an answer key or your reviews, with a confidence interval. `hunch diff` shows which rows a spec change flips, before you ship it.
+An answer key helps less than you might expect. On a public set of 385 banking messages, the model disagreed with the dataset's key 45 times. A panel of AI reviewers checked those 45 one by one: the key was wrong in 20, the model in 5, and the other 20 could reasonably go either way. A label is someone else's judgment, and it can be wrong too. To measure a model you end up reading some rows yourself.
+
+hunch is built around that problem, from three ideas.
+
+## The question is written down
+
+The question, its options and the columns the model may see go in a YAML file called a spec:
 
 ```yaml ticket_triage.yml
 judgment: ticket_triage
+model: jev-1.13.0
 source: tickets.csv
 key: id
-state: [subject, body]              # what the model sees
+state: [subject, body]
+
 questions:
   department:
     type: choice
@@ -23,38 +30,25 @@ questions:
       billing: Problems with money already charged or owed
       technical: Something is broken, slow, or misbehaving
       sales: Buying more or buying differently
-    act: 0.80                       # below this confidence, a person reviews it
-    gold: gold_department           # the answer key, if you have one
-tests:
-  department:
-    min_accuracy: 0.90
+    gold: gold_department
 ```
 
-## Is it for you?
+The spec lives in git next to your code. If you have used dbt, it plays the part of a model there: a file that is run, tested, and changed through review.
 
-hunch fits when you ask the same question of many rows and need to know how often the answer is right:
+## Every answer is kept
 
-- **Evaluating agents and LLM apps.** Read agent traces (Claude Code, Cursor, OpenCode, OpenTelemetry) and judge each turn: did it work, did the agent claim success, was the claim true.
-- **Classifying and routing.** Tickets, intents, documents, reviews: one spec per decision, tested like code.
-- **Changing a prompt safely.** Every change gets a row-by-row diff and a paired significance test instead of a vibe check.
+`hunch run` asks the question of every row and stores each answer under its exact input. Run it again and the answers come from the store at no cost. Change one question and only that question is asked again.
 
-It is not a chatbot framework, a prompt playground, or a place to generate text. Answers are typed: a choice, a yes/no with a probability, or a score.
+## Accuracy is measured against gold
 
-<CardGroup cols={2}>
-  <Card title="Quickstart" icon="play" href="/quickstart">
-    Five minutes: run, test and review 40 sample tickets for about $0.001.
-  </Card>
-  <Card title="Concepts" icon="lightbulb" href="/concepts">
-    Spec, answer, store, gold, act and review, in ten minutes.
-  </Card>
-  <Card title="Judge agent traces" icon="robot" href="/guides/agent-traces">
-    Point hunch at your coding agent's sessions and measure how its turns went.
-  </Card>
-  <Card title="Spec reference" icon="book" href="/reference/spec">
-    Every key a spec can have.
-  </Card>
-</CardGroup>
+Gold is what you count as correct: the answer key, if there is one, and the rows you have reviewed. `hunch review` picks the rows worth reading, such as where the model and the key disagree, plus a random sample. Your verdicts become gold.
 
-## Status
+`hunch test` then reports accuracy as a range, because 24 reviewed rows tell you less than 240. When you change a question, `hunch diff` lists the rows whose answer would flip, before you ship the change.
 
-v0.1, used on real data (a 100,000-row run, agent traces, a public intent benchmark), not yet used by anyone outside the project. The CLI and library are Apache-2.0; the optional server is under the Elastic License 2.0. Engines: TypeSafe's Jev (what the recipes use), or any LLM that returns token probabilities. See [results](/results) for what has been measured, including what does not work yet.
+<Card title="Quickstart" icon="play" href="/quickstart">
+  Try all three on 40 sample tickets. It takes about five minutes.
+</Card>
+
+<Note>
+hunch is v0.1. It has been run on real data, but no one outside the project has used it yet. [Cookbooks](/cookbooks) show what has been measured.
+</Note>

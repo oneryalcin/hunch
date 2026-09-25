@@ -3,13 +3,11 @@ title: "Spec reference"
 description: "Every key a hunch spec (YAML) accepts, what it does, and one example each."
 ---
 
-A spec is one YAML file that defines one judgment: which rows to read, what part of each row the model sees, and which questions it answers. A folder of specs is a project (see [Projects](/guides/projects)).
-
-`hunch lint <spec or folder>` checks everything on this page before anything is asked. Unknown keys are warnings (likely typos), not errors.
+One YAML file defines one judgment. A folder of specs is a [project](/reference/projects). `hunch lint` checks every key on this page; unknown keys are warnings, not errors.
 
 ## A complete example
 
-Every key a root judgment can take, except the graph keys (`where`, `chain`, `union`, `question`, `reviews`) and `view`. It passes `hunch lint` against a CSV with the columns `id, subject, body, sample, gold_department, gold_urgent, gold_topics`:
+Every root-judgment key except `where`, `chain`, `union`, `question`, `reviews` and `view`. Passes `hunch lint` against a CSV with columns `id, subject, body, sample, gold_department, gold_urgent, gold_topics`:
 
 ```yaml ticket_triage.yml
 judgment: ticket_triage
@@ -88,7 +86,7 @@ tests:
 
 ### `judgment`
 
-The name of the judgment. It must be unique in a project. It becomes the table name in the store, so `answers`, `traffic`, and names starting with `_` or `sqlite_` are rejected.
+Unique within a project; also the table name in the store. `answers`, `traffic`, and names starting with `_` or `sqlite_` are rejected.
 
 ```yaml
 judgment: ticket_triage
@@ -96,7 +94,7 @@ judgment: ticket_triage
 
 ### `model`
 
-The engine that answers, pinned to an exact version. A name ending in `latest` or containing `:~` is refused, because answers from different versions would share cache keys.
+The engine, pinned to an exact version. Names ending in `latest` or containing `:~` are refused: different versions would share cache keys.
 
 | Form | Engine |
 | --- | --- |
@@ -108,7 +106,7 @@ The engine that answers, pinned to an exact version. A name ending in `latest` o
 model: jev-1.13.0
 ```
 
-`hunch <command> --model <engine>` overrides it for one run; see [Other engines](/guides/engines).
+`--model <engine>` overrides it for one run. See [Engines](/reference/engines).
 
 ### `source`
 
@@ -119,7 +117,7 @@ Where the rows come from. Relative paths resolve from the spec's folder.
 | `tickets.csv` | One row per CSV line; every value is text. |
 | `traces(<glob>)` | Agent sessions: Claude Code and Cursor `.jsonl`, OpenCode `.json`, OpenTelemetry GenAI spans. `~` and `**` work. See [`view`](#view). |
 | `py(<file.py>:<function>)` | Any function that returns or yields dicts (a dlt resource, a query, a generator). Non-text values become text: `None` → empty, dicts and lists → JSON. |
-| `ref(<judgment>)` | Another judgment's output rows: every input column plus its answer columns. See [Projects](/guides/projects). |
+| `ref(<judgment>)` | Another judgment's output rows: its input columns plus its [answer columns](#columns-a-judgment-adds). See [Projects](/reference/projects). |
 
 ```yaml
 source: traces(sessions/**/*.jsonl)
@@ -129,7 +127,7 @@ source: traces(sessions/**/*.jsonl)
 source: py(rows.py:tickets)
 ```
 
-`--source other.csv` replaces a root spec's source for one run (a holdout set, say); `--traffic` replaces it with rows logged by `judge(...)`.
+`--source other.csv` replaces a root spec's source for one run; `--traffic` replaces it with rows logged by `judge(...)`.
 
 ### `view`
 
@@ -140,7 +138,11 @@ How `traces(...)` turns sessions into rows. Ignored for other sources.
 | `turns` (default) | human message that got a reply and a next message | `id`, `session`, `at`, `request`, `final_reply`, `next_message`, `tools`, `edits`, `ran_after_edit` |
 | `runs` | session | `id`, `session`, `at`, `request`, `final_messages`, `human_messages`, `tools`, `edits`, `ran_after_edit` |
 
-In `turns`, `next_message` is what the developer wrote next: the closest thing to free gold in a conversation. Text the harness injects into a user message (IDE context, `!` shell output, reminders, messages from other agent sessions) is removed. A message that is only injected text, a slash command, or a context-continuation summary is not a turn, and neither is an interruption. The last turn of a session has no reaction yet, so it is not a row. `ran_after_edit` is `yes` when the agent ran a command after its last edit, `no` when it did not, and empty when it made no edits. `final_messages` in `runs` is the agent's last three messages.
+- `next_message`: the developer's next message.
+- Injected text (IDE context, `!` shell output, reminders, messages from other agent sessions) is removed from user messages. A message that is only injected text, a slash command, a context-continuation summary or an interruption is not a turn.
+- A session's last turn has no next message, so it is not a row.
+- `ran_after_edit`: `yes` if the agent ran a command after its last edit, `no` if not, empty if it made no edits.
+- `final_messages` (`runs`): the agent's last three messages.
 
 ```yaml
 source: traces(sessions/*.jsonl)
@@ -150,7 +152,7 @@ state: [request, final_messages]
 
 ### `key`
 
-The column that identifies a row. Rows are paired by key in `diff`, `review` and `on_change`, so it must be unique; `run` warns when values repeat. A spec reading `ref(...)` inherits its upstream's key.
+The column that identifies a row; `diff`, `review` and `on_change` pair rows by it. Must be unique (`run` warns on repeats). A `ref(...)` spec inherits its upstream's key.
 
 ```yaml
 key: id
@@ -158,17 +160,17 @@ key: id
 
 ### `state`
 
-The columns the model sees, as a JSON object. Nothing outside `state` is sent, and the answer's cache key is computed from exactly this (after `redact` and `clip`). Line endings are normalized, so `\r\n` and `\n` give the same key.
+The columns the model sees, sent as a JSON object. Nothing else is sent. The cache key is computed from exactly this, after `redact` and `clip`; `\r\n` and `\n` give the same key.
 
 ```yaml
 state: [subject, body]
 ```
 
-The engine's limit is about 32,000 tokens for state plus the longest question. `run` and `compile` warn about rows above 80% of that and names their largest column; [`clip`](#clip) is the fix.
+Limit: about 32,000 tokens for state plus the longest question. `run` and `compile` warn above 80% and name the largest column; use [`clip`](#clip).
 
 ### `redact`
 
-A list of rules applied to every state value before it is hashed, sent, or logged. Named rule sets:
+Rules applied to every state value before it is hashed, sent or logged. Named rule sets:
 
 | Name | Replaces |
 | --- | --- |
@@ -176,7 +178,7 @@ A list of rules applied to every state value before it is hashed, sent, or logge
 | `emails` | Email addresses → `[EMAIL]`. |
 | `home` | `/Users/<name>` and `/home/<name>` → `~`. |
 
-Anything else is a regular expression, and matches become `[REDACTED]`.
+Anything else is a regular expression; matches become `[REDACTED]`.
 
 ```yaml
 redact: [secrets, emails, home, 'ACME-\d{6}']
@@ -188,7 +190,7 @@ Quote regular expressions with single quotes. In YAML double quotes, a backslash
 
 ### `clip`
 
-Keep only part of a long state column: `N` keeps the first N characters, `-N` the last N (the end of a conversation usually holds its conclusion). The column must be in `state`, and N must be a nonzero integer.
+`N` keeps a state column's first N characters, `-N` its last N. The column must be in `state`; N is a nonzero integer.
 
 ```yaml
 clip: {request: 3000, final_reply: -3000}
@@ -196,21 +198,15 @@ clip: {request: 3000, final_reply: -3000}
 
 ### `where`
 
-Keep only the rows where a condition holds, before anything is asked. It can use any column that reaches the spec: source columns, and on a `ref(...)` spec the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Nothing else runs. Compared with a number, a text value is read as a number, and an empty cell matches no numeric condition.
+Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number; an empty cell matches no numeric condition. `lint` rejects a column that does not reach the spec.
 
 ```yaml
 where: department == 'billing' and department_p >= 0.5
 ```
 
-`lint` reports a column that does not reach the spec:
-
-```
-lint error: where uses 'departmnt', which does not reach this judgment
-```
-
 ### `chain`
 
-`chain: true` marks a refinement: this judgment's answer can only be right if the row was routed here correctly. Its confidence (`<question>_p`, and what `act` compares against) becomes its own confidence times the probability that the `where` condition holds, computed from the upstream answers' full probability distributions, across every hop. It needs a `where`.
+Needs `where`. Confidence (`<question>_p`, and what `act` compares) becomes the judgment's own confidence times the probability that `where` holds, computed from the upstream answers' distributions across every hop.
 
 ```yaml
 source: ref(group)
@@ -218,11 +214,9 @@ where: group == 'card_payments'
 chain: true
 ```
 
-Without `chain`, `where` only decides whether to ask, and confidence is the judgment's own.
-
 ### `union` and `question`
 
-A union combines one question's answers from several judgments into one table, so a tree of specialists can be tested as one classifier. Every branch must ask `question` with the same type, and a row may reach only one branch (hunch stops if their `where` conditions overlap). Union rows gain a `_branch` column. A union has no `model`, `source` or `questions` of its own.
+Combines one question's answers from several judgments into one table, so a tree of judgments is tested as one classifier. Every branch asks `question` with the same type; a row may reach only one branch (overlapping `where`s stop the run). Rows gain `_branch`. A union has no `model`, `source` or `questions`.
 
 ```yaml
 judgment: intent_tree
@@ -232,17 +226,17 @@ question: intent
 
 ### `reviews`
 
-The CSV file where `hunch review` keeps human verdicts; they become gold for `test` and `diff`. Default: `<judgment>.reviews.csv` next to the spec. Point several specs that ask the same question of the same rows at one file, so gold belongs to the data rather than to one spec.
+The CSV where `hunch review` saves verdicts, which become gold for `test` and `diff`. Default: `<judgment>.reviews.csv` next to the spec. Specs asking the same question of the same rows can share one file.
 
 ```yaml
 reviews: ../banking77/intent.reviews.csv
 ```
 
-A verdict applies only while the row's state is unchanged. Keep this file in version control; it is not rebuilt from the store.
+A verdict applies while the row's state is unchanged. Keep the file in git; it is not in the store.
 
 ### `weights`
 
-For a source that samples some kinds of row more than they occur (a 50/50 eval set of something that is 17% "yes" in production). Each row gets `_w` = population share ÷ sample share of its value in `by`, and `test` weights accuracy, calibration and estimates by it. Every value of `by` needs a share, and shares must sum to 1. Set it on the spec that reads the file; downstream specs carry `_w` along.
+Corrects for a sample whose mix differs from production. Each row gets `_w` = population share ÷ sample share of its `by` value; `test` weights accuracy, calibration and estimates by it. Every `by` value needs a share; shares sum to 1. Set it on the spec that reads the file; downstream specs carry `_w`.
 
 ```yaml
 weights:
@@ -252,7 +246,7 @@ weights:
 
 ### `tests`
 
-Thresholds `hunch test` checks, per question. A failed check makes `test` exit with status 1.
+Per-question thresholds for `hunch test`. A failure exits 1.
 
 | Test | Passes when | Applies to |
 | --- | --- | --- |
@@ -260,7 +254,7 @@ Thresholds `hunch test` checks, per question. A failed check makes `test` exit w
 | `max_calibration_error` | Expected calibration error (10 bins) is at most this. | all |
 | `min_act_accuracy` | Accuracy among answers confident enough to act on (see `act`) is at least this. | questions with `act` |
 | `min_auroc` | p(yes) separates gold yes from gold no at least this well (0.5 is a coin toss). | `noul` |
-| `order_stability` | `{sample, permutations, max_flip_rate}`: re-asks `sample` rows (default 100) with the options reordered `permutations` times (default 2); the share of answers that change must be at most `max_flip_rate`. It asks new questions, so it costs money. | `choice` |
+| `order_stability` | `{sample, permutations, max_flip_rate}`: re-asks `sample` rows (default 100) with options reordered `permutations` times (default 2); the share of changed answers is at most `max_flip_rate`. Costs money: it asks new questions. | `choice` |
 
 ```yaml
 tests:
@@ -289,20 +283,20 @@ on_change: new_rows_only
 | Key | What it does | Sent to the model |
 | --- | --- | --- |
 | `type` | `choice`, `noul`, `score` or `multi`. | yes |
-| `instructions` | The question. Plain text, or structured YAML (sent as JSON). Refer to state columns in backticks, like `` `next_message` ``. | yes |
+| `instructions` | The question: text, or structured YAML (sent as JSON). Refer to state columns in backticks, like `` `next_message` ``. | yes |
 | `criteria` | The options: a mapping for `choice` and `multi`, a list of levels for `score`. | yes |
 | `none` | Adds an option `none_of_these` with this description (`choice` only). | yes |
 | `act` | The confidence needed to act on an answer without review. | no |
 | `gold` | The source column holding the right answer. | no |
 | `escalate` | `{model: <engine>}`: re-ask answers below `act` on another engine. | no |
 
-Changing a key marked "no" never changes an answer's cache key, so it costs nothing to change.
+Keys not sent are not in the cache key; changing them asks nothing.
 
 ### Question types
 
 <Tabs>
   <Tab title="choice">
-    Pick one option. `criteria` maps each option's label to a description. Describe all options or none: `lint` warns on a mix, because described options pull answers away from bare ones. At most 255 options.
+    One option. `criteria` maps each label to a description. Describe all options or none (`lint` warns on a mix). At most 255 options.
 
     ```yaml
     department:
@@ -333,7 +327,7 @@ Changing a key marked "no" never changes an answer's cache key, so it costs noth
     ```
   </Tab>
   <Tab title="multi">
-    Several options can apply. hunch asks one yes/no question per option, named `<question>__<option>`, each tested, diffed and reviewed on its own. The row also gets `<question>`: the options that apply, joined by `|`. `act`, `gold` and `escalate` are copied to every option.
+    Several options can apply. Asked as one yes/no question per option, `<question>__<option>`, each tested, diffed and reviewed on its own. The row also gets `<question>`: the options that apply, joined by `|`. `act`, `gold` and `escalate` apply to every option.
 
     ```yaml
     topics:
@@ -348,7 +342,7 @@ Changing a key marked "no" never changes an answer's cache key, so it costs noth
 
 ### `act`
 
-The confidence at or above which an answer is acted on automatically; below it, the row goes to the review queue. A number in (0, 1], or for a `noul` question a separate threshold per answer, because a "no" and a "yes" are rarely equally reliable:
+Confidence at or above which an answer is acted on; below it, the row goes to the review queue. A number in (0, 1], or for `noul` one threshold per answer:
 
 ```yaml
 act: {yes: 0.95, no: 0.8}
@@ -358,7 +352,7 @@ With `chain: true`, the confidence compared is the chained one.
 
 ### `gold`
 
-The source column with the right answer, for `test` and `diff`. An empty cell means no gold for that row. Values by type:
+The source column with the right answer. Empty cell: no gold for that row.
 
 | Type | Gold value |
 | --- | --- |
@@ -367,11 +361,11 @@ The source column with the right answer, for `test` and `diff`. An empty cell me
 | `score` | The level: its number from 0 (`2`), its text (`Frustrated`), or both (`2:Frustrated`). |
 | `multi` | The options that apply, joined by `\|`; `-` means none apply. |
 
-Reviews made with `hunch review` override the source column for the rows they cover, and can accept two labels for one row.
+Reviews override this column for the rows they cover and can accept two labels.
 
 ### `escalate`
 
-Re-ask the answers that fall below `act` on another engine. The escalated answer replaces the original only when it clears `act` itself; both stay in the store, and the row's `<question>_by` column says which engine answered. Needs `act`, and a model different from the spec's.
+Re-asks answers below `act` on another engine. The new answer is used only if it clears `act` itself; both are stored and `<question>_by` names the engine used. Needs `act` and a different model.
 
 ```yaml
 act: 0.95
@@ -380,7 +374,7 @@ escalate: {model: "deepseek:deepseek-flash"}
 
 ### `none`
 
-Adds an explicit "none of these fits" option, `none_of_these`, with your description. Declining is then an answer, not low confidence. `test` reports how many rows declined.
+Adds an option `none_of_these` with this description, so declining is an answer rather than low confidence. `test` reports how many rows declined.
 
 ```yaml
 none: The message needs no team (thanks, spam, chit-chat)
@@ -388,7 +382,7 @@ none: The message needs no team (thanks, spam, chit-chat)
 
 ## Columns a judgment adds
 
-Each row of a judgment's output (and what a `ref(...)` spec or `where` can read) has its input columns plus:
+A judgment's output rows (what `ref(...)` and `where` read) have their input columns plus:
 
 | Column | When | Value |
 | --- | --- | --- |
@@ -402,7 +396,7 @@ Each row of a judgment's output (and what a `ref(...)` spec or `where` can read)
 | `_w` | with `weights` | The row's sampling weight. |
 | `_branch` | union | The judgment the row came through. |
 
-A question named like an input column would overwrite it, so `lint` rejects it (a common case: a question named like its gold column).
+`lint` rejects a question named like an input column (often its gold column). The store also adds `<question>_key` and `_hunch_run_id`; see [Store](/reference/store#judgment-tables).
 
 ## YAML details
 

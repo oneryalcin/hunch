@@ -1,54 +1,57 @@
 ---
 title: "Test in CI"
-description: "Set pass/fail thresholds for a judgment and fail the build when a spec change makes it worse."
+description: "Set thresholds in the spec, and fail the build when a change makes a judgment worse."
 ---
 
-`hunch test` checks each question against thresholds you set in the spec, prints `PASS` or `FAIL` per check, and exits 1 if any check fails. That is all CI needs.
+A unit test checks that a function returns what you expect. A judgment can't be checked that way, because some of its answers will always be wrong. What you can check is how often it is wrong, and whether its confidence can be trusted.
 
-## Set thresholds
+## Thresholds live in the spec
 
-Add a `tests:` block to the spec, keyed by question:
+Add a `tests:` block, keyed by question:
 
-```yaml
-questions:
-  intent:
-    type: choice
-    instructions: What is this bank customer asking about?
-    criteria: { ... }
-    act: 0.90
-    gold: gold_intent
-
+```yaml prototype/examples/banking77/intent.yml
 tests:
   intent:
     min_accuracy: 0.85
     max_calibration_error: 0.05
     min_act_accuracy: 0.97
-    order_stability: {sample: 150, permutations: 2, max_flip_rate: 0.05}
 ```
 
-| Test | Passes when | Applies to |
-| --- | --- | --- |
-| `min_accuracy` | The estimated accuracy (or plain accuracy, when there is no estimate yet) is at least this. For a `multi` question, key it by the question's name: it checks exact-set accuracy | All |
-| `max_calibration_error` | The gap between stated confidence and observed accuracy is at most this | `choice`, `noul`, `score` |
-| `min_act_accuracy` | Accuracy on rows at or above the question's `act` (what your code does unattended) is at least this. Needs `act` | All with `act` |
-| `min_auroc` | p(yes) separates yes rows from no rows at least this well (0.5 = coin toss) | `noul` |
-| `order_stability` | Asking `sample` rows (default 100) again with the options shuffled `permutations` times (default 2) flips at most `max_flip_rate` of answers (default 1, no limit) | `choice` |
+`hunch test` checks each one, prints `PASS` or `FAIL`, and exits 1 if any fails.
 
-A question with no `tests:` entry still gets its accuracy, calibration and dial printed, and nothing can fail. The accuracy among auto-acted rows and order stability are only computed when `min_act_accuracy` or `order_stability` asks for them. An unknown test name is a lint warning, so typos don't pass silently.
+Here is the BANKING77 intent spec, run against its answer key:
+
+```text
+intent (choice, 770 rows)
+  gold: 770 rows (770 from source, 0 from review)
+  PASS accuracy 85.5% (min 85%)
+  FAIL calibration error 0.085 (max 0.05)
+  ...
+  FAIL accuracy among auto-acted 91.8% on 83% of rows at act=0.9 (min 97%)
+```
+
+Accuracy passes, yet the spec fails twice. The model is more confident than it should be. Of the answers it gave at confidence 0.9 or above, only 91.8% were right, and those are the ones the code acts on without a person looking. Accuracy alone would not have shown that.
+
+The other tests are `min_auroc` for yes/no questions and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no tests still gets its numbers printed; nothing can fail.
 
 <Note>
-The thresholds compare the point estimate, not the lower end of the confidence interval. With 30 reviewed rows the interval is wide (±15 points), so set `min_accuracy` a little below what you measured, and add reviews before you trust a close call.
+Thresholds compare the point estimate, not the lower end of its interval. With 30 reviewed rows the interval is about ±15 points, so set `min_accuracy` a little below what you measured.
 </Note>
 
 ## What CI needs
 
-1. **Gold.** Your answer key column and your `*.reviews.csv` files. Commit them.
-2. **Answers.** `test` asks the engine for any answer the store doesn't have. In CI you want either no new answers (free, fast) or new answers under a cost cap:
-   - **Cache the store between runs.** Answers are content-addressed, so a restored store is always safe to reuse. Only rows or questions that changed are asked again.
-   - **Always pass `--max-cost`.** If one judgment's missing answers would cost more than that, `test` stops before asking and exits 1.
-3. **An API key**, if anything may be asked: `TYPESAFE_API_KEY` for Jev, or the key for your `--model` engine (see [Environment](/reference/environment)).
+`test` compares answers with gold, so CI needs both.
 
-## GitHub Actions
+**Gold** is your answer key column and your `*.reviews.csv` files. Commit them.
+
+**Answers** come from the store. `test` asks the engine for any it lacks, which in CI would mean paying on every pull request. Two things keep that small:
+
+- Cache the store between runs. Answers are stored by their exact input, so a restored store is always safe to reuse, and only changed rows or questions are asked again.
+- Always pass `--max-cost`. If the missing answers would cost more, `test` asks nothing and exits 1.
+
+If anything may be asked, CI also needs an API key: `TYPESAFE_API_KEY` for Jev, or your engine's key ([Environment](/reference/environment)).
+
+## A GitHub Actions workflow
 
 ```yaml .github/workflows/judgments.yml
 name: judgments
@@ -74,19 +77,20 @@ jobs:
         run: hunch test evals/ --max-cost 0.50
 ```
 
-- The cache key changes every run, and `restore-keys` restores the newest store, so answers asked in one run are there for the next.
-- hunch uses the nearest `.hunch/store.sqlite` in the spec's folder or above; with none, it creates one at the repository root. Cache that path, or set `HUNCH_STORE` to choose it.
-- hunch is not on PyPI yet, and the repository is private for now: installing from GitHub needs access to it.
-- To also see what a spec change does, add a step: `hunch diff evals/ --against git:origin/main --max-cost 0.50`. `diff` reports; it does not fail the build.
+The cache key changes every run and `restore-keys` picks the newest store, so answers asked in one run are there for the next. hunch uses the nearest `.hunch/store.sqlite` at or above the spec's folder, or creates one at the repository root. Set `HUNCH_STORE` to choose another path.
 
-<Warning>
-`test` exits 1 for a failed check and also when `--max-cost` stops it (for example, `order_stability` needs answers the store lacks). The log's last line tells you which.
-</Warning>
+To see what a pull request does to the answers, add a step with `hunch diff evals/ --against git:origin/main --max-cost 0.50`. It reports and does not fail the build.
 
-## Exit codes
+## Reading a failure
 
-| Code | Meaning |
+| Exit code | Meaning |
 | --- | --- |
 | 0 | Every check passed |
-| 1 | A check failed, or the command stopped (above `--max-cost`, unknown judgment) |
-| 2 | A lint error in a spec |
+| 1 | A check failed, or `test` stopped before asking |
+| 2 | A spec has a lint error |
+
+Exit 1 has two causes, and the last line of the log tells them apart. Run with `--max-cost 0`, the same spec ends like this, because its `order_stability` test needs answers the store doesn't have:
+
+```text
+intent: would ask 300 answers in 150 requests (~$0.0217), above --max-cost $0.0; nothing asked
+```

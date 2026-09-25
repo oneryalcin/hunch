@@ -3,7 +3,7 @@ title: "Server API"
 description: "Every endpoint of hunch-server: parameters, responses, authentication and errors."
 ---
 
-The server serves the same specs and store as the CLI. A row judged through `/v1/judge` is a cache hit for the next `hunch run`, and a verdict given on `/review` is a review that `hunch test` and `hunch diff` use. To install and run it, see [Run the server](/guides/server).
+Same specs and store as the CLI. To install and run it, see [Server](/reference/server).
 
 ## Paths
 
@@ -17,9 +17,7 @@ With `HUNCH_SERVER_TOKEN` set, every request needs the token, in any one of:
 - the query parameter `?token=<token>`,
 - a form field `token` (the review page's buttons send it this way).
 
-The comparison is constant-time (`hmac.compare_digest`). A missing or wrong token gets `401`.
-
-Without `HUNCH_SERVER_TOKEN` the server is open. Use that only on your own machine.
+Compared in constant time. Missing or wrong: `401`. Without `HUNCH_SERVER_TOKEN` the server is open.
 
 ## Errors
 
@@ -36,7 +34,7 @@ JSON endpoints (`/v1/...`) answer errors as `{"error": "<message>"}`. Pages answ
 
 ## Cost cap
 
-The server sets the engine's cost cap from `HUNCH_SERVER_MAX_COST` (default `0.01` USD). It applies per judgment per request: if one judgment's missing answers for the row would cost more, nothing is asked and the request gets `422`. `HUNCH_MAX_COST` is ignored by the server.
+`HUNCH_SERVER_MAX_COST` (default `0.01` USD), per judgment per request. Above it, nothing is asked: `422`. `HUNCH_MAX_COST` is ignored.
 
 ## JSON API
 
@@ -97,7 +95,7 @@ For each question of one judgment (`node` may be left out for a one-judgment pro
            "change": null, "alert": false}]}
 ```
 
-`change` is the total variation distance between this run's shares and the previous run's: half the sum of the absolute differences, `0` for the same mix, `1` for no overlap. `alert` is `true` when it is above `0.10`. The first run has `change: null`.
+`change`: total variation distance from the previous run's shares (`0` same mix, `1` no overlap; `null` for the first run). `alert`: `change` above `0.10`.
 
 ## Pages
 
@@ -110,7 +108,7 @@ For each question of one judgment (`node` may be left out for a one-judgment pro
 
 ### The review queue
 
-`GET /review` builds the same queue as [`hunch review`](/reference/cli) from answers already in the store. It asks nothing. `audit` (default `30`) is how many random rows per question to spot-check. Each card shows the row's state, the model's top three answers and one button per verdict:
+The same queue as [`hunch review`](/guides/review), from answers already in the store; asks nothing. `audit` (default `30`): random rows per question to spot-check. Each card shows the state, the model's top three answers and one button per verdict:
 
 | Button | Verdict | Label saved |
 |---|---|---|
@@ -124,4 +122,4 @@ For each question of one judgment (`node` may be left out for a one-judgment pro
 
 Verdicts are appended to the judgment's reviews file: `<judgment>.reviews.csv` next to its spec, or the file its `reviews:` key names. The reviewer name is the `X-Reviewer` header, else the `reviewer` parameter, else `server`.
 
-`POST /review` accepts a verdict only for a row the current queue offers, with the same state hash and the same kind. Anything else gets `409`. This keeps spot checks a random sample: a row picked by hand cannot be filed as one.
+`POST /review` accepts a verdict only for a row the current queue offers, with the same state hash and kind; anything else is `409`, so spot checks stay random.

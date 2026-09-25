@@ -1,0 +1,73 @@
+---
+title: "Predict whether a patch passes"
+description: "Judge a coding agent's patch without running its tests, and learn that a confident no is worth more than a confident yes."
+---
+
+A coding agent reads a GitHub issue, edits the code, and hands back a patch. Does the patch fix the issue? The honest answer is to run the project's tests, but those may be slow, hidden, or not written yet. Could a model reading the issue and the patch tell you in advance?
+
+The SWE-agent trajectories dataset ([Nebius](https://huggingface.co/datasets/nebius/SWE-agent-trajectories), CC BY 4.0) records real agent runs and whether each patch passed the issue's tests. The example in `prototype/examples/swe_agent/` samples 200 runs, 100 that passed and 100 that did not.
+
+## The spec
+
+```yaml patch_eval.yml
+judgment: patch_eval
+model: jev-1.13.0
+source: traces.csv
+key: id
+state: [issue, final_messages, patch]
+weights:   # traces.csv is 50/50 on `resolved`; across all 80,036 runs 13,389 pass (16.7%)
+  by: resolved
+  population: {yes: 0.167, no: 0.833}
+
+questions:
+  passes_tests:
+    type: noul
+    instructions: >-
+      Would this patch make the project's own tests for this issue pass, fully resolving
+      the `issue` as described? Judge the `patch` itself, not what the agent says about it.
+    act: {yes: 0.90, no: 0.80}
+    gold: resolved
+
+  claims_fixed:
+    type: noul
+    instructions: In its `final_messages`, does the agent claim that it has fixed the issue?
+```
+
+`weights` matters here. The sample is half passing patches, but in the full dataset only 16.7% pass. Without the weights, every rate `test` reports would describe a world where agents succeed half the time.
+
+## The model ranks patches well
+
+AUROC answers one question: pick a passing patch and a failing one at random; how often does the passing one get the higher probability? 0.5 is a coin toss. Here it was 0.831.
+
+That is good ranking, not good prediction, and the dial shows the difference:
+
+```sh
+hunch test prototype/examples/swe_agent/patch_eval.yml --max-cost 0
+```
+
+```
+       dial   act on yes: automated  wrong   │  act on no: automated  wrong
+       0.50                  27.8%  59.8%   │                72.2%   7.6%
+       0.70                   9.3%  53.5%   │                57.0%   3.5%
+       0.80                   1.5%  55.5%   │                44.2%   1.9%  ← act no
+       0.90                   0.0%   0.0%   │                26.8%   0.6%  ← act yes
+```
+
+Acting on "no" at 0.80 would settle 44% of all runs with 1.9% of them wrong. Acting on "yes" is never safe: even the model's most confident "passes" were wrong more than half the time. Of the 55 patches given a pass probability below 0.2, 52 did fail.
+
+So a yes/no question can take two thresholds, `act: {yes: …, no: …}`. Here the useful product is a filter: set aside the patches that will almost surely fail, and run the tests on the rest.
+
+## Agents overclaim
+
+The second question reads only the agent's last messages: does it say it fixed the issue? The agent claimed a fix in 160 of 200 runs, and 66 of those, 41%, failed the tests. A panel of three AI reviewers checked `claims_fixed` on 40 random runs and matched the model on 29 of the 30 they could decide.
+
+Which raises a worry. The patch spec also sees those messages. If the agent says "I fixed it", does the judge believe it?
+
+`patch_only.yml` is the same question with `final_messages` removed from the state. AUROC barely moved: 0.828 without the messages against 0.831 with them. A claim of success did not raise the probability of passing. The messages did matter when the agent admitted it could not finish: those pushed the probability down, correctly, since 34 of 40 such patches failed.
+
+## What did not work
+
+- Calibration fails the spec's own test: 0.147 against a maximum of 0.10, weighted to the real pass rate. The model is overconfident about "yes".
+- The first version of `prepare.py` kept the start of long final messages and cut the end, where the claim is. The review panel found it; 17 of 200 rows changed after the fix, and all numbers above are after it.
+- A second engine, DeepSeek V4.1 Flash, reached AUROC 0.866, but the difference was not significant (p = 0.52). See [Engines](/reference/engines).
+- This is one dataset and one agent. The numbers say nothing yet about others.

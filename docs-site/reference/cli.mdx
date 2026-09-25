@@ -8,7 +8,7 @@ hunch <command> <path> [flags]
 hunch init [--list] RECIPE [DIR]
 ```
 
-`path` is a spec file (`intent.yml`) or a folder of specs (a project). Every command loads and lints the whole project first: lint warnings print to stderr, and a lint error stops the command with exit code 2.
+`path` is a spec file or a folder of specs. Every command lints the whole project first: warnings go to stderr; an error exits 2.
 
 ## Commands
 
@@ -23,7 +23,7 @@ hunch init [--list] RECIPE [DIR]
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
 | `init` | Copies a starter recipe into a folder | No |
 
-Answers are cached by content, so any command that asks only pays for answers the store doesn't have. Put `--max-cost 0` on a command to be sure it spends nothing: if anything is missing, it stops before asking. For `suggest`, the cap also covers each writer call at its worst case (the whole reply allowance).
+Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
 
 ### `hunch init`
 
@@ -33,7 +33,7 @@ hunch init tickets              # copies the recipe into ./tickets
 hunch init agent-eval evals/    # copies into evals/
 ```
 
-The folder must not exist yet. Recipes today: `agent-eval` (check a coding agent's work from its trace) and `tickets` (route 40 sample support tickets; about $0.001 to run).
+The folder must not exist. Recipes: `agent-eval` (check a coding agent's work from its trace), `tickets` (40 sample support tickets, about $0.001).
 
 ## Flags
 
@@ -83,12 +83,14 @@ The folder must not exist yet. Recipes today: `agent-eval` (check a coding agent
 # intent: 770 rows in; 770 answers planned, 770 cached, 0 to ask, ~0 input tokens, ~$0.00000 (jev-1.13.0)
 ```
 
-- The JSON is the exact request for the first row, after `redact` and `clip`. What you see is what the engine sees. For an LLM engine it prints the prompt instead.
-- Then one line per judgment: rows in, answers planned, how many are cached, how many `run` would ask, and the estimated tokens and cost.
-- `where keeps ≤ N` and `rows kept because the answers their where-clause needs aren't cached yet`: the upstream judgment hasn't run, so the count and cost are an upper bound. Run the upstream judgment first for the real numbers.
-- `size warning`: a row's state is near the engine's size limit.
-- `on_change: freeze and the spec changed`: `run` will refuse without `--allow-change`.
-- `# total`: the whole project, with an expected cost when some rows are an upper bound.
+| Line | Meaning |
+|---|---|
+| JSON | The exact request for the first row, after `redact` and `clip`. For an LLM engine, the prompt. |
+| `# <judgment>: …` | Rows in, answers planned, cached, to ask, estimated tokens and cost. |
+| `where keeps ≤ N`, `rows kept because the answers their where-clause needs aren't cached yet` | Upstream hasn't run; count and cost are upper bounds. |
+| `size warning` | A row's state is near the engine's limit. |
+| `on_change: freeze and the spec changed` | `run` will refuse without `--allow-change`. |
+| `# total` | The whole project, with an expected cost when some rows are upper bounds. |
 
 ### `run`
 
@@ -98,11 +100,10 @@ intent: 385 rows in; answers: 385 cached, 0 asked in 0 requests, 0 input tokens,
 materialized 1 table(s) in .hunch/store.sqlite (run 2026-09-25T10:45:03-8b2bab)
 ```
 
-- Answers cached and asked, requests, input tokens and the real cost.
-- `rows below act`: answers whose confidence is under the question's `act` threshold. Your code should not act on them alone; they are what `review` shows as "model unsure".
-- The run id ties every table row to this run (see [Store](/reference/store)).
-
-While asking, stderr shows progress: `asking 529 answers in 529 requests (~$0.0168)` and the request rate.
+- First line: answers cached and asked, requests, input tokens, actual cost.
+- `rows below act`: confidence under `act`; `review` shows them as "model unsure".
+- The run id is stored on every table row ([Store](/reference/store)).
+- stderr shows progress while asking: `asking 529 answers in 529 requests (~$0.0168)` and the request rate.
 
 ### `test`
 
@@ -132,23 +133,23 @@ intent (choice, 385 rows)
 answers: 685 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
 ```
 
-Line by line:
-
-- **`gold:`** how many rows have a right answer, and where it came from: the source's gold column, your reviews, or both labels acceptable. Rows marked ambiguous or needing more context are counted as excluded and not scored.
-- **`context:`** (only after spot checks marked "needs more context") how many random spot checks needed more than the state shows. A high share means the spec should see more (earlier turns, what happened next), not that the model is wrong.
-- **`estimated accuracy`** the headline. It comes from reviewed rows only, with a 95% confidence interval. With an answer key, hunch reviews every disagreement and a random sample of agreements, and weights them to all rows. Without an answer key, it uses the random spot checks alone. The `(min …)` is the `tests:` threshold; `PASS`/`FAIL` compares the estimate with it.
-- **`accuracy`** (instead of `estimated accuracy`) when there is no estimate yet: plain accuracy against whatever gold there is. If some rows were reviewed, the next line says `upper bound only, no estimate` and why: reviewing only disagreements can only move accuracy up, so the random spot checks are still missing.
-- **`not the headline`** accuracy two other ways, for comparison: on current gold (trusts every unreviewed row) and on the raw answer key.
-- **`calibration error`** the average gap between what the model says (`stated p`) and how often it is right (`observed`), weighted by rows. The table shows each band. Observed above stated means the model is too modest; below means overconfident.
-- **`AUROC`** (yes/no questions) how well p(yes) separates yes rows from no rows. 0.5 is a coin toss, 1.0 is perfect. Not affected by how rare "yes" is.
-- **`dial`** for each confidence threshold: the share of rows your code would act on automatically, and how many of those are wrong. `← act` marks the question's `act`. Yes/no questions get two columns, one per side. The table uses rows with gold; if most gold came from reviewing uncertain rows, it leans toward hard rows.
-- **`accuracy among auto-acted`** accuracy on just the rows at or above `act`: the error rate of what your code does unattended.
-- **`most confident mistakes`** wrong answers, most confident first. High confidence and wrong is either a dangerous model error or a wrong gold label; review them.
-- **`most confused`** the most common (gold → got) pairs.
-- **`order stability`** (with `order_stability` in `tests:`) the same rows asked with the options shuffled. Flips inside the noise band (margin under 0.10) are listed but expected.
-- **`declined (none_of_these)`**, **`escalated to …`** shown for questions with `none` or `escalate`.
-- **`weighted to the population`** shown when the source has sampling weights; every number above is then weighted.
-- The last line: answers cached and asked, and the cost.
+| Line | Meaning |
+|---|---|
+| `gold:` | Rows with a right answer, by origin: source column, reviews, two acceptable labels. Ambiguous and needs-context rows are excluded. |
+| `context:` | After "needs more context" verdicts: the share of random spot checks that needed more than the state shows. |
+| `estimated accuracy` | The headline, from reviewed rows, with a 95% interval. With an answer key: all disagreements plus a random sample of agreements, weighted to all rows. Without: random spot checks only. `(min …)` is the threshold. See [How the numbers work](/reference/how-the-numbers-work). |
+| `accuracy` | Shown instead when there is no estimate yet: plain accuracy on current gold. `upper bound only, no estimate` means spot checks are missing. |
+| `not the headline` | Accuracy on current gold (trusts unreviewed rows) and on the raw answer key. |
+| `calibration error` | Row-weighted gap between `stated p` and `observed`, with the per-band table. Observed above stated: too modest; below: overconfident. |
+| `AUROC` | Yes/no: how well p(yes) separates yes from no. 0.5 is chance, 1.0 perfect. |
+| `dial` | Per threshold: share of rows automated and share of those wrong. `← act` marks `act`; yes/no questions get one column pair per side. Computed on rows with gold. |
+| `accuracy among auto-acted` | Accuracy on rows at or above `act`. |
+| `most confident mistakes` | Wrong answers, most confident first: a model error or a gold error. |
+| `most confused` | Most common (gold → got) pairs. |
+| `order stability` | With the `order_stability` test: flips when options are shuffled; noise-band flips (margin under 0.10) are expected. |
+| `declined (none_of_these)`, `escalated to …` | Questions with `none` or `escalate`. |
+| `weighted to the population` | The source has `weights`; every number is weighted. |
+| last line | Answers cached and asked, and cost. |
 
 ### `diff`
 
@@ -169,15 +170,17 @@ intent: 77/770 rows flip (15 within noise band)
   … 65 more
 ```
 
-- **`rows flip`** rows whose answer changed, and how many of those changes are within the noise band (either side's margin under 0.10: re-asking would flip them too).
-- **`N rows newly reach it, M no longer do`** a `where` upstream changed which rows this judgment sees.
-- **`probabilities moved`** how far answers moved, not just which labels changed. `mean |Δ|` is the size of the move; `mean Δ p(old answer)` is its direction (negative: the new spec is less sure of the old answer; for yes/no questions, the change in p(yes)).
-- **`gold accuracy … →`** accuracy of old and new on the shared rows with gold. Flips split into ✓ fixed, ✗ broken, wrong both times, and without gold.
-- **`paired sign test`** whether fixed vs broken is more than chance. `NOT significant` means get more gold before believing the change.
-- Each flip: ✓ fixed, ✗ broken, blank for no gold or wrong both times; `~noise` marks noise-band flips (listed last).
-- Other forms: `unchanged (same keys, 0 calls)`, `new question`, `renamed from 'x'` (matched by answer keys), and `moved by upstream changes` when this spec is identical and only its inputs changed.
+| Line | Meaning |
+|---|---|
+| `rows flip` | Rows whose answer changed; `within noise band` counts flips where either side's margin is under 0.10. |
+| `N rows newly reach it, M no longer do` | An upstream `where` changed which rows this judgment sees. |
+| `probabilities moved` | `mean \|Δ\|`: size of the move. `mean Δ p(old answer)`: direction (for yes/no, the change in p(yes)). |
+| `gold accuracy … →` | Old and new accuracy on shared rows with gold: fixed, broken, wrong both times, without gold. |
+| `paired sign test` | Whether fixed vs broken beats chance. |
+| flip rows | ✓ fixed, ✗ broken, blank: no gold or wrong both times. `~noise` flips are listed last. |
+| `unchanged (same keys, 0 calls)`, `new question`, `renamed from 'x'`, `moved by upstream changes` | Other outcomes; renames are matched by answer keys. |
 
-Both sides use today's reviews: gold belongs to the rows, not to a spec version.
+Both sides use today's reviews.
 
 ### `review`
 
@@ -188,4 +191,16 @@ review queue: 112 disputed, 30 audit
   disputed  #  281 intent     card_arrival 1.00                    gold=card_delivery_estimate   my card was not in the mail again can you advise?
 ```
 
-Kind, row id, question, the model's answer and confidence, the answer key (`-` if none), and the start of the row.
+Columns: kind, row id, question, model answer and confidence, answer key (`-` if none), start of the row.
+
+Verdicts saved to `<judgment>.reviews.csv` (columns `qid,row_id,state_hash,verdict,label,reviewer,at,kind`):
+
+| Verdict | Saved when |
+|---|---|
+| `model_right` / `key_right` | On a disputed row, you picked the model's answer / the answer key |
+| `against_right` / `spec_right` | On a shadow row, you picked the `--against` spec's answer / this spec's |
+| `confirmed` | On a spot check, you picked the marked answer |
+| `labeled` | You picked any other option |
+| `both_ok` | `b`: two answers are acceptable; both count as right |
+| `ambiguous` | `a`: no single right answer; left out of scoring |
+| `needs_context` | `c`: the text shown is not enough to judge; left out of scoring and counted in `test`'s context line |

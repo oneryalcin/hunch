@@ -1,26 +1,20 @@
 ---
 title: "Change a spec safely"
-description: "See what an edit does row by row before you ship it, control what happens to old answers, and let an LLM propose rewrites that must win on held-out gold."
+description: "See which rows an edit flips before you ship it, try a candidate on live traffic, and decide what happens to old answers."
 ---
 
-Editing a question's wording changes answers you can't see from reading the diff in git. `hunch diff` shows you which rows flip, which way, and whether the change fixed more than it broke. `on_change` decides what a run does with answers from before the edit, and `suggest` proposes rewrites for you.
+A git diff of a spec shows the words you changed. It doesn't show what those words do. Adding one line of description to an option can move hundreds of answers, some to the right label and some away from it.
 
-## `diff`: what did the change do?
+## `diff` shows what flipped
+
+`hunch diff` runs two versions of a spec on the same rows and compares them row by row. Here is BANKING77, where the old version lists 77 bare intent labels and the new one gives each label a one-line description:
 
 ```bash
-hunch diff intent.yml --against intent_bare.yml     # two files
-hunch diff intent.yml --against git:HEAD~1          # the committed version
-hunch diff evals/ --against git:origin/main         # a whole project
-hunch diff evals/ --against git:main --node claims  # one judgment in it
+cd prototype/examples/banking77
+hunch diff intent.yml --against intent_bare.yml --max-cost 0
 ```
 
-`--against` takes a path (a spec or a folder) or `git:REF`. With `git:REF`, hunch reads the specs as committed at that ref from the same file or folder. Either way the old version runs on **today's rows**: its sources are replaced by the new spec's, so the comparison is row by row on the same data. If the old version reads columns today's rows don't have, `diff` stops and says so.
-
-Real output, BANKING77, bare labels (`intent_bare.yml`) vs labels with one-line descriptions (`intent.yml`):
-
 ```text
-══ intent  vs  intent_bare
-
 intent: 77/770 rows flip (15 within noise band)
   probabilities moved: mean |Δ| 0.102, mean Δ p(old answer) -0.021
   gold accuracy on the 770 shared rows with gold 79.0% → 85.5%  (✓ 58 fixed, ✗ 8 broken, 11 wrong both times, 0 without gold)
@@ -29,63 +23,84 @@ intent: 77/770 rows flip (15 within noise band)
   ✗ # 255           fiat_currency_support 0.66 → exchange_via_app 0.91                       How do I change currencies to euros?
 ```
 
-Read it as: 77 rows changed answer; with gold, 58 got fixed and 8 got broken, and a sign test says that is not chance. The flip list shows each one, fixed first marked ✓, broken ✗. Every line is explained in [CLI › diff](/reference/cli#diff).
+77 rows changed answer. Against the answer key, 58 were fixed and 8 broken, and a sign test says that balance is not chance. Each flip is listed, `✓` for fixed and `✗` for broken, so you can read the ones that went wrong. A flip marked `~noise` was a near tie that could tip either way on a re-run.
 
-- **Only the rows that flip matter for the comparison.** Rows where both versions agree can't tell them apart. `hunch review --against OLD` puts exactly those rows first, so a few minutes of review can settle a `NOT significant` result.
-- **It costs only the new answers.** Old answers are cached; a question whose text didn't change reports `unchanged (same keys, 0 calls)`.
-- **Both sides use today's reviews.** Gold belongs to the rows, not to a spec version.
-- **Renamed a question?** `diff` matches it by its answers and prints `renamed from 'old_name'`.
-- **With `--traffic`**, both versions run on the rows your app logged with `judge(..., shadow=...)`. See [Shadow a new spec](/guides/shadow).
-- **With `--model`**, `diff` compares engines instead of wordings: `hunch diff intent.yml --against intent.yml --model deepseek:deepseek-flash`.
+`--against` takes another spec file, a folder, or `git:REF` for the version committed at that ref:
 
-## `on_change`: what happens to old answers
-
-An answer is cached under a key made from the engine, the row's state and the question as sent. Edit the question and every row gets a new key. What `run` does next is set per judgment:
-
-```yaml
-on_change: reask        # default
+```bash
+hunch diff intent.yml --against git:HEAD~1
+hunch diff evals/ --against git:origin/main --node claims
 ```
+
+The old version always runs on today's rows, so the comparison is fair. Its answers are usually already in the store, and a question whose text didn't change reports `unchanged (same keys, 0 calls)`. Every line of the output is explained in [CLI › diff](/reference/cli#diff).
+
+## Only the flips carry evidence
+
+Where both versions give the same answer, they are right or wrong together, so those rows can't tell you which is better. The flips can. When there is no answer key, or the key is thin, review just those:
+
+```bash
+hunch review intent.yml --against intent_bare.yml
+```
+
+The queue starts with the rows where the two versions disagree, marking one answer `← --against` and the other `← this spec`. Your verdicts become gold, so the next `diff` can count fixed and broken.
+
+## Trying a candidate on live traffic
+
+Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the tickets spec and the candidate folder holds the stricter `urgent` from the [quickstart](/quickstart):
+
+```python app.py
+answers = hunch.judge("live", shadow="candidate", id=t["id"], subject=t["subject"], body=t["body"])
+```
+
+The live spec answers and `judge` returns that answer. The row is logged to the store's `traffic` table, redacted by the live spec's `redact` rules. The candidate then answers the same row in the background. It never delays or changes the live answer, and if it fails, the error goes to stderr.
+
+After 40 tickets have come through, `--traffic` compares the two on the logged rows. Both sets of answers are already in the store, so this costs nothing:
+
+```bash
+hunch diff candidate --against live --traffic --max-cost 0
+```
+
+```text
+note: logged traffic has no gold (1 questions); `hunch review --traffic` builds it
+answers: 240 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
+
+department: unchanged (same keys, 0 calls)
+
+urgent: 2/40 rows flip (1 within noise band)
+  probabilities moved: mean |Δ| 0.105, mean Δ p(yes) -0.100
+    #  40     yes 0.92 → no 0.95          Cancel and refund | The product doesn't…
+    #  11      no 0.51 → yes 0.54  ~noise SSO broken | Okta login loops back to t…
+```
+
+Logged traffic has no answer key. `hunch review candidate --against live --traffic` queues the flipped rows, and your verdicts become the gold that the next `diff` scores against.
+
+A candidate doesn't have to exist before the traffic does. Call `judge(LIVE, log=True, ...)` in production, and any spec written later can be compared on those rows. Through the server, pass `"shadow"` in the body of [`POST /v1/judge`](/reference/server-api).
+
+## What happens to old answers
+
+An answer is stored under a key made from the engine, the row, and the question as sent. Edit the question and every row gets a new key. What `run` does next is set per judgment with `on_change`:
 
 | Value | After an edit, `run`… | Use when |
 | --- | --- | --- |
-| `reask` | Asks every row again under the new spec | The default. Results always match the spec as written |
-| `new_rows_only` | Keeps each old row's previous answer as long as its id and its state are unchanged; asks only new rows. A row whose text changed counts as new | Historical results must not move, for example numbers already reported |
-| `freeze` | Refuses to run if the spec changed since the last complete run, and asks nothing | Production judgments that must not change by accident |
+| `reask` (default) | Asks every row again | Results should always match the spec as written |
+| `new_rows_only` | Keeps old rows' answers while their text is unchanged; asks only new rows | Numbers already reported must not move |
+| `freeze` | Refuses to run until you accept the change | Production judgments that must not change by accident |
 
-- `new_rows_only` applies to `run` and `compile` (so `compile` shows the real cost). `test`, `diff`, `review` and `judge()` always use the spec as written, so they show what the edit would do.
-- Under `freeze`, `compile` warns and `run` stops:
+Under `freeze`, `run` stops and says so:
 
-  ```text
-  on_change: freeze, and ['intent'] changed since the last complete run: nothing asked. `hunch diff` shows what the change does; `hunch run --allow-change` accepts it
-  ```
-
-  Check with `diff`, then accept with `hunch run --allow-change`.
-- "Changed" means the spec's hash differs from the last complete run's. The hash covers everything in the spec except `on_change` itself and `source`, so pointing a spec at new data (or running it with `--source` or `--traffic`) is not a change, while editing a question, `state`, `act`, `gold` or `tests:` is.
-
-## `suggest`: let an LLM propose rewrites
-
-```bash
-export DEEPSEEK_API_KEY=...
-hunch suggest intent_bare.yml --question intent --n 3
+```text
+on_change: freeze, and ['intent'] changed since the last complete run: nothing asked. `hunch diff` shows what the change does; `hunch run --allow-change` accepts it
 ```
 
-`suggest` rewrites one question (its instructions and option descriptions; the option labels must stay the same) and keeps a rewrite only if it wins on gold it never saw:
+Check with `diff`, then accept with `hunch run --allow-change`. `test`, `diff`, `review` and `judge()` always use the spec as written, so they show what an edit would do whatever `on_change` says.
 
-1. Rows with gold are split in two by a hash of their id.
-2. The writer (default `deepseek:deepseek-flash`, change with `--writer`) sees the current spec's mistakes on the first half and writes `--n` rewrites (default 3).
-3. Each rewrite answers the second half, and is compared with the current answers on the same rows: fixed vs broken, paired sign test.
-4. A rewrite is **KEPT** only if it fixes more than it breaks and `p < 0.05 / n`. Dividing by the number tried (Bonferroni) is needed because the best of several rewrites looks better than it is.
+## Letting a model propose rewrites
 
-Every rewrite, kept or rejected, is saved as a full spec in a `suggest/` folder next to the store (usually `.hunch/suggest/<judgment>.<question>.<k>.yml`), and the output lists each one's accuracy, fixed/broken counts, p-value and cost. A rewrite that renames, adds, drops or reorders options is rejected as unusable.
-
-**Before adopting a kept rewrite, check it on a holdout**, rows neither half came from:
+`hunch suggest` asks an LLM to rewrite one question's wording, and keeps a rewrite only if it beats the current wording on gold rows the writer never saw:
 
 ```bash
-hunch diff .hunch/suggest/intent_bare.intent.0.yml --against intent_bare.yml --source banking77_holdout.csv
+export DEEPSEEK_API_KEY=...    # the default writer
+hunch suggest intent_bare.yml --question intent --n 3 --max-cost 0.50
 ```
 
-Measured on BANKING77 (bare labels, 770 dev rows): the kept rewrite scored +5.1 points on the judging half (p = 0.008), but only +2.4 points on the untouched holdout (p = 0.23, not significant). Hand-written descriptions reached 88.3% on the same holdout. Treat `suggest` as a source of candidates, not a verdict.
-
-<Note>
-`suggest` needs gold rows with mistakes to learn from; with none it stops with `no mistakes to learn from`. `--max-cost` also caps each writer call, at its worst case (the prompt plus the whole 32,000-token reply allowance), so `--max-cost 0` refuses before the writer is called. The BANKING77 run above cost $0.22 in all for three rewrites of a 77-option question.
-</Note>
+Rewrites are saved under `.hunch/suggest/`. Treat a kept one as a candidate: the best of several looks better than it is, so `diff` it on rows that played no part in choosing it before you adopt it. [How the numbers work](/reference/how-the-numbers-work) explains why, and [Route banking intents](/cookbooks/banking-intents) shows what it gained on BANKING77.

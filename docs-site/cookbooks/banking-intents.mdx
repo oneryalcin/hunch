@@ -1,0 +1,75 @@
+---
+title: "Route banking intents"
+description: "Sort bank customers' messages into 77 intents, and find out that the answer key is wrong more often than the model."
+---
+
+A bank's support inbox receives messages like "my card still hasn't arrived" and "why was I charged a fee for this transfer?". Each should go to the right place, and there are 77 places. The public BANKING77 dataset ([PolyAI](https://github.com/PolyAI-LDN/task-specific-datasets), CC BY 4.0) has messages like these with an intent label on each, which makes it a good place to ask how well a model routes them.
+
+The example is in `prototype/examples/banking77/`: 770 messages for developing the spec, and 385 held back to measure it.
+
+## Names are not enough
+
+The first spec listed the 77 intent names and nothing else. It scored 82.3% on the holdout against the dataset's labels.
+
+Reading the mistakes showed why. Some names mislead: `get_physical_card` is about PINs, not about getting a card. A model that sees only the name has no way to know. So the second step was to describe every option in one line:
+
+```yaml intent.yml
+questions:
+  intent:
+    type: choice
+    instructions: What is this bank customer asking about?
+    criteria:
+      activate_my_card: How to activate a card, or problems activating it
+      card_arrival: A card that was sent to them has not arrived yet, or tracking it
+      card_delivery_estimate: How long card delivery takes in general
+      # … 74 more
+```
+
+With every option described, the holdout score rose to 88.3%: 28 rows fixed, 5 broken, p < 0.001. Describing only 29 of the 77 did not help significantly (22 fixed, 14 broken, p = 0.24). The described options pulled in rows that belonged to their bare neighbours. Describe all the options or none.
+
+To reproduce it from the repository root, at no cost:
+
+```sh
+hunch diff prototype/examples/banking77/intent.yml --against prototype/examples/banking77/intent_bare.yml \
+  --source prototype/examples/banking77/banking77_holdout.csv --max-cost 0
+```
+
+`diff` scores against today's gold, which includes the reviews described next, so its percentages are higher than the raw-label ones above.
+
+## The answer key was wrong more often than the model
+
+At 88.3%, the model disagreed with the dataset's label on 45 of the 385 holdout messages. The natural reading is 45 model mistakes. It was not.
+
+A panel of three AI reviewers checked every one of the 45. Each reviewer first chose the right intent from the message alone, then rated the two candidate labels without being told which was the key's and which the model's. The label was wrong 20 times. The model was wrong 5 times. For the other 20, both intents were reasonable answers to the message.
+
+If some labels are wrong where the model disagrees, some are probably wrong where it agrees too, and the model would be wrong along with them. So the panel also checked a random 60 of the 340 agreeing rows. With both sets of verdicts, `hunch test` estimates accuracy over all 385:
+
+```
+intent (choice, 385 rows)
+  gold: 385 rows (243 from source, 142 from review, 25 with two acceptable labels)
+  PASS estimated accuracy 95.8% (95% CI 88.7%–97.9%) from reviews of 60/340 agreeing rows, 45/45 disagreeing rows (min 85%)
+       not the headline: on current gold 97.9% (trusts unreviewed rows), on the raw answer key 88.3%
+```
+
+The model was right on an estimated 95.8% of messages, against 91.9% for the answer key itself. Two lessons followed and became part of hunch. Gold can be a set: where two intents are both acceptable, both count as right. And a review queue needs random spot checks as well as disagreements, or it can only move accuracy up.
+
+## When to trust an answer
+
+The spec sets `act: 0.90`: below that confidence, a message goes to a person. On the holdout, 81% of messages were at or above it, and none of those were wrong on current gold. Calibration error was 0.043, so the model's confidence is close to how often it is right.
+
+## A tree that lost
+
+77 options make a long request. A tree seemed cheaper: first route each message to one of ten groups, then choose among that group's intents. `prototype/examples/banking77_tree/` builds it from the same descriptions. It was 48% cheaper. `diff` against the flat spec:
+
+```
+intent: 47/385 rows flip (7 within noise band)
+  gold accuracy on the 385 shared rows with gold 97.9% → 89.6%  (✓ 3 fixed, ✗ 35 broken, 9 wrong both times, 0 without gold)
+  paired sign test p=0.000 → significant
+```
+
+33 messages were sent to a group that did not contain their answer. Once in the wrong group, the second question had no right option left. After the panel reviewed the tree's own disagreements, its estimated accuracy was 87.5%, against 95.8% for the flat question.
+
+## Also tried
+
+- `hunch suggest` rewrote the bare-label question automatically. It gained 2.4 points on the holdout, not significant; the hand-written descriptions gained 6.0. See [Change a spec](/guides/change-a-spec).
+- A second engine, DeepSeek V4.1 Flash, scored 92.3% on the same spec: fixed 4, broke 22, p = 0.001. See [Engines](/reference/engines).

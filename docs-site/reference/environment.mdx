@@ -5,7 +5,7 @@ description: "Every environment variable hunch and hunch-server read, with its d
 
 ## API keys
 
-Only the key for the engine a spec uses is needed, and only when an answer is not already in the store. A fully cached run needs no key.
+Only the key for the spec's engine, and only when an answer is not in the store.
 
 | Variable | Used by | Effect |
 |---|---|---|
@@ -14,7 +14,7 @@ Only the key for the engine a spec uses is needed, and only when an answer is no
 | `DEEPSEEK_API_KEY` | `model: deepseek:<id>`, and `hunch suggest` with the default writer | The DeepSeek API key. |
 | `OPENROUTER_API_KEY` | `model: openrouter:<id>` | The OpenRouter API key. |
 
-A missing key stops the command before anything is sent (for `suggest`, before the writer is called), naming the variable to set: `ticket_triage: set TYPESAFE_API_KEY to ask jev-1.13.0 (40 requests to send)`. Cached answers never need a key.
+A missing key stops the command before anything is sent: `ticket_triage: set TYPESAFE_API_KEY to ask jev-1.13.0 (40 requests to send)`.
 
 ## hunch
 
