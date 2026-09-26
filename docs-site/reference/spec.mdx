@@ -115,6 +115,7 @@ The engine, pinned to an exact version. Names ending in `latest` or containing `
 | `jev-1.13.0` | TypeSafe's Jev (`TYPESAFE_API_KEY`). |
 | `deepseek:<model id>` | DeepSeek's API, read through answer-token log-probabilities (`DEEPSEEK_API_KEY`). |
 | `openrouter:<model id>[@provider]` | Any OpenRouter model that returns log-probabilities (`OPENROUTER_API_KEY`). `@provider` pins one provider. |
+| `distilled:<folder>` | A local model written by [`hunch distill`](/guides/distill), relative to the spec. Answers only the questions it was trained on, as worded then. Needs the `distill` extra. |
 
 ```yaml
 model: jev-1.13.0
@@ -513,7 +514,7 @@ Reviews override this column for the rows they cover and can accept two labels.
 
 ### `escalate`
 
-Re-asks answers below `act` on another engine. The new answer is used only if it clears `act` itself; both are stored and `<question>_by` names the engine used. Needs `act` and a different model.
+Re-asks answers below `act` on another engine. The new answer is used only if it clears `act` itself (behind a `distilled:` model, always); both are stored and `<question>_by` names the engine used. Needs `act` and a different model.
 
 ```yaml
 act: 0.95

@@ -24,6 +24,7 @@ hunch init [--list] RECIPE [DIR]
 | `init` | Copies a starter recipe into a folder | No |
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
 | `hook` | Guards a coding agent's shell commands: `install` wires it in, `run` is what the agent calls | Yes, per command |
+| `distill` | Trains a small local model per question on the answers already in the store | No |
 | `docs` | Writes a page people can read and search: each judgment's status, numbers and lineage | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
@@ -58,6 +59,16 @@ hunch hook run hunch/command_guard.yml   # what the agent calls, with the event 
 `install` copies the command guard (spec, 38 labelled commands, NOTICE) into `hunch/`, keeping files already there, adds `.hunch/` to `.gitignore`, and adds a `PreToolUse` hook with matcher `Bash` and a 30-second timeout to `.claude/settings.json` and `.codex/hooks.json`, keeping the rest of each file. It writes nothing if a settings file can't be read. The hook command finds the spec through `$CLAUDE_PROJECT_DIR` (Claude Code) or the git root (Codex), and ends in `|| echo` a warning, so a missing or older hunch lets commands through instead of blocking them.
 
 `run` reads the agent's event, judges the command with `request` (the last message the person typed, from a Claude Code transcript; empty otherwise), `cwd`, `description` and `command`, and logs the row, redacted by the spec's rules, for `--traffic`. When any answer is `yes` or routes to `review`, it replies `ask`, or `deny` with `--deny` (Codex, which cannot ask yet), with the reasons; otherwise it prints nothing. It never replies `allow`. On any error it prints a `systemMessage` warning and lets the command through. `HUNCH_MAX_COST` defaults to 0.01 per command. See [Guard your coding agent](/guides/guard-your-agent).
+
+### `hunch distill`
+
+```bash
+hunch distill intent.yml                                  # from the answers for the spec's own rows
+hunch distill intent.yml --source banking77_unlabeled.csv # or for these rows
+hunch distill hunch/command_guard.yml --traffic           # or for rows logged by judge(..., log=True)
+```
+
+Needs the `distill` extra. Asks nothing: it reads the store's answers for `--node` (default: the last judgment) and writes `distilled/<judgment>@<hash>/` next to the spec (`meta.json` and `weights.npz`). Per question it trains a linear layer on a frozen MiniLM encoder, class-balanced, on the row's gold where there is some and the engine's answer otherwise, holding out half the gold rows by a hash of their text. It prints each question's training size and rarest answer, warning under 30 examples, and the lines to measure and use it. See [Distill a decision](/guides/distill).
 
 ### `hunch docs`
 

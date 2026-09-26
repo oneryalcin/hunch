@@ -26,6 +26,7 @@ Issues = "https://github.com/oneryalcin/hunch/issues"
 
 [project.optional-dependencies]
 pydantic = ["pydantic>=2"]
+distill = ["fastembed>=0.7"]  # hunch distill: a MiniLM encoder on ONNX (CPU), plus numpy
 
 [project.scripts]
 hunch = "hunch.cli:main"

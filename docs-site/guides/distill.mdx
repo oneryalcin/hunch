@@ -1,0 +1,98 @@
+---
+title: "Distill a decision into a local model"
+description: "Train a small model on the answers your engine already gave, measure it like any engine, and let it answer what it is sure of while the engine answers the rest."
+---
+
+Every answer your engine gives is kept in the store, under its exact input. After a few thousand of them, the store holds something valuable: a labelled dataset for that exact question, in your data, with your reviews on top. `hunch distill` turns it into a small model that runs on your machine in about 10 milliseconds, with no API call.
+
+A small model on its own is worse than the engine that taught it. It doesn't have to be good at everything, though. It only has to know when it is sure. Put the engine behind it, and the student answers the rows it is sure of while the engine answers the rest. hunch measures both, so you choose how much to keep local with numbers.
+
+## Distill
+
+The [BANKING77 spec](/cookbooks/banking-intents) sorts bank customers' messages into 77 intents. Jev had answered 3,000 unlabelled messages, kept in the store. Distilling asks nothing:
+
+```bash
+cd prototype/examples/banking77
+hunch distill intent.yml --source banking77_unlabeled.csv
+```
+
+```text
+intent: distilled to distilled/intent@e60839c7
+  intent: 3000 answers, 77 classes; rarest: 'contactless_not_working' (7)  ← few examples: measure what it misses (hunch test --model) before trusting it
+measure it (free, local): hunch test intent.yml --model distilled:distilled/intent@e60839c7
+use it: model: distilled:distilled/intent@e60839c7, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
+```
+
+Each row's state goes through a small frozen encoder (MiniLM, on your CPU), and each question gets one linear layer, trained on your gold where a row has it and on the engine's answer everywhere else. The rarest answer is reported because a student learns little from a handful of examples. The folder, 194 KB here, is the model; commit it with the spec.
+
+It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastembed and its runtime (onnxruntime, tokenizers and about 20 other packages). The encoder downloads once, about 90 MB, to `~/.cache/hunch/encoders` (or `FASTEMBED_CACHE_PATH`).
+
+## Measure it like any engine
+
+A distilled model is an engine, `distilled:<folder>`, so every command measures it. On the 385 held-out messages, which it never saw:
+
+```bash
+hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@e60839c7 --max-cost 0
+```
+
+```text
+intent (choice, 385 rows)
+  PASS accuracy 91.2% (raw source gold: 85.7%) (min 85%)
+  FAIL calibration error 0.181 (raw source gold: 0.127) (max 0.05)
+       dial   automated   wrong among automated
+       0.70       65.7%                    0.8%
+       0.80       51.2%                    0.0%
+       0.90       27.5%                    0.0%  ← act
+```
+
+On its own it is right 91.2% of the time, where Jev is right 97.9%, and its stated confidence isn't a trustworthy probability yet. The dial is what matters: above 0.8, it answers half the messages with no mistakes. `distill` holds back a fifth of any gold rows it could have learned from and records what it trained on, so `test` and `diff` grade a distilled model only on rows it never saw. (Never saw means never saw that exact text: 3 of these 385 messages differ from a training message only in case or punctuation.)
+
+## Put the engine behind it
+
+`intent_distilled.yml` is `intent.yml` with the student in front and Jev behind it:
+
+```yaml intent_distilled.yml
+model: distilled:distilled/intent@e60839c7
+questions:
+  intent:
+    # type, instructions, criteria as in intent.yml
+    act: 0.70
+    escalate: {model: jev-1.13.0}    # below 0.70, the teacher answers
+```
+
+```bash
+hunch test intent_distilled.yml --source banking77_holdout.csv --max-cost 0
+```
+
+```text
+intent (choice, 385 rows)
+  PASS estimated accuracy 95.5% (95% CI 88.3%–97.6%) from reviews of 60/343 agreeing rows, 42/42 disagreeing rows (min 85%)
+  FAIL calibration error 0.111 (raw source gold: 0.049) (max 0.05)
+  PASS accuracy among auto-acted 98.9% on 94% of rows at act=0.7 (min 97%)
+  PASS order stability: 0/300 answers flip (0.0%, 0 within noise band), mean |Δp| of original answer 0.000 (max flip rate 5%)
+  escalated to jev-1.13.0: 132/385 rows use its answer, 107 of them confident enough to act; right on 125/132 with gold
+```
+
+Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. Two thirds of the messages were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
+
+Calibration fails the spec's own test, and that is real: the rows now carry two engines' probabilities, and the student's aren't honest probabilities yet. Choose `act` from the dial, which counts mistakes, not from the stated confidence.
+
+The share that stays local grows with the answers you keep. Students trained on more of Jev's answers, measured on the same holdout with a script of the same design (scikit-learn in place of hunch's own linear layer, which matches it; see the design notes, round 17), kept more:
+
+| Jev's answers learned from | answered locally at 0.7 | combined plain accuracy |
+| --- | --- | --- |
+| 770 | 23% | 97.9% |
+| 1,770 | 49% | 97.9% |
+| 3,770 | 64% | 97.7% |
+
+Every run and every review adds to the store, so distilling again later keeps more of the work local.
+
+## When not to use it
+
+A student learns an answer from examples of it. When one answer is rare and missing it is costly, a few thousand rows aren't enough. The [command guard](/guides/guard-your-agent) is that case: 2% of shell commands need a person, so its student saw only 9 destructive commands. Measured by a script on commands the panel had labelled and the student never saw, the student with Jev behind it (act 0.9) let through 4 of 8 destructive commands and 6 of 29 that send data out, where Jev alone let through none and one. `distill` flags the rare answers; `hunch test --model distilled:…` shows the misses on the dial's "act on no" side. For a guard like that, keep the engine until the store holds many more of the rare answer.
+
+A distilled model answers only the questions it was trained on, word for word. Change a question and it refuses until you distill again, and `hunch diff` against the old engine shows what the new student changed.
+
+## Speed and cost
+
+Inside a running app, a new answer takes about 11 ms: the encoder and the linear layer, on the CPU. A fresh process pays about 0.3 s to load the encoder first, so a per-command hook gains no speed, only cost and network. Distilled answers cost nothing and are stored like any other, so a row seen before comes from the store.
