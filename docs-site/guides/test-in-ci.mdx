@@ -81,6 +81,18 @@ jobs:
         run: hunch test evals/ --max-cost 0.50
 ```
 
+To put the numbers on the pull request itself, add a step that turns the results file into a comment. [`results_comment.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/ci/results_comment.py) reads only the published [results format](/reference/files), with the standard library (the job also needs `permissions: pull-requests: write`):
+
+```yaml
+      - name: Comment the numbers on the pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python results_comment.py .hunch/target/evals.json > comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md --edit-last --create-if-none
+```
+
 On GitHub Actions, `test` also adds a table to the run's summary page: per question, accuracy, its range and any failed check, and a line for each metric and for the examples. The same numbers are in the [results file](/reference/cli#the-results-file) for any other CI.
 
 The cache key changes every run and `restore-keys` picks the newest store, so answers asked in one run are there for the next. hunch uses the nearest `.hunch/store.sqlite` at or above the spec's folder, or creates one at the repository root. Set `HUNCH_STORE` to choose another path.

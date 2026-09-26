@@ -110,7 +110,9 @@ alerting on top without any plugin API. This is cheap and needs no permission fr
    so a battery-level results path comes first), reproducible with `hunch test`. And it is found by agents: `hunch
    skill` teaches a coding agent the batteries that exist and when to reach for one, since the first users work in
    Claude Code and Codex.
-2. **Document and version the artifacts** (`results.json`, `manifest.json`, `*.reviews.csv`): a JSON Schema, a
+2. (Done 2026-09-26: `results.schema.json` and `manifest.schema.json`, checked in CI against real files; CI
+   fails a battery whose receipt is stale; `reference/files` is the contract; `results_comment.py` the example
+   consumer.) **Document and version the artifacts** (`results.json`, `manifest.json`, `*.reviews.csv`): a JSON Schema, a
    version field, a changelog and one example consumer (a GitHub Action that comments a spec's numbers on a PR).
 3. **The benchmark table,** every battery × every engine, generated from the artifacts, not written by hand.
 4. **Engines, only what pays now:** `adapter` defaults to the plugin package's version, so a changed prompt can't

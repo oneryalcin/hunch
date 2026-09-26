@@ -1,0 +1,651 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/results.schema.json",
+  "title": "hunch test results",
+  "description": "What `hunch test` measured: .hunch/target/<tested path>.json, and the receipt `test --receipt` writes beside a spec (the same, without at, git_sha and cost). Version 1: fields may be added within a version, never renamed or removed. Reference: https://fuguai.mintlify.site/reference/files",
+  "type": "object",
+  "required": [
+    "version",
+    "command",
+    "passed",
+    "judgments"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "command": {
+      "const": "test"
+    },
+    "at": {
+      "type": "string"
+    },
+    "git_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "hunch": {
+      "type": "string",
+      "description": "Receipts: the hunch version that wrote it"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "sample": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "cost": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "judgments": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "spec_hash",
+          "model",
+          "questions"
+        ],
+        "properties": {
+          "spec_hash": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "integer"
+          },
+          "questions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "type",
+                "rows"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "choice",
+                    "noul",
+                    "score"
+                  ]
+                },
+                "rows": {
+                  "type": "integer"
+                },
+                "gold": {
+                  "type": "object",
+                  "properties": {
+                    "rows": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "integer"
+                    },
+                    "review": {
+                      "type": "integer"
+                    },
+                    "excluded": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "accuracy": {
+                  "type": "object",
+                  "required": [
+                    "value",
+                    "basis"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Accuracy"
+                    },
+                    "ci": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "description": "95% interval [low, high]"
+                    },
+                    "basis": {
+                      "enum": [
+                        "estimate",
+                        "gold"
+                      ]
+                    },
+                    "reviewed": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "reviewed": {
+                            "type": "integer"
+                          },
+                          "of": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "calibration_error": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "auroc": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "act": {
+                  "type": "object",
+                  "properties": {
+                    "threshold": {
+                      "oneOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "yes": {
+                              "type": "number"
+                            },
+                            "no": {
+                              "type": "number"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "automated": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Share of all rows acted on"
+                    },
+                    "judged": {
+                      "type": "integer"
+                    },
+                    "wrong": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Share of acted-on rows with gold that are wrong"
+                    }
+                  }
+                },
+                "dial": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "threshold"
+                    ],
+                    "properties": {
+                      "threshold": {
+                        "type": "number"
+                      },
+                      "automated": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": ""
+                      },
+                      "wrong": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": ""
+                      },
+                      "yes": {
+                        "type": "object",
+                        "properties": {
+                          "automated": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 1,
+                            "description": "Share of rows acted on"
+                          },
+                          "wrong": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 1,
+                            "description": "Share of those that are wrong"
+                          }
+                        }
+                      },
+                      "no": {
+                        "type": "object",
+                        "properties": {
+                          "automated": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 1,
+                            "description": "Share of rows acted on"
+                          },
+                          "wrong": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "minimum": 0,
+                            "maximum": 1,
+                            "description": "Share of those that are wrong"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "mistakes": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "most_confident": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "got": {
+                            "type": "string"
+                          },
+                          "p": {
+                            "type": "number"
+                          },
+                          "gold": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "check",
+                      "passed"
+                    ],
+                    "properties": {
+                      "check": {
+                        "type": "string",
+                        "description": "The test key, e.g. min_accuracy"
+                      },
+                      "passed": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "severity": {
+                        "enum": [
+                          "error",
+                          "warn"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "spot_checks": {
+                  "type": "integer"
+                },
+                "needs_context": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "multi": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "multi"
+                },
+                "rows": {
+                  "type": "integer"
+                },
+                "gold_rows": {
+                  "type": "integer"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "exact_set_accuracy": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "mean_overlap": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "check",
+                      "passed"
+                    ],
+                    "properties": {
+                      "check": {
+                        "type": "string",
+                        "description": "The test key, e.g. min_accuracy"
+                      },
+                      "passed": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "severity": {
+                        "enum": [
+                          "error",
+                          "warn"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "rule"
+              ],
+              "properties": {
+                "rule": {
+                  "type": "string"
+                },
+                "rows": {
+                  "type": "integer"
+                },
+                "fired": {
+                  "type": "integer"
+                },
+                "rate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "gold": {
+                  "type": "object",
+                  "properties": {
+                    "basis": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "gold_rate": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "of": {
+                      "type": "integer"
+                    },
+                    "rate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "ci": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "description": "95% interval [low, high]"
+                    }
+                  }
+                },
+                "missed": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "of": {
+                      "type": "integer"
+                    },
+                    "rate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "ci": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "description": "95% interval [low, high]"
+                    }
+                  }
+                },
+                "false_alarms": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "of": {
+                      "type": "integer"
+                    },
+                    "rate": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "ci": {
+                      "type": [
+                        "array",
+                        "null"
+                      ],
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "description": "95% interval [low, high]"
+                    }
+                  }
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "check",
+                      "passed"
+                    ],
+                    "properties": {
+                      "check": {
+                        "type": "string",
+                        "description": "The test key, e.g. min_accuracy"
+                      },
+                      "passed": {
+                        "type": "boolean"
+                      },
+                      "value": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "severity": {
+                        "enum": [
+                          "error",
+                          "warn"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "passed"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "passed": {
+                  "type": "boolean"
+                },
+                "severity": {
+                  "enum": [
+                    "error",
+                    "warn"
+                  ]
+                },
+                "answers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "question": {
+                        "type": "string"
+                      },
+                      "expected": {
+                        "type": "string"
+                      },
+                      "got": {
+                        "type": "string"
+                      },
+                      "p": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "passed": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

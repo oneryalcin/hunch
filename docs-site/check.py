@@ -51,4 +51,14 @@ drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}
 for name, (extra, absent) in drift.items():
     print(f"spec.schema.json {name}: " + ", ".join([f"not in the code {sorted(extra)}"] * bool(extra) + [f"missing {sorted(absent)}"] * bool(absent)))
 print(f"schema: {len(pairs)} key sets " + ("match the code" if not drift else "differ from the code"))
-sys.exit(1 if any(missing.values()) or drift else 0)
+# A battery's results.json must describe its spec as it is now: an edited battery ships re-measured numbers.
+stale = []
+for receipt in sorted((SRC / "recipes").glob("*/results.json")):
+    project = core.load_project(receipt.parent)
+    for name, j in json.loads(receipt.read_text())["judgments"].items():
+        if name in project["nodes"] and j["spec_hash"] != core.spec_hash(project["nodes"][name]):
+            stale.append(f"{receipt.parent.name}/{name}")
+for s in stale:
+    print(f"recipes/{s}: results.json was measured on another version of the spec; re-run `hunch test . --receipt`")
+print(f"receipts: {len(list((SRC / 'recipes').glob('*/results.json')))} batteries, " + ("all match their specs" if not stale else f"{len(stale)} stale"))
+sys.exit(1 if any(missing.values()) or drift or stale else 0)

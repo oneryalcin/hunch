@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/manifest.schema.json",
+  "title": "hunch manifest",
+  "description": "The project as data, written by `hunch docs` (<name>.manifest.json). Version 1: fields may be added within a version, never renamed or removed. Each judgment is its spec as written (see spec.schema.json) plus file, spec_hash and upstream. Reference: https://fuguai.mintlify.site/reference/files",
+  "type": "object",
+  "required": [
+    "version",
+    "project",
+    "judgments"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "git_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project": {
+      "type": "string"
+    },
+    "judgments": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "spec_hash",
+          "upstream"
+        ],
+        "properties": {
+          "file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spec_hash": {
+            "type": "string"
+          },
+          "upstream": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
