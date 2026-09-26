@@ -81,7 +81,7 @@ jobs:
         run: hunch test evals/ --max-cost 0.50
 ```
 
-To put the numbers on the pull request itself, add a step that turns the results file into a comment. [`results_comment.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/ci/results_comment.py) reads only the published [results format](/reference/files), with the standard library (the job also needs `permissions: pull-requests: write`):
+To put the numbers on the pull request itself, add a step that turns the results file into a comment. [`results_comment.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/ci/results_comment.py) reads only the published [results format](/reference/files), with the standard library; the step fetches it, or copy it into your repository and pin it. The job also needs `permissions: pull-requests: write`:
 
 ```yaml
       - name: Comment the numbers on the pull request
@@ -89,6 +89,7 @@ To put the numbers on the pull request itself, add a step that turns the results
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          curl -sSfLO https://raw.githubusercontent.com/oneryalcin/hunch/main/prototype/examples/ci/results_comment.py
           python results_comment.py .hunch/target/evals.json > comment.md
           gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md --edit-last --create-if-none
 ```

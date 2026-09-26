@@ -9,7 +9,7 @@ dbt's ecosystem grew as much from the files it writes as from its plugins: tools
 | --- | --- | --- | --- |
 | The spec | you | anywhere, in git | [`spec.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json) |
 | Results | `hunch test` | `.hunch/target/<tested path>.json` | [`results.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/results.schema.json) |
-| A receipt | `hunch test --receipt` | beside what was tested: `<spec>.results.json`, or `results.json` in a folder | the same |
+| A receipt | `hunch test --receipt` | beside what was tested: `<spec>.results.json`, or `results.json` in a folder; with `--model`, the engine's suffix (`results__deepseek_deepseek_flash.json`) | the same |
 | The manifest | `hunch docs` | `.hunch/target/<name>.manifest.json` | [`manifest.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/manifest.schema.json) |
 | Verdicts | `hunch review`, the server's review page | `<judgment>.reviews.csv` beside the spec | the columns below |
 | The store | every command that asks | `.hunch/store.sqlite` | [Store](/reference/store) |
@@ -18,7 +18,7 @@ Field by field: the results file and the manifest are described in the [CLI refe
 
 ## What may change
 
-Each file names its format: `"version": 1` in results and manifests. Within a version, fields may be added, and a reader should ignore fields it doesn't know. A field is never renamed, removed or given another meaning without the version going up, and a new version is listed below with what changed. The schemas are checked in CI against the files hunch writes: every battery's `results.json`, and a manifest from `hunch docs`.
+Each file names its format: `"version": 1` in results and manifests. Within a version, fields may be added, and enumerated values (question types, accuracy bases, check names, verdicts, review kinds) may gain members, so a reader should ignore what it doesn't know. A field is never renamed, removed or given another meaning without the version going up, and a new version is listed below with what changed. `spec_hash` is part of the contract too: how it is computed changes only with a new version, since receipts and `on_change: freeze` compare it. The schemas are checked in CI against the files hunch writes: every battery's `results.json`, and a manifest from `hunch docs`.
 
 To check a file yourself:
 
@@ -28,7 +28,7 @@ uvx check-jsonschema --schemafile https://raw.githubusercontent.com/oneryalcin/h
 
 ## Receipts
 
-A battery ships the numbers it was measured with: `hunch test --receipt` writes the results beside the spec, without the fields a re-run would change (`at`, `git_sha`, `cost`) and with the `hunch` version that wrote them. On the same answers the file comes out byte for byte the same, so in git a diff of a receipt is a change in what was measured. CI checks that each battery's receipt records the spec hash of its spec as it is now: a battery edited without being measured again fails the build.
+A battery ships the numbers it was measured with: `hunch test --receipt` writes the results beside the spec, without the fields a re-run would change (`at`, `git_sha`, `cost`). On the same answers the file comes out byte for byte the same, whatever hunch version wrote it, so in git a diff of a receipt is a change in what was measured. A battery can hold one receipt per engine. CI checks every receipt against the battery as it is now: each judgment measured, none that is gone, and each spec hash that of the spec today (with that receipt's engine), so a battery edited without being measured again fails the build.
 
 ## Verdicts
 
@@ -39,7 +39,7 @@ A battery ships the numbers it was measured with: `hunch test --receipt` writes 
 | `qid` | The question. |
 | `row_id` | The row's key value. |
 | `state_hash` | A hash of exactly what the model saw. A verdict follows its text: if the row id changes, it is matched by this; if the text changes, it no longer applies. |
-| `verdict` | `labeled`, `confirmed`, `model_right`, `key_right`, `both_ok`, `ambiguous` or `needs_context` ([what each means](/reference/server-api#the-review-queue)). |
+| `verdict` | `labeled`, `confirmed`, `model_right`, `key_right`, `both_ok`, `ambiguous` or `needs_context` ([what each means](/reference/server-api#the-review-queue)); from `hunch review --against`, `spec_right` or `against_right` (which of two specs was right on a row where they disagree). |
 | `label` | The right answer; several joined by `\|` for `both_ok`; empty for `ambiguous` and `needs_context`, which drop the row from scoring. |
 | `reviewer` | Who decided: a name, or for AI reviewers a name that says so (`ai-agent`, `panel:…`). |
 | `at` | When, in UTC. |
@@ -47,12 +47,12 @@ A battery ships the numbers it was measured with: `hunch test --receipt` writes 
 
 ## Building on them
 
-`prototype/examples/ci/results_comment.py` turns a results file into a pull-request comment: about 40 lines, the standard library only, no hunch import. It reads the version first and refuses one it doesn't know. The [CI guide](/guides/test-in-ci) shows it in a workflow.
+`prototype/examples/ci/results_comment.py` turns a results file into a pull-request comment: questions, `multi` questions, metrics and examples, with the standard library only and no hunch import. It reads the version first and refuses one it doesn't know. The [CI guide](/guides/test-in-ci) shows it in a workflow.
 
 ## Changes
 
 | Version | Since | What |
 | --- | --- | --- |
-| results 1 | hunch 0.1 | First version. Receipts, from the release after 0.3.0, are the same format without `at`, `git_sha` and `cost`, with `hunch` added. |
+| results 1 | hunch 0.1 | First version (0.2 added `act.judged`). Receipts, from the release after 0.3.0, are the same format without `at`, `git_sha` and `cost`. A union judgment's `model` is `null`. |
 | manifest 1 | hunch 0.2 | First version. |
 | verdicts | hunch 0.1 | The columns above. |

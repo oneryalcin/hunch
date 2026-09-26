@@ -2276,10 +2276,11 @@ def receipt_path(project: dict) -> Path:
 
 def write_receipt(project: dict, report: dict, check: "Checks") -> Path:
     """`test --receipt`: the numbers a battery ships with, to commit beside its spec. Only what the answers decide
-    (no time, cost or commit), so running it again on cached answers changes nothing and a diff shows real change."""
+    (no time, cost, commit or hunch version), so running it again on the same answers changes nothing, even after
+    an upgrade, and a diff is a change in what was measured."""
     path = receipt_path(project)
-    doc = {"version": RESULTS_VERSION, "command": "test", "hunch": __import__("hunch").__version__,
-           "passed": not check.failed, "sample": SAMPLE, "judgments": report}
+    doc = {"version": RESULTS_VERSION, "command": "test", "passed": not check.failed, "sample": SAMPLE,
+           "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     return path
 
