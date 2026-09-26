@@ -113,7 +113,7 @@ Async `judge`: same arguments and return. A `shadow` candidate runs as a backgro
 
 Both ask the engine for answers the store lacks, except:
 
-- A cost cap. `HUNCH_MAX_COST` (read when `hunch` is imported), or `hunch.core.MAX_COST = 0.0` at runtime. If one judgment's missing answers would cost more, nothing is asked and `SystemExit` is raised with a message such as `intent: would ask 1 answers in 1 requests (~$0.0001), above --max-cost $0.0; nothing asked`.
+- A cost cap. `HUNCH_MAX_COST` (read when `hunch` is imported), or `hunch.core.MAX_COST = 0.0` at runtime. If one judgment's missing answers would cost more, nothing is asked and `SystemExit` is raised with a message such as `intent: would ask 1 answers in 1 requests (~$0.0001), above --max-cost $0.0; nothing asked`. The cap holds on what is charged: while asking, a request is sent only if its worst case still fits, and one that doesn't stops the call with `SystemExit` (`… stopped at --max-cost …`), the answers already asked saved.
 - A missing input column raises `KeyError`, for example `"command_guard: state needs ['command']"`.
 
 Spec errors also raise `SystemExit`; catch it around `judge` in long-running code.

@@ -95,7 +95,7 @@ When the first answer is below `act`, the same question goes to the `escalate` m
 A burst of new rows shouldn't be able to run up a bill:
 
 ```sh
-export HUNCH_MAX_COST=0.01   # USD, per judgment per call, estimated before asking
+export HUNCH_MAX_COST=0.01   # USD, per judgment per call, on what is charged
 ```
 
 If the missing answers would cost more, nothing is asked and `judge` raises `SystemExit`. A spec error raises `SystemExit` too, and a row missing a state column raises `KeyError`, so catch both in a long-running service.

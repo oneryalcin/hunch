@@ -69,7 +69,9 @@ RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx
 NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside this margin are flagged
 DIAL = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
 SHOW = 12  # rows listed per section; summaries always cover everything
-MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None  # --max-cost: refuse to ask if a single fill would cost more (USD, estimated)
+# --max-cost (USD per fill): refuse to start if the estimate is above it, and never send a request that could take
+# the charged cost above it (see worst_cost)
+MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None
 RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
@@ -818,7 +820,8 @@ ENDPOINTS = {  # OpenAI-compatible chat APIs that return top logprobs
 }
 LLM_ADAPTER = "logprobs-v1"  # part of an LLM answer's key: temperature 1, top-20, numbered options, question first
 LLM_OVERHEAD_TOKENS = 40  # prompt scaffolding per request beyond ~chars/4
-_llm_prices: dict[str, float] = {}
+LLM_MAX_TOKENS = 256  # reply allowance per question: room for providers that reason briefly anyway
+_llm_prices: dict[str, tuple[float, float]] = {}
 _reasoning: dict[str, dict] = {}  # per model: reasoning off where allowed (it hides logprobs), else minimal
 
 
@@ -830,17 +833,23 @@ def endpoint(model: str) -> dict:
     return ENDPOINTS[model.split(":", 1)[0]]
 
 
-def price_per_token(model: str) -> float:
-    """Input price. For an LLM: OpenRouter's listed prompt price (an upper bound: cached prefixes cost less,
-    and the few output tokens are ignored in estimates; spend is always the provider's reported cost)."""
-    if not is_llm(model):
-        return PRICE_PER_INPUT_TOKEN
+def llm_prices(model: str) -> tuple[float, float]:
+    """(input, output) price per token: the endpoint's list price or, on OpenRouter, the dearest provider's for
+    that model. OpenRouter's model listing shows the cheapest, and a pinned or fallback provider can charge 3x it,
+    so the cap's worst case takes the most any of them charges. Spend is always the provider's reported cost."""
     if "price" in endpoint(model):
-        return endpoint(model)["price"][0]
-    if not _llm_prices:
-        for m in httpx.get(f"{OPENROUTER}/models", timeout=30).json()["data"]:
-            _llm_prices[m["id"]] = float(m["pricing"]["prompt"])
-    return _llm_prices[llm_route(model)[0]]
+        return endpoint(model)["price"]
+    mid = llm_route(model)[0]
+    if mid not in _llm_prices:
+        eps = httpx.get(f"{OPENROUTER}/models/{mid}/endpoints", timeout=30).json()["data"]["endpoints"]
+        _llm_prices[mid] = (max(float(e["pricing"]["prompt"]) for e in eps),
+                            max(float(e["pricing"].get("completion") or 0) for e in eps))
+    return _llm_prices[mid]
+
+
+def price_per_token(model: str) -> float:
+    """Input price; estimates ignore an LLM's few output tokens."""
+    return llm_prices(model)[0] if is_llm(model) else PRICE_PER_INPUT_TOKEN
 
 
 def llm_route(model: str) -> tuple[str, dict]:
@@ -859,6 +868,24 @@ def estimate_cost(model: str, groups: list[list[dict]]) -> float:
     tokens = sum((len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4 + LLM_OVERHEAD_TOKENS
                  for g in groups for it in g)  # one request per question
     return tokens * price_per_token(model)
+
+
+def _bytes(x) -> int:
+    return len(json.dumps(x, ensure_ascii=False).encode())
+
+
+def worst_cost(model: str, g: list[dict]) -> float:
+    """The most one request (one row's questions) can be charged, so --max-cost holds on the charged cost, not
+    the estimate. Tokenizers spend at most one token per byte: every Jev request in the store (100,000+, 12 specs)
+    was charged at most bytes + 184 tokens, under the 275-token overhead allowed here. An LLM may use its whole
+    reply allowance."""
+    if model.startswith("distilled:"):
+        return 0.0
+    if not is_llm(model):
+        return (_bytes(g[0]["state"]) + sum(_bytes(it["aq"]) for it in g) + REQUEST_OVERHEAD_TOKENS) * PRICE_PER_INPUT_TOKEN
+    p_in, p_out = llm_prices(model)
+    return sum((len(llm_prompt(it["aq"], g[0]["state"])[0].encode()) + LLM_OVERHEAD_TOKENS) * p_in
+               + LLM_MAX_TOKENS * p_out for it in g)
 
 
 def llm_prompt(aq: dict, state: dict) -> tuple[str, list[str], list[str]]:
@@ -911,7 +938,8 @@ def llm_answer(aq: dict, codes: list[str], labels: list[str], logprobs: list[dic
 
 
 async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
-    """POST with retries on rate limits, overload and transport errors."""
+    """POST with retries on rate limits, overload and transport errors. A request that was billed but whose reply
+    was lost is billed again by its retry, and only the reply that arrives is counted: rare, and not in the cap."""
     last = "no response"
     async with sem:
         for attempt in range(8):
@@ -950,7 +978,7 @@ async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions
         mid, pref = llm_route(model)
         ep = endpoint(model)
         body = {"model": mid, "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 256,  # room for providers that reason briefly anyway; the answer's logprobs come after
+                "max_tokens": LLM_MAX_TOKENS,  # the answer's logprobs come after any brief reasoning
                 # temperature 1 = the model's own distribution; at 0 some APIs return -9999 for every other token.
                 # Only the probabilities are read, never the sampled text.
                 "temperature": 1, "logprobs": True, "top_logprobs": 20, **ep.get("body", {})}
@@ -1016,11 +1044,25 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         key = os.environ.get(var) or (None if is_llm(model) else os.environ.get("TYPESAFE_AI_API_KEY"))
         if not key:
             raise SystemExit(f"{spec.get('judgment', '')}: set {var} to ask {model} ({len(group)} requests to send)")
+        # The estimate can be low (chars/4 undercounts dense text: 20% on BANKING77, 41% on shell commands), so the
+        # cap is also kept while asking: a request is sent only if the charged cost so far, plus the worst case of
+        # every request in flight and of this one, stays within it. Asyncio runs one task at a time, so the check
+        # and the reservation can't interleave.
+        held, stop = [0.0], [0]
         async with httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=120) as client:
-            sem = asyncio.Semaphore(CONCURRENCY)
+            sem, gate = asyncio.Semaphore(CONCURRENCY), asyncio.Semaphore(CONCURRENCY)
 
             async def one(g: list[dict]) -> None:
-                res = await ask(client, sem, model, g[0]["state"], {it["rid"]: it["aq"] for it in g})
+                async with gate:
+                    worst = worst_cost(model, g)
+                    if MAX_COST is not None and (stop[0] or stats["cost"] + held[0] + worst > MAX_COST):
+                        stop[0] += 1
+                        return
+                    held[0] += worst
+                    try:
+                        res = await ask(client, sem, model, g[0]["state"], {it["rid"]: it["aq"] for it in g})
+                    finally:
+                        held[0] -= worst
                 tokens = res["tokens"]
                 write(db, "insert or replace into answers (key, model, answer, input_tokens) values (?, ?, ?, ?)",
                       [[it["key"], res["model"], json.dumps(res["answers"][it["rid"]]), tokens / len(g)] for it in g])
@@ -1040,6 +1082,10 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         if failed:
             raise RuntimeError(f"{len(failed)}/{len(group)} requests failed; {stats['asked']} answers saved, "
                                f"re-run to retry only the rest. First error: {failed[0]}") from failed[0]
+        if stop[0]:
+            raise SystemExit(f"{spec.get('judgment', '')}: stopped at --max-cost ${MAX_COST}: ${stats['cost']:.4f} charged for "
+                             f"{stats['asked']} answers (saved); {stop[0]} requests not sent, as the next could have "
+                             f"gone over. Re-run with a higher --max-cost to ask only the rest")
     return have, stats
 
 
@@ -1069,8 +1115,9 @@ def oversized(items: list[dict]) -> list[str]:
 
 
 def estimate_tokens(groups: list[list[dict]]) -> float:
-    """Input tokens for these requests (one per group of items sharing a row): ~chars/4 plus a measured
-    fixed overhead per request. Within ~5% of actual on jev-1.13.0."""
+    """Input tokens for these requests (one per group of items sharing a row): ~chars/4 plus a measured fixed
+    overhead per request. An estimate: 3% high on the command guard recipe, 20% low on BANKING77 (77 long
+    options), 41% low on real shell commands; --max-cost is kept on the charged cost (worst_cost)."""
     return (sum(len(json.dumps(g[0]["state"])) + sum(len(json.dumps(it["aq"])) for it in g) for g in groups) / 4
             + REQUEST_OVERHEAD_TOKENS * len(groups))
 
@@ -2544,8 +2591,8 @@ async def llm_text(model: str, prompt: str, temperature: float = 0.7) -> tuple[s
     body = {"model": llm_route(model)[0], "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 32000, "temperature": temperature}  # reasoning models think first: leave room
     if MAX_COST is not None:  # worst case: the whole reply allowance used
-        p_in = price_per_token(model)
-        worst = len(prompt) / 4 * p_in + body["max_tokens"] * (ep["price"][1] if "price" in ep else 4 * p_in)
+        p_in, p_out = llm_prices(model)
+        worst = len(prompt.encode()) * p_in + body["max_tokens"] * p_out  # at most a token per byte
         if worst > MAX_COST:
             raise SystemExit(f"writer {model}: up to ${worst:.4f} per rewrite, above --max-cost ${MAX_COST}; nothing asked")
     async with httpx.AsyncClient(headers={"Authorization": f"Bearer {os.environ[ep['key']]}"}, timeout=300) as client:
@@ -2824,7 +2871,7 @@ def main() -> None:
     p.add_argument("--limit", type=int, help="review: at most N items")
     p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
     p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
-    p.add_argument("--max-cost", type=float, help="refuse to ask if one judgment's missing answers would cost more (USD, estimated)")
+    p.add_argument("--max-cost", type=float, help="USD: the most each set of asks may be charged (refused up front on the estimate, kept while asking)")
     p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
     args = p.parse_args()
     global MAX_COST, SAMPLE

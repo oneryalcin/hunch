@@ -96,7 +96,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 | `--source CSV` | all | the spec's `source` | Run the root judgments on this CSV instead (a holdout set, for example) |
 | `--traffic` | all | off | Run the root judgments on rows logged by `judge(..., shadow=...)`. Not with `--source` |
 | `--model ID` | all | the spec's `model` | Use this engine for every judgment. Its tables get a suffix (`intent__deepseek_deepseek_flash`), so the spec's own tables are untouched |
-| `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | Stop before asking if one judgment's missing answers would cost more than this (estimated) |
+| `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | The most one set of asks may be charged: a judgment's missing answers, and separately its escalations and `test`'s order check. Above the estimate, nothing is asked; while asking, a request is sent only if its worst case still fits, so the charge stays under it |
 | `--sample N` | `compile`, `run`, `test`, `diff` | all rows | Judge only N rows of each root source, the same N every time |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
 | `--list` | `review` | off | Print the queue instead of prompting |

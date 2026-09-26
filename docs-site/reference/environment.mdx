@@ -21,7 +21,7 @@ A missing key stops the command before anything is sent: `command_guard: set TYP
 | Variable | Default | Effect |
 |---|---|---|
 | `HUNCH_STORE` | unset | Path of the SQLite store to use. When unset, hunch uses the nearest `.hunch/store.sqlite` in the spec's folder or above, or creates one at the git repository root. See [Store](/reference/store#where-it-lives). |
-| `HUNCH_MAX_COST` | unset (no cap) | Refuse to ask if one judgment's missing answers would cost more than this many US dollars, estimated before asking. `--max-cost` overrides it on the CLI. Read once when `hunch` is imported. |
+| `HUNCH_MAX_COST` | unset (no cap) | The most one set of asks may be charged, in US dollars (a judgment's missing answers; its escalations and `test`'s order check are separate sets): nothing is asked if the estimate is above it, and a request is sent only if its worst case still fits. `--max-cost` overrides it on the CLI. Read once when `hunch` is imported. |
 | `HUNCH_CONCURRENCY` | `16` | Requests in flight at once for each judgment. The 100,000-row test ran at 32 with no rate-limit errors. Read once at import. |
 | `FASTEMBED_CACHE_PATH` | `~/.cache/hunch/encoders` | Where [`hunch distill`](/guides/distill) and `distilled:` models keep the encoder they download once (about 90 MB). |
 | `NO_COLOR` | unset | Any value turns off bold and dim text on the `hunch review` screen. Output is also plain when it is not a terminal. |
