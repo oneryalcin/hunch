@@ -21,6 +21,7 @@ hunch init [--list] RECIPE [DIR]
 | `review` | Walks you through the rows that need a human verdict | Yes, missing answers only |
 | `diff` | Compares this spec with an older or other version on today's rows | Yes, missing answers only |
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
+| `ask` | Answers one question for every row of a CSV, and writes the spec for it | Yes, missing answers only |
 | `init` | Copies a starter recipe into a folder | No |
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
 | `hook` | Guards a coding agent's shell commands: `install` wires it in, `run` is what the agent calls | Yes, per command |
@@ -28,6 +29,16 @@ hunch init [--list] RECIPE [DIR]
 | `docs` | Writes a page people can read and search: each judgment's status, numbers and lineage | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
+
+### `hunch ask`
+
+```bash
+hunch ask "Would this command destroy data?" commands.csv                     # yes or no
+hunch ask "Which team should handle this?" messages.csv --options billing,technical,sales
+hunch ask "Is this urgent?" messages.csv --columns subject,body --name urgent --max-cost 0.05
+```
+
+Writes `<name>.yml` in the current folder (the name defaults to the question's first four words that aren't filler, `command_destroy_data` above), runs it like `run`, prints how the answers split and the ten rows it was least sure of, and writes every row's `answer`, `p` and `route` to `<name>.answers.csv`. The key is the `id` column, else the first; the model sees `--columns`, else every column but the key and `gold_*`. Each question gets `act: 0.9`, so "unsure" means below 0.9. If `<name>.yml` exists with a different question or columns, it stops: pass `--name`, or edit the spec and `hunch run` it.
 
 ### `hunch init`
 
@@ -68,7 +79,7 @@ hunch distill intent.yml --source banking77_unlabeled.csv # or for these rows
 hunch distill hunch/command_guard.yml --traffic           # or for rows logged by judge(..., log=True)
 ```
 
-Needs the `distill` extra. Asks nothing: it reads the store's answers for `--node` (default: the last judgment) and writes `distilled/<judgment>@<hash>/` next to the spec (`meta.json` and `weights.npz`). Per question it trains a linear layer on a frozen MiniLM encoder, class-balanced, on the row's gold where there is some and the engine's answer otherwise, holding out half the gold rows by a hash of their text. It prints each question's training size and rarest answer, warning under 30 examples, and the lines to measure and use it. See [Distill a decision](/guides/distill).
+Needs the `distill` extra. Asks nothing: it reads the store's answers for `--node` (default: the last judgment) and writes `distilled/<judgment>@<hash>/` next to the spec (`meta.json` and `weights.npz`). Per question it trains a linear layer on a frozen MiniLM encoder, class-balanced, on the row's gold where there is some and the engine's answer otherwise, holding out a fifth of the gold rows by a hash of their text, and fits a temperature so its confidence is a calibrated probability. It prints each question's training size and rarest answer, warning under 30 examples, and the lines to measure and use it. See [Distill a decision](/guides/distill).
 
 ### `hunch docs`
 
