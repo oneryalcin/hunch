@@ -834,14 +834,17 @@ def endpoint(model: str) -> dict:
 
 
 def llm_prices(model: str) -> tuple[float, float]:
-    """(input, output) price per token: the endpoint's list price, or OpenRouter's listing (an upper bound: cached
-    prefixes cost less; spend is always the provider's reported cost)."""
+    """(input, output) price per token: the endpoint's list price or, on OpenRouter, the dearest provider's for
+    that model. OpenRouter's model listing shows the cheapest, and a pinned or fallback provider can charge 3x it,
+    so the cap's worst case takes the most any of them charges. Spend is always the provider's reported cost."""
     if "price" in endpoint(model):
         return endpoint(model)["price"]
-    if not _llm_prices:
-        for m in httpx.get(f"{OPENROUTER}/models", timeout=30).json()["data"]:
-            _llm_prices[m["id"]] = (float(m["pricing"]["prompt"]), float(m["pricing"].get("completion") or 0))
-    return _llm_prices[llm_route(model)[0]]
+    mid = llm_route(model)[0]
+    if mid not in _llm_prices:
+        eps = httpx.get(f"{OPENROUTER}/models/{mid}/endpoints", timeout=30).json()["data"]["endpoints"]
+        _llm_prices[mid] = (max(float(e["pricing"]["prompt"]) for e in eps),
+                            max(float(e["pricing"].get("completion") or 0) for e in eps))
+    return _llm_prices[mid]
 
 
 def price_per_token(model: str) -> float:
@@ -935,7 +938,8 @@ def llm_answer(aq: dict, codes: list[str], labels: list[str], logprobs: list[dic
 
 
 async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
-    """POST with retries on rate limits, overload and transport errors."""
+    """POST with retries on rate limits, overload and transport errors. A request that was billed but whose reply
+    was lost is billed again by its retry, and only the reply that arrives is counted: rare, and not in the cap."""
     last = "no response"
     async with sem:
         for attempt in range(8):
@@ -2867,7 +2871,7 @@ def main() -> None:
     p.add_argument("--limit", type=int, help="review: at most N items")
     p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
     p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
-    p.add_argument("--max-cost", type=float, help="refuse to ask if one judgment's missing answers would cost more (USD, estimated)")
+    p.add_argument("--max-cost", type=float, help="USD: the most each set of asks may be charged (refused up front on the estimate, kept while asking)")
     p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
     args = p.parse_args()
     global MAX_COST, SAMPLE

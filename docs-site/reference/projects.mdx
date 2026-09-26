@@ -106,7 +106,7 @@ Without `chain`, `where` is only a filter and confidence is the judgment's own. 
 
 If some are cached, it uses their pass rate to estimate the rest, and the total line shows both: `# total: ~$0.00474 upper bound, ~$0.00385 expected`.
 
-**`--max-cost`** (or `HUNCH_MAX_COST`) caps what each judgment is charged. One whose estimate is above it asks nothing. Estimates can run low (dense text such as shell commands has more tokens per character), so the cap is also kept while asking: a request goes out only if its worst case still fits, and a judgment that reaches the cap stops, with the answers it got saved.
+**`--max-cost`** (or `HUNCH_MAX_COST`) caps what each set of asks is charged: a judgment's missing answers, and separately its escalations and `test`'s order check. One whose estimate is above it asks nothing. Estimates can run low (dense text such as shell commands has more tokens per character), so the cap is also kept while asking: a request goes out only if its worst case still fits, and a judgment that reaches the cap stops, with the answers it got saved.
 
 **`--node <judgment>`** narrows a command:
 
