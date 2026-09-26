@@ -1,0 +1,13 @@
+[
+ {"n": 1, "same": "no"},
+ {"n": 2, "same": "no"},
+ {"n": 3, "same": "yes"},
+ {"n": 4, "same": "yes"},
+ {"n": 5, "same": "unclear"},
+ {"n": 6, "same": "no"},
+ {"n": 7, "same": "no"},
+ {"n": 8, "same": "no"},
+ {"n": 9, "same": "no"},
+ {"n": 10, "same": "unclear"},
+ {"n": 11, "same": "unclear"}
+]

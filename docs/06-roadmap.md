@@ -113,6 +113,16 @@ Checked against the docs on 2026-09-26: graphs (`ref`, `where`, `chain`, `union`
 
 The first two make "decisions as code" feel like dbt to a data team: decisions become columns where the data already is, and a spec moves from dev to prod the way a model does. Postgres follows when hunch runs on more than one machine, and fits with the first.
 
+## Features the cookbooks need (2026-09-27)
+
+Cookbooks are how people will understand hunch: real, useful jobs, end to end, with real numbers (decided 2026-09-27). Candidates from the OpenChamber survey of 6,948 Jev use cases, in order: product matching (done), rules a linter can't check (same spec in CI and an agent hook, gold from mutations), columns your data doesn't have (FOMC tone as a dbt column), routing to the cheapest model that solves it (SWE-bench per-model results as gold), fewer files for the agent with a recall bar. When a cookbook needs something hunch lacks, it goes here first, with the cookbook that found it.
+
+| Item | Found by | What happens today | Done when |
+|---|---|---|---|
+| **A blind review panel as a command** | Every cookbook with gold from reviewers: BANKING77, SWE, Claude Code, command guard, product matching | Each one copies `review_panel/<name>/build.py` and `to_reviews.py`: packets, a hidden key, majority vote, `audit` and `disputed` kinds, rounds appended by hand. 04 round 4 already proposed `review --panel` | `hunch review --panel` writes blind packets (a random audit plus unreviewed disagreements), imports reviewers' answers (agents or people) as majority verdicts with the right `kind`, and a second round asks only what is new |
+| **Results of the spec as it is** | Product matching | `hunch.results()` reads the table from the last `run`. After an edit whose answers `diff` already cached, a script reading results gets the old wording's answers without a word; the panel script found 0 disagreements until `hunch run` was repeated | `results()` warns when the table's spec hash is not the spec's, or answers for the spec as written from the store |
+| **Distill for pairs** | Product matching | A student reads the pair as one text through a sentence encoder and can't compare codes: AUROC 0.576 where Jev is 1.000 | Trigger: a second pair cookbook (linking records, deduplication) that needs matching to be free. Then a student with pair features (shared codes, string similarity) or a cross-encoder, measured the same way |
+
 ## Next up, from dbt (docs index read 2026-09-25, [llms.txt](https://docs.getdbt.com/llms.txt))
 
 **Lesson.** dbt did not spread through features. It spread through four things: a file format anyone can read, **machine-readable artifacts** that others built on ([`manifest.json`](https://docs.getdbt.com/reference/artifacts/manifest-json.md), [`run_results.json`](https://docs.getdbt.com/reference/artifacts/run-results-json.md); its docs site, [state comparison](https://docs.getdbt.com/docs/deploy/dbt-state-about.md), orchestrators and observability tools all read them), [packages](https://docs.getdbt.com/docs/build/packages.md), and [docs generated from the project](https://docs.getdbt.com/docs/explore/build-and-view-your-docs.md). Its plugin API (adapters) exists because warehouses differ. hunch should copy the four, not the adapter system.

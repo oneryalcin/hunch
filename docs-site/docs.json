@@ -73,6 +73,7 @@
               "cookbooks/command-guard",
               "cookbooks/rag-answers",
               "cookbooks/nda-review",
+              "cookbooks/product-matching",
               "cookbooks/banking-intents",
               "cookbooks/swe-patches",
               "cookbooks/amazon-reviews"
