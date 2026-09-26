@@ -95,12 +95,3 @@ tests:
     max_calibration_error: 0.05
     min_act_accuracy: 0.97
     order_stability: {sample: 150, permutations: 2, max_flip_rate: 0.05}
-
-exposures:
-  - name: card-bot
-    kind: app
-    owner: cards-team
-    uses:
-      intent: [lost_or_stolen_card, card_arrival, activate_my_card]
-  - name: intent-dashboard
-    kind: dashboard

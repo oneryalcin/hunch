@@ -3,101 +3,115 @@ title: "Change a spec safely"
 description: "See which rows an edit flips before you ship it, try a candidate on live traffic, and decide what happens to old answers."
 ---
 
-A git diff of a spec shows the words you changed. It doesn't show what those words do. Adding one line of description to an option can move hundreds of answers, some to the right label and some away from it.
+A git diff of a spec shows the words you changed. It doesn't show what those words do. Narrowing one question by a clause can move dozens of answers, and a wording that reads better can be worse.
 
 ## `diff` shows what flipped
 
-`hunch diff` runs two versions of a spec on the same rows and compares them row by row. Here is BANKING77, where the old version lists 77 bare intent labels and the new one gives each label a one-line description:
+`hunch diff` runs two versions of a spec on the same rows and compares them row by row. Here is the [command guard](/cookbooks/command-guard) on 1,315 shell commands real coding agents ran. The candidate narrows `sends_out` from "send code, files or data to another machine" to "publish or upload something where other people or services can see it":
 
 ```bash
-cd prototype/examples/banking77
-hunch diff intent.yml --against intent_bare.yml --max-cost 0
+cd prototype/examples/claude_code
+hunch diff candidates/command_guard.yml --against command_guard.yml --max-cost 0.05
 ```
 
 ```text
-intent: 77/770 rows flip (15 within noise band)
-  probabilities moved: mean |Δ| 0.102, mean Δ p(old answer) -0.021
-  gold accuracy on the 770 shared rows with gold 79.0% → 85.5%  (✓ 58 fixed, ✗ 8 broken, 11 wrong both times, 0 without gold)
+destroys: unchanged (same keys, 0 calls)
+
+reaches_outside: unchanged (same keys, 0 calls)
+
+sends_out: 20/1315 rows flip (1 within noise band)
+  probabilities moved: mean |Δ| 0.041, mean Δ p(yes) -0.041
+  gold accuracy on the 270 shared rows with gold 98.9% → 93.0%  (✓ 2 fixed, ✗ 18 broken, 0 wrong both times, 0 without gold)
   paired sign test p=0.000 → significant
-  ✓ #  76                activate_my_card 0.92 → card_linking 0.84                           Could you help me reactivate my card? I…
-  ✗ # 255           fiat_currency_support 0.66 → exchange_via_app 0.91                       How do I change currencies to euros?
+  ✓ #a20a4070#4.17     yes 0.60 → no 0.95     implement API.MD | D:\DMLS\build | Raw …
+  ✗ #da5d32d6#4.5      yes 0.89 → no 0.94     The phone is on usb adb for testing | ~…
+  ✗ #da5d32d6#4.10     yes 0.87 → no 0.94     The phone is on usb adb for testing | ~…
 ```
 
-77 rows changed answer. Against the answer key, 58 were fixed and 8 broken, and a sign test says that balance is not chance. Each flip is listed, `✓` for fixed and `✗` for broken, so you can read the ones that went wrong. A flip marked `~noise` was a near tie that could tip either way on a re-run.
+20 commands changed answer. Against the answer key, a review panel's verdicts, 2 were fixed and 18 broken, and a sign test says that balance is not chance. Each flip is listed, `✓` for fixed and `✗` for broken, so you can read the ones that went wrong. A flip marked `~noise` was a near tie that could tip either way on a re-run.
+
+Reading them is the point. Most of the broken rows install an app on a phone over `adb`. The panel counted that as sending files to another machine, and it is; the narrower wording says a test phone isn't "where other people can see it". So the diff isn't only saying the new wording is worse. It is saying the new wording is a different policy, and showing exactly which commands the policy changes. Whether `adb install` should wait for a person is your call; the diff makes sure you make it on purpose.
 
 `--against` takes another spec file, a folder, or `git:REF` for the version committed at that ref:
 
 ```bash
-hunch diff intent.yml --against git:HEAD~1
+hunch diff command_guard.yml --against git:HEAD~1
 hunch diff evals/ --against git:origin/main --node claims
 ```
 
-The old version always runs on today's rows, so the comparison is fair. Its answers are usually already in the store, and a question whose text didn't change reports `unchanged (same keys, 0 calls)`. Every line of the output is explained in [CLI › diff](/reference/cli#diff).
+The old version always runs on today's rows, so the comparison is fair. Its answers are usually already in the store, and a question whose text didn't change reports `unchanged (same keys, 0 calls)`, as `destroys` and `reaches_outside` did above. Every line of the output is explained in [CLI › diff](/reference/cli#diff).
 
-A changed question has to be asked again on every row. To see what a change does before paying for all of them, add `--sample 200`: both versions are judged on the same 200 rows, and those answers are kept for the full run.
+A changed question has to be asked again on every row: this one cost $0.03 for 1,315 commands. To see what a change does before paying for all of them, add `--sample 200`: both versions are judged on the same 200 rows, and those answers are kept for the full run.
 
 ## Only the flips carry evidence
 
 Where both versions give the same answer, they are right or wrong together, so those rows can't tell you which is better. The flips can. When there is no answer key, or the key is thin, review just those:
 
 ```bash
-hunch review intent.yml --against intent_bare.yml
+hunch review candidates/command_guard.yml --against command_guard.yml
 ```
 
 The queue starts with the rows where the two versions disagree, marking one answer `← --against` and the other `← this spec`. Your verdicts become gold, so the next `diff` can count fixed and broken.
 
 ## Apps depend on answer names
 
-`diff` says whether the new answers are better. It can't see the code that reads them. An app that freezes a card does something like this with the [answer from `judge`](/guides/use-in-your-app):
+`diff` says whether the new answers are better. It can't see the code that acts on them. Take the [outcome](/cookbooks/claude-code-sessions) judgment, which reads the developer's next message to say how a coding agent's turn went: `worked`, `failed`, `redirected` or `unclear`. A job that re-runs failed turns does something like this:
 
 ```python
-if answers["intent"]["label"] == "lost_or_stolen_card":
-    freeze_card(customer)
+if answers["outcome"]["label"] == "failed":
+    retry(turn)
 ```
 
-That line depends on the option's name. Shorten it to `lost_card` in the spec and the model answers `lost_card` from then on. The branch never matches again, and nothing in hunch knows the app was looking for the old name. If the answer key was renamed along with the option, every test still passes.
+That line depends on the answer's name. Rename `failed` to `broken` in the spec and the model answers `broken` from then on. The branch never matches again, and nothing in hunch knows the job was looking for the old name. If the answer key was renamed along with it, every test still passes.
 
-The spec can say which answers the app relies on. Name the app under `exposures`, and map each question it reads to the answers it compares against:
+The spec can say which answers the job relies on. Name it under `exposures`, and map each question it reads to the answers it compares against:
 
-```yaml intent.yml
+```yaml outcome.yml
 exposures:
-  - name: card-bot
-    kind: app
-    owner: cards-team
+  - name: retry-failed-turns
+    kind: job
+    owner: agent-platform
     uses:
-      intent: [lost_or_stolen_card, card_arrival, activate_my_card]
-  - name: intent-dashboard
+      outcome: [failed]
+  - name: agent-eval-dashboard
     kind: dashboard
 ```
 
 Every command lints the spec before it does anything, so after the rename `lint`, `test` and `diff` all stop, in CI too:
 
 ```text
-lint error: exposures.card-bot relies on intent = 'lost_or_stolen_card', but intent has no such answer (it has 77; closest: lost_or_stolen_phone, visa_or_mastercard, lost_card): if an answer was renamed or removed on purpose, change card-bot first, then its uses
+lint error: exposures.retry-failed-turns relies on outcome = 'failed', but outcome has no such answer (its answers: worked, broken, redirected, unclear): if an answer was renamed or removed on purpose, change retry-failed-turns first, then its uses
 ```
 
-The rename is still possible. It now takes a second edit to `uses`, made by someone who has changed card-bot, and the owner is right there in the spec.
+The rename is still possible. It now takes a second edit to `uses`, made by someone who has changed the job, and the owner is right there in the spec.
 
-The same list makes `diff` precise. At the end of the BANKING77 diff above, each exposure gets the rows it would see change:
+The same list makes `diff` precise. The [Claude Code cookbook](/cookbooks/claude-code-sessions#a-better-wording-that-was-worse) tried telling the model that a follow-up question is not a failure. On the 309 public turns, `diff` ends with the rows each exposure would see change:
+
+```bash
+hunch diff candidates/outcome.yml --against outcome.yml --max-cost 0.02
+```
 
 ```text
-affects card-bot (app, reads intent = lost_or_stolen_card, card_arrival, activate_my_card): 10 rows
-affects intent-dashboard (dashboard, reads every answer): 77 rows
+outcome: 19/309 rows flip (9 within noise band)
+  …
+affects retry-failed-turns (job, reads outcome = failed): 7 rows
+affects agent-eval-dashboard (dashboard, reads every answer): 19 rows
 ```
 
-77 rows flipped, but only 10 moved into or out of the three intents card-bot branches on. The other 67 reach its default branch before and after the change. The dashboard shows every answer, so all 77 reach it. The values each question type accepts are in [the spec reference](/reference/spec#answers-an-exposure-relies-on).
+19 turns changed answer, but only 7 moved into or out of `failed`, so only 7 would change what the retry job does. The dashboard shows every answer, so all 19 reach it. The values each question type accepts are in [the spec reference](/reference/spec#answers-an-exposure-relies-on).
 
 ## Trying a candidate on live traffic
 
-Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the tickets spec and the candidate folder holds the stricter `urgent` from the [quickstart](/quickstart):
+Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the [quickstart](/quickstart)'s command guard and the candidate folder the same guard with the narrower `sends_out`, both under one project folder so they share its store. Each command the agent is about to run goes through:
 
 ```python app.py
-answers = hunch.judge("live", shadow="candidate", id=t["id"], subject=t["subject"], body=t["body"])
+answers = hunch.judge("live", shadow="candidate", id=c["id"], request=c["request"], cwd=c["cwd"],
+                      description=c["description"], command=c["command"])
 ```
 
 The live spec answers and `judge` returns that answer. The row is logged to the store's `traffic` table, redacted by the live spec's `redact` rules. The candidate then answers the same row in the background. It never delays or changes the live answer, and if it fails, the error goes to stderr.
 
-After 40 tickets have come through, `--traffic` compares the two on the logged rows. Both sets of answers are already in the store, so this costs nothing:
+After 38 commands have come through, `--traffic` compares the two on the logged rows. Both sets of answers are already in the store, so this costs nothing:
 
 ```bash
 hunch diff candidate --against live --traffic --max-cost 0
@@ -105,14 +119,18 @@ hunch diff candidate --against live --traffic --max-cost 0
 
 ```text
 note: logged traffic has no gold (1 questions); `hunch review --traffic` builds it
-answers: 240 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
+answers: 228 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
 
-department: unchanged (same keys, 0 calls)
+destroys: unchanged (same keys, 0 calls)
 
-urgent: 2/40 rows flip (1 within noise band)
-  probabilities moved: mean |Δ| 0.105, mean Δ p(yes) -0.100
-    #  40     yes 0.92 → no 0.95          Cancel and refund | The product doesn't…
-    #  11      no 0.51 → yes 0.54  ~noise SSO broken | Okta login loops back to t…
+reaches_outside: unchanged (same keys, 0 calls)
+
+sends_out: 4/38 rows flip (1 within noise band)
+  probabilities moved: mean |Δ| 0.117, mean Δ p(yes) -0.115
+    #  20     yes 0.72 → no 0.60          push it to main, then setup github ac…
+    #  18     yes 0.69 → no 0.95          keep going, a few more clean small ap…
+    #  24     yes 0.62 → no 0.95          The official app doesn't have 30 pres…
+    #  34     yes 0.54 → no 0.99  ~noise  Solid work. Ok next up, two tasks: 1.…
 ```
 
 Logged traffic has no answer key. `hunch review candidate --against live --traffic` queues the flipped rows, and your verdicts become the gold that the next `diff` scores against.
@@ -132,7 +150,7 @@ An answer is stored under a key made from the engine, the row, and the question 
 Under `freeze`, `run` stops and says so:
 
 ```text
-on_change: freeze, and ['intent'] changed since the last complete run: nothing asked. `hunch diff` shows what the change does; `hunch run --allow-change` accepts it
+on_change: freeze, and ['command_guard'] changed since the last complete run: nothing asked. `hunch diff` shows what the change does; `hunch run --allow-change` accepts it
 ```
 
 Check with `diff`, then accept with `hunch run --allow-change`. `test`, `diff`, `review` and `judge()` always use the spec as written, so they show what an edit would do whatever `on_change` says.

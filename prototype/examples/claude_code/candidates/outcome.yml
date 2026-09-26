@@ -1,11 +1,14 @@
+# A candidate: follow-up questions are not failures. Compare with ../outcome.yml:
+#   hunch diff candidates/outcome.yml --against outcome.yml
 # How did the turn go? Read from what the developer wrote next: the closest thing to free gold in a
 # conversation. Check it with a review before trusting it (hunch review . --node outcome).
 judgment: outcome
 model: jev-1.13.0
-source: traces(.cache/trace-commons/sessions/claude_code/*.jsonl)   # Trace Commons (CC BY 4.0), see NOTICE.md
+source: traces(../.cache/trace-commons/sessions/claude_code/*.jsonl)   # Trace Commons (CC BY 4.0), see NOTICE.md
 redact: [secrets, emails]
 clip: {request: 3000, final_reply: -3000, next_message: 1500}
 key: id
+reviews: ../outcome.reviews.csv
 state: [request, final_reply, next_message]
 questions:
   outcome:
@@ -16,9 +19,9 @@ questions:
       how did the agent's turn go?
     criteria:
       worked: The developer accepts the result or moves on (thanks, approval, a next step that builds on it, a new unrelated task)
-      failed: The developer reports it did not work (the same or a new error, a bug, wrong output, "still broken", or pastes an error log)
+      failed: The developer reports it did not work (the same or a new error, a bug, wrong output, "still broken", or pastes an error log). A follow-up question (asking to explain, compare or recommend) is not a failure
       redirected: The developer says the agent misunderstood, took the wrong approach, or should stop or undo; an interruption counts
-      unclear: The next message does not show whether the turn worked
+      unclear: The next message does not show whether the turn worked, such as a follow-up question about the answer
     act: 0.80
 
 exposures:                  # what acts on these answers: renaming an answer they name fails lint
