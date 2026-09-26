@@ -23,7 +23,7 @@ Returns a project.
 
 | `obj` | Meaning |
 |---|---|
-| `"triage.yml"` or a `Path` | One spec file: a one-judgment project. |
+| `"command_guard.yml"` or a `Path` | One spec file: a one-judgment project. |
 | `"specs/"` | A folder: every `*.yml` in it, ordered by their `ref()` dependencies. |
 | a `dict` | One spec in its dict form, for example from [`spec_from_model`](#spec_from_model). |
 | a `list` of dicts | A graph built in Python. |
@@ -47,9 +47,9 @@ hunch.results(obj, base: str | Path = ".", judgment: str | None = None) -> list[
 A judgment's table from its last complete run, one dict per row. Default: the last judgment in dependency order. Columns: [Store](/reference/store#judgment-tables).
 
 ```python
-rows = hunch.results("prototype/examples/features/triage.yml")
-len(rows)          # 6
-sorted(rows[0])[:4]  # ['_hunch_run_id', '_path_p', 'body', 'dept']
+rows = hunch.results("prototype/examples/claude_code/command_guard.yml")
+len(rows)            # 1315
+sorted(rows[0])[:5]  # ['_hunch_run_id', '_path_p', 'at', 'command', 'cwd']
 ```
 
 ## Judging one row
@@ -89,9 +89,13 @@ The shape depends on the project:
 - A `type: multi` question appears as one yes/no answer per option, named `<question>__<option>`.
 
 ```python
-hunch.judge("prototype/examples/banking77/intent.yml",
-            text="I still have not received my new card, I ordered over a week ago.")
-# {'intent': {'label': 'card_arrival', 'p': 1.0, 'margin': 1.0, 'route': 'act', 'cached': True}}
+hunch.judge("src/hunch/recipes/agent_commands/command_guard.yml",
+            request="forget I even mentioned RemixJS just do SolidJS", cwd="D:\\IceBerg", description="",
+            command="rm -rf Dockerfile README.md app node_modules package-lock.json package.json public "
+                    "react-router.config.ts tsconfig.json vite.config.ts .gitignore .dockerignore .react-router .claude && echo \"done\"")
+# {'destroys': {'label': 'yes', 'p': 0.95, 'margin': 0.9, 'route': 'act', 'cached': True},
+#  'reaches_outside': {'label': 'no', 'p': 0.88, 'margin': 0.76, 'route': '', 'cached': True},
+#  'sends_out': {'label': 'no', 'p': 0.97, 'margin': 0.94, 'route': '', 'cached': True}}
 ```
 
 `judge` uses `asyncio.run`; inside a running loop use `ajudge`. With `shadow`, the candidate runs in a non-daemon thread after `judge` returns, so a script waits for it at exit.
@@ -110,7 +114,7 @@ Async `judge`: same arguments and return. A `shadow` candidate runs as a backgro
 Both ask the engine for answers the store lacks, except:
 
 - A cost cap. `HUNCH_MAX_COST` (read when `hunch` is imported), or `hunch.core.MAX_COST = 0.0` at runtime. If one judgment's missing answers would cost more, nothing is asked and `SystemExit` is raised with a message such as `intent: would ask 1 answers in 1 requests (~$0.0001), above --max-cost $0.0; nothing asked`.
-- A missing input column raises `KeyError`, for example `"triage: state needs ['body']"`.
+- A missing input column raises `KeyError`, for example `"command_guard: state needs ['command']"`.
 
 Spec errors also raise `SystemExit`; catch it around `judge` in long-running code.
 
@@ -128,7 +132,7 @@ Needs the `pydantic` extra. Each field becomes one question:
 
 | Spec part | Comes from | Default |
 |---|---|---|
-| `instructions` | `Field(description=...)` | the field name as a question (`dept` → `Dept?`) |
+| `instructions` | `Field(description=...)` | the field name as a question (`sends_out` → `Sends out?`) |
 | Option descriptions | `json_schema_extra["options"]`, by value (or member name for `IntEnum`) | a docstring set on the enum member, else empty (`IntEnum`: the member name in lower case) |
 | `act`, `gold`, `escalate`, `none` | `json_schema_extra["hunch"]` | none; never sent to the engine |
 
