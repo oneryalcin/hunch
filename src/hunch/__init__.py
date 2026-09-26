@@ -27,7 +27,7 @@ from hunch.core import (  # noqa: F401  (the public surface)
 )
 from hunch.models import spec_from_agent, spec_from_model, to_model  # noqa: F401
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 
 def load(obj, base: str | Path = ".") -> dict:
