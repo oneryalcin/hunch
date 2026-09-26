@@ -63,7 +63,7 @@ examples:                         # must pass on every test
     expect: {destroys: "yes"}
 ```
 
-Engines: TypeSafe's Jev, or any LLM read through its answer-token probabilities (`deepseek:…`, `openrouter:…`). Sources: CSV, coding-agent traces (Claude Code, Cursor, OpenCode, OpenTelemetry), or a Python function.
+Engines: TypeSafe's Jev, any LLM read through its answer-token probabilities (`deepseek:…`, `openrouter:…`), a small local model trained by `hunch distill`, or one from a plugin (`hunch install hunch-engine-ollama`). Sources: CSV, coding-agent traces (Claude Code, Cursor, OpenCode, OpenTelemetry), or a Python function.
 
 ## Docs
 
@@ -74,7 +74,7 @@ Engines: TypeSafe's Jev, or any LLM read through its answer-token probabilities 
 
 ## Status
 
-v0.2. hunch has run on public datasets, real coding-agent sessions and a 100,000-row test, but no one outside the project has used it yet. Expect the spec format to change before 1.0.
+v0.3. hunch has run on public datasets, real coding-agent sessions and a 100,000-row test, but no one outside the project has used it yet. Expect the spec format to change before 1.0.
 
 ## License
 

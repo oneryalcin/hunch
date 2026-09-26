@@ -9,7 +9,8 @@ For people working on hunch: research, design and decisions. Using hunch is cove
 | [03-opportunity-scan.md](03-opportunity-scan.md) | Which domains are "pre-2016 dbt"; ranked candidates; why hunch |
 | [04-design.md](04-design.md) | Clean-slate rationale, architecture, spec sketch, tests, open questions |
 | [05-licensing.md](05-licensing.md) | Split-by-layer license model (Apache 2.0 core + ELv2 server) |
-| [06-roadmap.md](06-roadmap.md) | Draft roadmap, ordered by risk: trust the numbers, the graph, engines and scale, package, server |
+| [06-roadmap.md](06-roadmap.md) | Roadmap, ordered by risk: trust the numbers, the graph, engines and scale, package, server; where we are |
+| [07-plugins.md](07-plugins.md) | What plugins solve, who would write them, and what hunch builds (engines only) |
 
 ## Decisions so far
 
@@ -21,6 +22,8 @@ For people working on hunch: research, design and decisions. Using hunch is cove
 | 2026-09-24 | License split by layer: spec+compiler+CLI Apache 2.0; server ELv2 | Spec adoption needs permissive; protect what a cloud would host (05-licensing) |
 | 2026-09-24 | Engine pluggable, Jev first | Avoid single-vendor dependency |
 | 2026-09-24 | First user: AI engineer (evals over agent and LLM traces), then analytics engineers, then ops | Strongest evidence so far (SWE-agent: 39% of claimed fixes fail) and the most acute pain (06-roadmap) |
+| 2026-09-26 | Category: decision engineering; the value is decisions as code, measurement one property of it | As dbt made analytics engineering a practice; hunch is the default way to put decision models in software, not an eval tool (06-roadmap) |
+| 2026-09-26 | Engines are the only code plugin; sources through dlt and `py()`, no sink plugins | A plugin type needs outside authors with a reason to build it (07-plugins) |
 
 ## Name
 
