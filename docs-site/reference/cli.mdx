@@ -48,7 +48,7 @@ hunch init agent-commands       # copies the recipe into ./agent-commands
 hunch init agent-eval evals/    # copies into evals/
 ```
 
-The folder must not exist. Recipes: `agent-commands` (a guard for 38 real coding-agent shell commands, the [quickstart](/quickstart), about $0.002), `agent-eval` (check a coding agent's work from its trace), `rag-answers` (does a RAG answer say anything its passages don't support; 40 annotated answers, about $0.002), `tickets` (40 made-up support tickets: a choice, a yes/no and a score).
+The folder must not exist. Recipes: `agent-commands` (a guard for 38 real coding-agent shell commands, the [quickstart](/quickstart), about $0.002), `agent-eval` (check a coding agent's work from its trace), `rag-answers` (does a RAG answer say anything its passages don't support; 900 annotated answers, about $0.03), `tickets` (40 made-up support tickets: a choice, a yes/no and a score).
 
 ### `hunch skill`
 
@@ -108,6 +108,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 | `--traffic` | all | off | Run the root judgments on rows logged by `judge(..., shadow=...)`. Not with `--source` |
 | `--model ID` | all | the spec's `model` | Use this engine for every judgment. Its tables get a suffix (`intent__deepseek_deepseek_flash`), so the spec's own tables are untouched |
 | `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | The most one set of asks may be charged: a judgment's missing answers, and separately its escalations and `test`'s order check. Above the estimate, nothing is asked; while asking, a request is sent only if its worst case still fits, so the charge stays under it |
+| `--receipt` | `test` | off | Also write the numbers beside what was tested: `<spec>.results.json`, or `results.json` in a folder (with the engine's suffix under `--model`). Only what the answers decide, no time or cost, so a re-run on cached answers changes nothing: commit it with a battery |
 | `--sample N` | `compile`, `run`, `test`, `diff` | all rows | Judge only N rows of each root source, the same N every time |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
 | `--list` | `review` | off | Print the queue instead of prompting |
