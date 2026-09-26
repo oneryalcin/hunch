@@ -22,6 +22,7 @@ PATH is a spec file (a one-node project) or a directory of specs (a project: jud
 import argparse
 import ast
 import asyncio
+import concurrent.futures.thread  # noqa: F401  (see _join_shadows: its exit hook must come first)
 import csv
 import difflib
 import getpass
@@ -2731,6 +2732,21 @@ async def ajudge(path: str | Path, row: dict | None = None, /, *, node: str | No
     return next(iter(out.values())) if len(out) == 1 else out
 
 
+_SHADOWS: list[threading.Thread] = []
+
+
+def _join_shadows() -> None:
+    for t in _SHADOWS:
+        t.join()
+
+
+# At exit, Python runs these hooks (last registered first) and only then joins non-daemon threads. One of them,
+# concurrent.futures', stops every thread pool, and asyncio resolves hosts through one: a shadow still asking
+# failed with "cannot schedule new futures after interpreter shutdown" and its answer was lost. Registered after
+# concurrent.futures.thread is imported (at the top of this file), this joins the shadows before that happens.
+threading._register_atexit(_join_shadows)
+
+
 def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = None, shadow: str | Path | None = None,
           log: bool = False, **fields) -> dict | None:
     """Sync ajudge. A shadow candidate runs in a thread after the live answer returns; the thread is not a
@@ -2741,7 +2757,9 @@ def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = No
         extra = _shadow_names(_project(path), shadow)
         if extra:
             log_traffic(_project(path), extra, fields)
-        threading.Thread(target=lambda: asyncio.run(_shadow(shadow, fields)), name="hunch-shadow").start()
+        t = threading.Thread(target=lambda: asyncio.run(_shadow(shadow, fields)), name="hunch-shadow")
+        _SHADOWS.append(t)
+        t.start()
     return out
 
 
