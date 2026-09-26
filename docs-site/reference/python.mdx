@@ -191,9 +191,9 @@ Needs the `sql` extra: `uv add "hunch-ai[sql]"`. The [guide](/guides/sql) walks 
 hunch.sql.register(con, path, *, name=None, max_cost=None) -> str
 ```
 
-Adds the spec or project folder at `path` to the DuckDB connection `con` as a function, and returns its name: the judgment's, or the folder's for a project, unless `name` is given. The function takes the columns the specs read (every judgment's `state`, less the answers upstream judgments add), as `VARCHAR`, in order; `hunch.sql.columns(hunch.load(path))` lists them. It returns a struct of questions, each `{label, p, route}`, or for a project a struct of judgments, NULL where a row never reached one.
+Adds the spec or project folder at `path` to the DuckDB connection `con` as a function, and returns its name: the judgment's, or the folder's for a project, unless `name` is given. The function takes the columns the specs read (every judgment's `state`, then the columns its `where` reads, less the answers upstream judgments add), as `VARCHAR`, in order; `hunch.sql.columns(hunch.load(path))` lists them. It returns a struct of questions, each `{label, p, route}`, or for a project a struct of judgments, NULL where a row never reached one.
 
-`max_cost` is the most the function may be charged in total on this connection, in USD; default `HUNCH_MAX_COST`, else no cap. A `hunch.sql.Budget(usd)` passed to several `register` calls is one budget they share. At the cap, the query fails with `SystemExit` and the answers already asked are saved.
+`max_cost` is the most the function may be charged in total on this connection, across every judgment and escalation, in USD; default `HUNCH_MAX_COST`, else no cap. A `hunch.sql.Budget(usd)` passed to several `register` calls is one budget they share. At the cap, the query fails (DuckDB raises `InvalidInputException` with hunch's message) and the answers already asked are saved.
 
 ### dbt
 

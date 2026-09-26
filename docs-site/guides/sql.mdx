@@ -16,27 +16,29 @@ con = duckdb.connect()
 hunch.sql.register(con, "hunch/command_guard.yml", max_cost=0.05)
 con.sql("""
   select command, round(g.destroys.p, 2) as p, g.destroys.route as route
-  from (select *, command_guard(request, cwd, description, command) as g from 'hunch/commands.csv')
+  from (select *, command_guard(request, cwd, description, command) as g
+        from read_csv('hunch/commands.csv', all_varchar = true))
   where g.destroys.label = 'yes'
 """).show()
 ```
 
 ```text
-  asking 90 answers in 30 requests (~$0.0008)
-  30 requests in 0.7s (42.0/s at concurrency 16)
-┌──────────────────────────────────────────────────────────────────────────┬──────┬────────┐
-│ command                                                                  │  p   │ route  │
-├──────────────────────────────────────────────────────────────────────────┼──────┼────────┤
-│ rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo "removed broken venv…│ 0.7  │ review │
-│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit\user" …   │ 0.82 │ review │
-│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit" …        │ 0.81 │ review │
-│ Remove-Item -Recurse -Force "d:\Yggdrasil\jsx-transpiler" …              │ 0.72 │ review │
-└──────────────────────────────────────────────────────────────────────────┴──────┴────────┘
+┌─────────────────────────────────────────────────────────────────────────────┬──────┬────────┐
+│ command                                                                     │  p   │ route  │
+├─────────────────────────────────────────────────────────────────────────────┼──────┼────────┤
+│ rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo "removed broken venv" … │ 0.7  │ review │
+│ rm -rf Dockerfile README.md app node_modules package-lock.json package.json │ 0.94 │ act    │
+│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit\user" …       │ 0.82 │ review │
+│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit" …             │ 0.81 │ review │
+│ Remove-Item -Recurse -Force "d:\Yggdrasil\jsx-transpiler" …                   │ 0.72 │ review │
+│ cd d:\Epilog\nRemove-Item internals\atoms.c, internals\variables.c, …         │ 0.81 │ review │
+│ rm -rf d:/DMLS/build d:/DMLS/builddmls.exe d:/DMLS/dmls_save.bin …          │ 0.92 │ act    │
+└─────────────────────────────────────────────────────────────────────────────┴──────┴────────┘
 ```
 
-The function is named after the judgment and takes the spec's `state` columns, in order. It returns a struct with one field per question, each holding what [`judge()`](/guides/use-in-your-app) returns for one row: `label`, `p` (the probability of that label) and `route` (`act`, `review`, or empty when the question has no `act`). `review` here means the guard's bar for acting alone, 0.9, wasn't met: these are commands a person should look at.
+The function is named after the judgment and takes the spec's `state` columns, in order. It returns a struct with one field per question, each holding what [`judge()`](/guides/use-in-your-app) returns for one row: `label`, `p` (the probability of that label) and `route` (`act`, `review`, or empty when the question has no `act`). `review` means the guard's bar for acting alone, 0.9, wasn't met: five of the seven are for a person to look at, and two it is sure of.
 
-DuckDB hands the function up to 2,048 rows at a time, and each batch is one hunch run: requests go out together, and every answer is kept in the store like any other. Run the query again and it takes 0.06 s and asks nothing. `hunch run` on the same rows afterwards found all 114 answers already there: SQL, batch and `judge()` share one cache.
+DuckDB hands the function up to 2,048 rows at a time, and each batch is one hunch run: requests go out together, and every answer is kept in the store like any other. The first query sent Jev 38 requests, one per distinct command, for $0.001 in about a second. Run it again and it takes 0.06 s and asks nothing. `hunch run` on the same rows afterwards found all 114 answers already there: SQL, batch and `judge()` share one cache.
 
 ## It is still measured
 
@@ -44,7 +46,8 @@ The panel's labels are a column, so checking the function is a query:
 
 ```sql
 select g.destroys.label as hunch, gold_destroys as panel, count(*) as commands
-from (select *, command_guard(request, cwd, description, command) as g from 'hunch/commands.csv')
+from (select *, command_guard(request, cwd, description, command) as g
+      from read_csv('hunch/commands.csv', all_varchar = true))
 group by all order by all
 ```
 
@@ -52,9 +55,9 @@ group by all order by all
 ┌───────┬───────┬──────────┐
 │ hunch │ panel │ commands │
 ├───────┼───────┼──────────┤
-│ no    │ false │       31 │
-│ yes   │ false │        1 │
-│ yes   │ true  │        6 │
+│ no    │ no    │       31 │
+│ yes   │ no    │        1 │
+│ yes   │ yes   │        6 │
 └───────┴───────┴──────────┘
 ```
 
@@ -62,7 +65,7 @@ group by all order by all
 
 ## A budget, not a surprise
 
-`select … from big_table` asks for every row. `max_cost` is the most the function may be charged in total, in US dollars, across every query on the connection. Each request reserves its worst case before it is sent, so the charge stays under the cap; a query that reaches it fails with a message, and the answers it got are saved, so the next query over those rows is free. Without `max_cost`, `HUNCH_MAX_COST` applies; with neither, there is no cap.
+`select … from big_table` asks for every row. `max_cost` is the most the function may be charged in total, in US dollars, across every query on the connection and every judgment and escalation in it. Each request reserves its worst case before it is sent, so the charge stays under the cap; a query that reaches it fails with DuckDB's error around hunch's message, and the answers it got are saved, so the next query over those rows is free. Without `max_cost`, `HUNCH_MAX_COST` is the total; with neither, there is no cap.
 
 A [distilled](/guides/distill) spec answers on your machine for $0, which is what makes a decision on every row of a large table cheap.
 
@@ -84,22 +87,27 @@ agents:
             max_cost: 0.05                     # USD for the whole dbt invocation
 ```
 
-A model then builds the decisions as columns:
+A model then builds the decisions as columns. Make it a table: a view would store the function call itself, and a connection without hunch (the DuckDB CLI, a BI tool) couldn't read it.
 
 ```sql models/command_risks.sql
+{{ config(materialized='table') }}
+
 select id, command,
        g.destroys.label = 'yes'    as destroys,
        g.sends_out.label = 'yes'   as sends_out,
        g.destroys.route = 'review' as needs_a_look
 from (select *, command_guard(request, cwd, description, command) as g
-      from read_csv('hunch/commands.csv'))
+      from read_csv('hunch/commands.csv', all_varchar = true))
 ```
 
-`dbt run` built it in 0.17 s from the store: 38 commands, 7 that destroy something, 9 that send data out, 12 that need a look. From here it is an ordinary table: dbt tests it, documents it, and downstream models join it.
+`dbt run` built it in 0.13 s from the store: 38 commands, 7 that destroy something, 9 that send data out, 12 that need a look. From here it is an ordinary table: dbt tests it, documents it, and downstream models join it.
 
 ## Details
 
-- **Projects.** Register a folder of specs and the function is named after the folder. It returns a struct of judgments, each a struct of questions, a [union](/reference/projects) included. A judgment a row never reached, because its `where` said no, is NULL.
-- **Inputs are text.** Every argument is `VARCHAR`, as a CSV cell is; cast other types. A NULL argument is sent as an empty string, as an empty cell is by `hunch run`, so the answers and the cache are the same. A row whose arguments are all NULL gets NULL.
+- **Arguments.** The columns the specs read, in the order `hunch.sql.columns(hunch.load(path))` lists them: every judgment's `state`, then any column a `where` reads.
+- **Projects.** Register a folder of specs and the function is named after the folder. It returns a struct of judgments, each a struct of questions, a [union](/reference/projects) included. A judgment a row never reached, because its `where` said no, is NULL. A `multi` question gives one field per option, `topics__refund` and so on.
+- **Inputs are text.** Every argument is `VARCHAR`, as a CSV cell is. Read CSVs with `all_varchar = true`: DuckDB otherwise guesses types, and `1.50` comes back as `1.5`, a different input with a different cache entry. A NULL argument is sent as an empty string, as an empty cell is by `hunch run`, so the answers and the cache are the same. A row whose arguments are all NULL gets NULL.
 - **Rows repeat.** Identical rows are asked once, and a row judged before, by any route, costs nothing.
-- **Install.** `uv add "hunch-ai[sql]"` brings DuckDB, PyArrow and numpy. dbt needs `dbt-duckdb` as well.
+- **Rows are told apart by position**, never by the spec's `key`, which can repeat in a table.
+- **Inside async code** (Jupyter, FastAPI) it works as anywhere else: hunch runs its requests on a worker thread.
+- **Install.** `uv add "hunch-ai[sql]"` brings DuckDB, PyArrow and numpy. dbt needs `dbt-duckdb` as well. Spec paths in the dbt plugin are relative to where dbt runs.

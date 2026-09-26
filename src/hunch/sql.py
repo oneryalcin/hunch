@@ -21,6 +21,7 @@ Needs the `sql` extra: `uv add "hunch-ai[sql]"`.
 import asyncio
 import inspect
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from hunch import core
@@ -33,16 +34,31 @@ class Budget:
     """USD that functions may be charged in total. Pass one to several register() calls (dbt does, for every
     connection) and they all draw from it."""
 
-    def __init__(self, cap: float | None):
-        self.cap = self.left = cap
+    def __init__(self, cap: float | None = None):
+        self.cap = self.left = core.MAX_COST if cap is None else cap  # none given: $HUNCH_MAX_COST, else no cap
+
+
+def _run(coro):
+    """asyncio.run, also from code already inside an event loop (Jupyter, FastAPI): DuckDB calls the function
+    on the query's own thread, where asyncio.run refuses to start a second loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 def columns(project: dict) -> list[str]:
-    """The source columns a project reads: every judgment's state, less the answers upstream judgments add."""
+    """The source columns a project reads: every judgment's state and `where` columns, less the answers upstream
+    judgments add (a question's own name, or `<question>_p` and the like)."""
     made = {q for spec in project["nodes"].values() for q in spec.get("questions") or {}}
-    cols = [c for n in project["order"] if "union" not in project["nodes"][n]
-            for c in core.state_columns(project["nodes"][n])]
-    return [c for c in dict.fromkeys(cols) if c not in made]
+    cols = []
+    for n in project["order"]:
+        spec = project["nodes"][n]
+        cols += core.compile_where(spec["where"])[1] if "where" in spec else []
+        cols += core.state_columns(spec) if "union" not in spec else []
+    return [c for c in dict.fromkeys(cols) if c not in made and not any(c.startswith(q + "_") for q in made)]
 
 
 def register(con, path: str | Path, *, name: str | None = None, max_cost: "float | Budget | None" = None) -> str:
@@ -55,9 +71,10 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
     except ImportError:
         raise SystemExit('hunch.sql needs the sql extra: uv add "hunch-ai[sql]"') from None
     project = core.load_project(Path(path).resolve())
+    for spec in project["nodes"].values():  # rows are told apart by position, never by the spec's key: in SQL a key
+        spec["key"] = "_hunch_row"          # can repeat, and chains and unions match rows by it
     judged = project["order"]
     cols = columns(project)
-    key = project["nodes"][core.roots(project)[0]]["key"]
     one = len(judged) == 1
     fname = name or (judged[0] if one else Path(path).resolve().name)
 
@@ -70,21 +87,20 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
     types = {n: qtype(n) for n in judged}
     sql_type = types[judged[0]][0] if one else duckdb.struct_type({n: types[n][0] for n in judged})
     arrow_type = types[judged[0]][1] if one else pa.struct([(n, types[n][1]) for n in judged])
-    budget = max_cost if isinstance(max_cost, Budget) else Budget(core.MAX_COST if max_cost is None else max_cost)
+    budget = max_cost if isinstance(max_cost, Budget) else Budget(max_cost)
 
     def fn(*arrays):
-        # _hunch_row: which row an answer belongs to (ids can repeat, and downstream rows are copies); rows without
-        # the spec's key get their position as id, so a union doesn't see one id reaching two branches
+        # Each row's id is its position in the batch (_hunch_row), which maps answers back.
         # A NULL column is sent as "", as an empty CSV cell is by `hunch run` (same answer, same cache); a row with
         # every column NULL gets NULL.
         vals = list(zip(*(a.to_pylist() for a in arrays)))
         live = [i for i, v in enumerate(vals) if any(x is not None for x in v)]
         rows = [{**{c: "" if x is None else x for c, x in zip(cols, vals[i])}, "_hunch_row": i} for i in live]
-        rows = [r if key in r else {**r, key: str(r["_hunch_row"])} for r in rows]
-        with _lock:
-            saved, before, core.MAX_COST = core.MAX_COST, core.CHARGED, budget.left
+        with _lock:  # the budget is a total over every fill of the batch (each judgment, each escalation)
+            before = core.CHARGED
+            core.SPEND_LIMIT = None if budget.left is None else before + budget.left
             try:
-                results = asyncio.run(core.aexecute(project, rows_in=rows))
+                results = _run(core.aexecute(project, rows_in=rows))
             except SystemExit as e:  # the cap, as this function's budget: the engine's message names the CLI flag
                 if budget.left is None or "max-cost" not in str(e):
                     raise
@@ -92,7 +108,7 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
                                  f"(a query over those rows is now free). Register again with a higher max_cost "
                                  f"to ask the rest. ({e})") from None
             finally:
-                core.MAX_COST = saved
+                core.SPEND_LIMIT = None
                 if budget.left is not None:  # what was charged, even when the batch stopped at the cap
                     budget.left = max(0.0, budget.left - (core.CHARGED - before))
         out = {n: {} for n in judged}
@@ -101,7 +117,7 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
             for it in res["items"]:
                 a = res["answers"][it["key"]]
                 label, _, _ = core.decide(a)
-                out[n].setdefault(it["row"]["_hunch_row"], {})[it["qid"]] = {"label": label, "p": core.conf_of(it, a),
+                out[n].setdefault(int(it["id"]), {})[it["qid"]] = {"label": label, "p": core.conf_of(it, a),
                                                              "route": core.route(it["q"], a, it["path_p"])}
         live = set(live)
         got = [None if i not in live else out[judged[0]].get(i) if one else {n: out[n].get(i) for n in judged}

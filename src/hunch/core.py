@@ -73,6 +73,7 @@ SHOW = 12  # rows listed per section; summaries always cover everything
 # the charged cost above it (see worst_cost)
 MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None
 CHARGED = 0.0  # USD charged by every fill in this process, as the engines report it
+SPEND_LIMIT: float | None = None  # a total across fills, on CHARGED (hunch.sql's budget: one query, many fills)
 RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
@@ -1037,9 +1038,12 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         for w in oversized([it for g in group for it in g])[:5]:
             print(f"  size warning: {w}", file=sys.stderr)
         est = estimate_cost(model, group)
-        if MAX_COST is not None and est > MAX_COST:
+        cap = MAX_COST  # this fill's cap: --max-cost, and what is left of a total across fills
+        if SPEND_LIMIT is not None:
+            cap = max(0.0, SPEND_LIMIT - CHARGED) if cap is None else min(cap, max(0.0, SPEND_LIMIT - CHARGED))
+        if cap is not None and est > cap:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
-                             f"(~${est:.4f}), above --max-cost ${MAX_COST}; nothing asked")
+                             f"(~${est:.4f}), above --max-cost ${cap:.4g}; nothing asked")
         print(f"  asking {sum(map(len, group))} answers in {stats['requests']} requests (~${est:.4f})", file=sys.stderr)
         var = endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
         key = os.environ.get(var) or (None if is_llm(model) else os.environ.get("TYPESAFE_AI_API_KEY"))
@@ -1057,7 +1061,7 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
                 global CHARGED
                 async with gate:
                     worst = worst_cost(model, g)
-                    if MAX_COST is not None and (stop[0] or stats["cost"] + held[0] + worst > MAX_COST):
+                    if cap is not None and (stop[0] or stats["cost"] + held[0] + worst > cap):
                         stop[0] += 1
                         return
                     held[0] += worst
@@ -1086,7 +1090,7 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             raise RuntimeError(f"{len(failed)}/{len(group)} requests failed; {stats['asked']} answers saved, "
                                f"re-run to retry only the rest. First error: {failed[0]}") from failed[0]
         if stop[0]:
-            raise SystemExit(f"{spec.get('judgment', '')}: stopped at --max-cost ${MAX_COST}: ${stats['cost']:.4f} charged for "
+            raise SystemExit(f"{spec.get('judgment', '')}: stopped at --max-cost ${cap:.4g}: ${stats['cost']:.4f} charged for "
                              f"{stats['asked']} answers (saved); {stop[0]} requests not sent, as the next could have "
                              f"gone over. Re-run with a higher --max-cost to ask only the rest")
     return have, stats
