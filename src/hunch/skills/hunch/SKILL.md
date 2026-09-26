@@ -65,7 +65,7 @@ A judgment can read another's answers with `source: ref(other)`, and `where:` li
 
 ## Engines and keys
 
-`model: jev-…` needs `TYPESAFE_API_KEY`; `deepseek:<id>` needs `DEEPSEEK_API_KEY`; `openrouter:<id>` needs `OPENROUTER_API_KEY`. `--model ID` runs the same specs on another engine into separate tables, and `diff --model ID` compares engines. If a key is missing, say so; do not look for one.
+`model: jev-…` needs `TYPESAFE_API_KEY`; `deepseek:<id>` needs `DEEPSEEK_API_KEY`; `openrouter:<id>` needs `OPENROUTER_API_KEY`. `--model ID` runs the same specs on another engine into separate tables, and `diff --model ID` compares engines. If a key is missing, say so; do not look for one. Engines from plugins: `hunch plugins` lists them; installing one (`hunch install hunch-engine-<name>`) is the user's call.
 
 ## In application code
 

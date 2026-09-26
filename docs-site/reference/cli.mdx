@@ -23,6 +23,8 @@ hunch init [--list] RECIPE [DIR]
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
 | `ask` | Answers one question for every row of a CSV, and writes the spec for it | Yes, missing answers only |
 | `init` | Copies a starter recipe into a folder | No |
+| `plugins` | Lists the engines hunch can use: built in, and from installed plugins | No |
+| `install` | Installs engine plugins into hunch's own environment | No |
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
 | `hook` | Guards a coding agent's shell commands: `install` wires it in, `run` is what the agent calls | Yes, per command |
 | `distill` | Trains a small local model per question on the answers already in the store | No |
@@ -39,6 +41,15 @@ hunch ask "Is this urgent?" messages.csv --columns subject,body --name urgent --
 ```
 
 Writes `<name>.yml` in the current folder (the name defaults to the question's first four words that aren't filler, `command_destroy_data` above), runs it like `run`, prints how the answers split and the ten rows it was least sure of, and writes every row's answer to `<name>.answers.csv`, in columns named as `run`'s tables name them: `<name>`, `<name>_p`, `<name>_route`. The key is the `id` column, else the first; the model sees `--columns`, else every column but the key and `gold_*`. Each question gets `act: 0.9`, so "unsure" means below 0.9. If `<name>.yml` exists and differs from what `ask` would write (another question or columns, or your own edits), it stops: pass `--name`, or `hunch run` the spec. A spec that fails lint isn't left behind.
+
+### `hunch plugins` and `hunch install`
+
+```bash
+hunch plugins                          # built-in engines, and each plugin: prefix, package and version, ok or why not
+hunch install hunch-engine-ollama      # into the environment hunch runs in
+```
+
+Engine plugins are Python packages, named `hunch-engine-<name>` on PyPI. hunch is usually a tool with an environment of its own, so `pip install` elsewhere doesn't reach it; `install` does. In a `uv tool install`, it rebuilds the tool with the plugin added (`uv tool install hunch-ai --with … --with hunch-engine-ollama`, keeping plugins added before), since a package put beside the tool would be dropped by the next `uv tool upgrade`. If the tool was installed from git or a local path, it prints that command to run instead. Anywhere else, it installs into hunch's interpreter with `uv pip`, or `pip` without uv. `plugins` also shows a plugin that failed to load, and one ignored because it claimed a built-in prefix. See [Engines from plugins](/reference/engines#engines-from-plugins).
 
 ### `hunch init`
 
