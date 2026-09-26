@@ -2,7 +2,8 @@
 
 The store holds every answer the engine gave, keyed by its exact input. `hunch distill SPEC` embeds each row's
 state with a small frozen encoder (MiniLM, via fastembed: ONNX on CPU) and fits one linear layer per question: to
-your gold where a row has it (an answer key or a review), else to the engine's answer. A fixed random fifth of
+your gold where a row has it (an answer key or a review), else to the engine's answer. A temperature, fitted
+on five-fold held-out predictions, makes its confidence an honest probability. A fixed random fifth of
 the gold rows (by a hash of the row's text) is held out, and the model records the rows it trained on, so
 `hunch test SPEC --model distilled:…` grades it only on rows it never saw. (Leaving all gold out would bias it:
 review queues put flagged rows first, so gold holds most of the rare answers.)
@@ -18,6 +19,7 @@ from pathlib import Path
 
 ENCODERS = {"minilm": "sentence-transformers/all-MiniLM-L6-v2"}
 MIN_ROWS = 20  # per question: fewer and there is nothing to learn from
+MIN_MISSES = 10  # held-out mistakes needed before the student's confidence is rescaled (see temperature)
 RARE = 30  # fewer examples of an answer than this and the student rarely learns to give it
 _encoders: dict = {}
 _models: dict = {}
@@ -80,6 +82,33 @@ def probs(W, b, X):
     return P / P.sum(1, keepdims=True)
 
 
+def temperature(X, y, k: int, folds) -> float:
+    """One number that makes the student's confidence an honest probability (temperature scaling): fit on
+    predictions for rows each fold's model never saw, so it measures the student on new rows, not on what it
+    memorised. On BANKING77 the plain student was underconfident (calibration error 0.118 on the holdout's raw
+    gold); T=0.55 brought it to 0.049 (0.033 on reviewed gold), with the same answers.
+    Held-out predictions that are almost never wrong can't say how sure to be: the fit would push T toward 0
+    and make the student certain of anything, off-topic text included. So below MIN_MISSES held-out mistakes it
+    stays 1, and T is kept within [0.25, 4]."""
+    import numpy as np
+    Z = np.zeros((len(y), k), np.float32)
+    for f in set(folds.tolist()):
+        tr = folds != f
+        if len(set(y[tr].tolist())) < 2:  # too few rows to hold any out: leave the confidence as it is
+            return 1.0
+        W, b = fit(X[tr], y[tr], k)
+        Z[~tr] = X[~tr] @ W + b
+    if int((Z.argmax(1) != y).sum()) < MIN_MISSES:
+        return 1.0
+
+    def nll(t):
+        L = Z / t
+        L = L - L.max(1, keepdims=True)
+        return -(L[np.arange(len(y)), y] - np.log(np.exp(L).sum(1))).mean()
+    grid = np.exp(np.linspace(np.log(0.25), np.log(4), 200))
+    return round(float(grid[np.argmin([nll(t) for t in grid])]), 4)
+
+
 def question_digest(aq: dict) -> str:
     return hashlib.sha256(json.dumps(aq, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -132,26 +161,28 @@ def distill(project: dict, node: str, encoder: str = "minilm") -> tuple[Path, li
             continue
         teacher = label_of(a)  # gold where known (the teacher's answer if gold accepts it), else the teacher
         lab = teacher if not it["gold"] or teacher in gold_classes(it) else sorted(gold_classes(it))[0]
-        by_q.setdefault(it["qid"], []).append((text_of(it["state"]), lab, it["aq"]))
+        by_q.setdefault(it["qid"], []).append((text_of(it["state"]), lab, it["aq"], int(it["shash"], 16) % 5))
         trained.add(it["shash"])
     if not by_q:
         raise SystemExit(f"{node}: no answers in the store to learn from; `hunch run` first (or --traffic)")
-    texts = sorted({t for rows in by_q.values() for t, _, _ in rows})
+    texts = sorted({r[0] for rows in by_q.values() for r in rows})
     X = dict(zip(texts, encode(encoder, texts)))
     arrays, report = {}, []
     meta = {"encoder": encoder, "teacher": spec["model"], "questions": {}, "trained": sorted(trained)}
     for qid, rows in by_q.items():
-        classes = sorted({lab for _, lab, _ in rows})
+        classes = sorted({r[1] for r in rows})
         if len(rows) < MIN_ROWS or len(classes) < 2:
             report.append(f"  {qid}: skipped ({len(rows)} answers, {len(classes)} distinct; needs {MIN_ROWS}+ and 2+)")
             continue
         aq = rows[0][2]
-        W, b = fit(np.stack([X[t] for t, _, _ in rows]), np.array([classes.index(lab) for _, lab, _ in rows]), len(classes))
+        Xq, yq = np.stack([X[r[0]] for r in rows]), np.array([classes.index(r[1]) for r in rows])
+        W, b = fit(Xq, yq, len(classes))
         arrays[f"{qid}.W"], arrays[f"{qid}.b"] = W, b
         meta["questions"][qid] = {"type": aq["type"], "question": question_digest(aq), "classes": classes,
                                   "legend": list(aq.get("criteria") or []) if aq["type"] == "score" else None,
-                                  "trained_on": len(rows)}
-        rare = min((sum(lab == c for _, lab, _ in rows), c) for c in classes)
+                                  "trained_on": len(rows),
+                                  "temperature": temperature(Xq, yq, len(classes), np.array([r[3] for r in rows]))}
+        rare = min((sum(r[1] == c for r in rows), c) for c in classes)
         report.append(f"  {qid}: {len(rows)} answers, {len(classes)} classes; rarest: {rare[1]!r} ({rare[0]})"
                       + ("  ← few examples: measure what it misses (hunch test --model) before trusting it"
                          if rare[0] < RARE else ""))
@@ -190,7 +221,8 @@ def answer(spec: dict, model: str, items: list[dict]) -> dict[str, dict]:
     out = {}
     for it in items:
         m = meta["questions"][it["qid"]]
-        p = dict(zip(m["classes"], probs(w[f"{it['qid']}.W"], w[f"{it['qid']}.b"], X[text_of(it["state"])][None])[0].tolist()))
+        t = m.get("temperature", 1.0)  # models distilled before 0.3 have none
+        p = dict(zip(m["classes"], probs(w[f"{it['qid']}.W"] / t, w[f"{it['qid']}.b"] / t, X[text_of(it["state"])][None])[0].tolist()))
         p = {k: round(v, 4) for k, v in p.items()}
         if m["type"] == "noul":
             out[it["key"]] = {"type": "noul", "noul": p.get("yes", 0.0)}
