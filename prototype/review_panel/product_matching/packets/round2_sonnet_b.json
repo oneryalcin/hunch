@@ -1,0 +1,122 @@
+{
+ "questions": {
+  "same": {
+   "question": "Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same model? A different model number, size or capacity is a different product, and so is an accessory made for it. The two shops word names differently, and a price may be missing. A shop may also add its own letters to the end of the same model's code (PM1327BK and PM1327, DU1100SS and DU1100XTPS): when the rest of the code and the product agree, it is the same product. But when both listings name a colour and the colours differ, they are different products.",
+   "yes": "They are the same product.",
+   "no": "They are different products.",
+   "unclear": "The two listings don't show enough to tell."
+  }
+ },
+ "rows": [
+  {
+   "n": 11,
+   "abt_name": "Maytag Bisque Over-The-Range Microwave Oven - MMV4205BT",
+   "abt_description": "Maytag Bisque Over-The-Range Microwave Oven - MMV4205BT/ 2.0 Cu. Ft. Capacity/ 1,150 Watts/ Ten Power Levels/ 220 CFM Airflow With Two Adjustable Fan Speeds/ Scrolling VFD Display/ Twelve Instant Touch Pads/ Precision Touch Electronic Controls/ Digital Display With Clock And Kitchen Timer/ Bisque Finish",
+   "abt_price": "",
+   "buy_name": "Maytag 2.0 Cu. Ft. Over-the-Range Microwave Oven",
+   "buy_manufacturer": "Whirlpool",
+   "buy_description": "",
+   "buy_price": ""
+  },
+  {
+   "n": 10,
+   "abt_name": "LG WM0642HW 4.0 Cu Ft White Rear Control Washer - WM0642HWH",
+   "abt_description": "LG WM0642HW White Rear Control Washer - WM0642HWH/ 4.0 Cu. Ft. Capacity/ 7 Washing Programs/ 6 Temperature Levels/ RollerJets And Forced Water Circulation/ Upfront Electronic Control Panel With Dial-A-Cycle/ LoDecibel Quiet Operation/ SenseClean System/ White Finish",
+   "abt_price": "",
+   "buy_name": "LG 4.0 cu. ft. Capacity Front Load Washer w/ Sanitary cycle",
+   "buy_manufacturer": "LG Electronics",
+   "buy_description": "",
+   "buy_price": ""
+  },
+  {
+   "n": 9,
+   "abt_name": "Panasonic VIERA 50' Plasma Flat Panel 1080p HDTV In Black - TH50PZ80U",
+   "abt_description": "Panasonic VIERA 50' Plasma Flat Panel 1080p HDTV In Black - TH50PZ80U/ 1080p Display/ 1920 x 1080 Native Resolution/ Color Purity Optimizer/ Surround Sound/ Anti-Reflective Filter/ VIERA Link HDAVI Control/ Built-In NTSC/ATSC/QAM Tuners/ 3 HDMI Inputs/ Built-In GalleryPlayer Capable/ SD Card Memory Slot/ Pedestal Stand Included/ Black Finish",
+   "abt_price": "",
+   "buy_name": "Panasonic Viera TH-50PZ800U - 50' Widescreen 1080p Plasma HDTV - 1,000,000:1 Dynamic Contrast Ratio",
+   "buy_manufacturer": "Panasonic",
+   "buy_description": "",
+   "buy_price": "$1,711.19"
+  },
+  {
+   "n": 8,
+   "abt_name": "Tech Craft Dark Cherry Veneto Series TV Stand - SWP60",
+   "abt_description": "Tech Craft Dark Cherry Veneto Series TV Stand - SWP60/ 60' Wide Credenza For Flat Panel TV?s And DLP?s/ Center Channel Compartment And Storage/ 260 Lbs TV Capacity/ 50 Lbs Shelf Capacity/ Dark Cherry Wood Veneer Finish",
+   "abt_price": "$399.00",
+   "buy_name": "Techcraft SWP60 Classic Wood Tone Credenza TV Stand",
+   "buy_manufacturer": "Tech Craft",
+   "buy_description": "Wood - Walnut",
+   "buy_price": ""
+  },
+  {
+   "n": 7,
+   "abt_name": "Canon PowerShot Black Digital Camera - SX110ISB",
+   "abt_description": "Canon PowerShot SX110 IS Black Digital Camera - SX110ISB/ 9.0 Megapixel/ 10x Optical Zoom Lens With Optical Image Stabilizer Technology/ 3.0' LCD Display/ DIGIC III Image Processor/ Face Detection/ Motion Detection/ 20 Shooting Modes Including 8 Special Scene Modes/ Red-Eye Correction/ Automatic ISO Settings/ Print-Share Button/ Power By AA Batteries For Convenient/ Black Finish",
+   "abt_price": "",
+   "buy_name": "Canon PowerShot SX110 IS Digital Camera - Silver - 2666B001",
+   "buy_manufacturer": "Canon",
+   "buy_description": "Canon PowerShot SX110 IS 9 Megapixel Digital Camera w/ 10x Optical Zoom, 3' LCD, ISO 1600, Optical Image Stabilizer - Silver",
+   "buy_price": ""
+  },
+  {
+   "n": 6,
+   "abt_name": "Sony White Speaker Dock And Clock Radio For iPod And iPhone - ICFC1IPMK2WHT",
+   "abt_description": "Sony ICFC1IPMK2 White Speaker Dock And Clock Radio For iPod And iPhone - ICFC1IPMK2WHT/ Unique Adjustable Backstop For iPods/ 3 Wake-Sleep Sound Alert Options/ Digital AM-FM Tuner/ Alarm Clock/ Automatic Time Set/ Automatic Daylight Savings Time/ Battery Charger/ Audio Input/ White Finish",
+   "abt_price": "",
+   "buy_name": "SONY IPOD/PHONE DOCK CLOCK RADIO BLACK NIC - ICFC1IPMK2WHI",
+   "buy_manufacturer": "Sony",
+   "buy_description": "",
+   "buy_price": "$61.42"
+  },
+  {
+   "n": 5,
+   "abt_name": "LG LDC22720ST 22 Cu. Ft. Smooth White Bottom Freezer Refrigerator - LDC22720SS",
+   "abt_description": "LG LDC22720ST 22 Cu. Ft. Stainless Steel Bottom Freezer Refrigerator - LDC22720SS/ 4 Split Tempered Glass Shelves/ Upfront Digital Temperature Controls/ 2 Clear Humidity Controlled Crispers/ Multi-Air Flow Cooling/ IcePlus Accelerated Freezing Function/ LoDecibel Quiet Operation/ BioShield Anti-Bacterial Door Seal/ Freezer Drawer/ Stainless Steel Finish",
+   "abt_price": "",
+   "buy_name": "LG 22 Cu.Ft. Total Capacity",
+   "buy_manufacturer": "LG Electronics",
+   "buy_description": "",
+   "buy_price": ""
+  },
+  {
+   "n": 4,
+   "abt_name": "Apple 1GB Silver iPod Shuffle - MB225LLA",
+   "abt_description": "Apple 1GB Silver 2nd Generation iPod Shuffle - MB225LLA/ Holds Up To 240 Songs/ 12 Hours Of Continuous Playback/ Skip-Free Playback/ Battery Indicator/ Shuffle Switch/ Built-In Clip/ Mac And Windows Compatible/ MB226LLA/ Silver Finish",
+   "abt_price": "$49.00",
+   "buy_name": "Apple iPod Shuffle 1GB MP3 Player - MB226LL/A",
+   "buy_manufacturer": "Apple",
+   "buy_description": "1GB Flash Memory - Silver",
+   "buy_price": ""
+  },
+  {
+   "n": 3,
+   "abt_name": "Omnimount Stellar Series Audio Tower - G303DARK",
+   "abt_description": "Omnimount Stellar Series Audio Tower - G303DARK/ Designed For Large Audio Components/ Supports Tabletop Flat Panels/ Three ?Floating? Shelf Design/ Integrated Cable Management/ Black Finish",
+   "abt_price": "$299.00",
+   "buy_name": "OmniMount 3-Shelf Large-Component Tower - STELLARG303G",
+   "buy_manufacturer": "OMNIMOUNT SYSTEMS, INC",
+   "buy_description": "",
+   "buy_price": ""
+  },
+  {
+   "n": 2,
+   "abt_name": "Sony DSLR-A350 Digital Camera And 18-70mm Zoom Lens - DSLRA350K",
+   "abt_description": "Sony DSLR-A350 Digital Camera And 18-70mm Zoom Lens - DSLRA350K/ 14.2 Megapixel/ Tiltable 2.7 Clear Photo LCD Plus Screen/ Smart Teleconverter 2X Zoom/ Bionz Image Processor/ Super SteadyShot In-Camera Image Stabilization/ Anti-Dust Technology/ Eye-Start Autofocus System/ Auto Pop-Up Flash/ Black Finish",
+   "abt_price": "",
+   "buy_name": "Sony alpha DSLR-A350 Digital SLR Camera - DSLRA350",
+   "buy_manufacturer": "Sony DSLR",
+   "buy_description": "14.2 Megapixel - 16:9 - 2.7' Active Matrix TFT Color LCD",
+   "buy_price": "$594.73"
+  },
+  {
+   "n": 1,
+   "abt_name": "LG WM3431W All-In-One White Washer And Dryer Combo - WM3431WH",
+   "abt_description": "LG WM3431W All-In-One Front Load White Washer And Dryer Combo - WM3431WH/ 2.44 Cu. Ft. Capacity/ NeveRust Stainless Steel Drum/ 1400 RPM Maximum Spin Speed/ Ventless Condensing Drying System/ 9 Wash Programs/ 5 Rinse Temperatures/ LoDecibel Quiet Operation/ Upfront Electronic Controls With Dial-A-Cycle/ White Finish",
+   "abt_price": "",
+   "buy_name": "Full Size Steam Washer and Dryer Combination with Allergiene Cycle",
+   "buy_manufacturer": "LG Electronics",
+   "buy_description": "",
+   "buy_price": ""
+  }
+ ]
+}

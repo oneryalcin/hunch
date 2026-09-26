@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# Abt-Buy (Leipzig entity-resolution benchmark, see NOTICE.md): is an Abt listing the same product as a Buy listing?
+# Rows are candidate pairs from candidates.py, five per Abt product.
+judgment: same_product
+model: jev-1.13.0
+source: py(candidates.py:pairs)
+key: id
+state: [abt_name, abt_description, abt_price, buy_name, buy_manufacturer, buy_description, buy_price]
+questions:
+  same:
+    type: noul
+    instructions: >-
+      Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with
+      `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
+      model? A different model number, size or capacity is a different product, and so is an accessory made for it.
+      The two shops word names differently, and a price may be missing. A shop may also add its own letters to the
+      end of the same model's code (PM1327BK and PM1327, DU1100SS and DU1100XTPS): when the rest of the code and the
+      product agree, it is the same product. But when both listings name a colour and the colours differ, they are
+      different products.
+    gold: gold_same
+    act: 0.9
+
+tests:
+  same: {min_auroc: 0.98, min_act_accuracy: 0.99}
+
+examples:                 # must pass on every test, whatever else changes
+  - name: the shop's own letters on the same model code
+    row: {abt_name: Peerless Wall TV Mounts In Black - PM1327BK, abt_description: '', abt_price: '',
+          buy_name: Peerless Adjustable TV Wall Mount - PM1327, buy_manufacturer: Peerless, buy_description: '', buy_price: ''}
+    expect: {same: "yes"}
+  - name: the same camera in two colours
+    row: {abt_name: Sony Silver Cyber-Shot Digital Camera - DSCW150, abt_description: '', abt_price: '',
+          buy_name: Sony Cyber-shot DSC-W150 Digital Camera - Gold - DSCW150N, buy_manufacturer: Sony, buy_description: '', buy_price: ''}
+    expect: {same: "no"}
+  - name: one digit apart, another model
+    row: {abt_name: Sony Cyber-Shot Black Digital Camera - DSCT500B, abt_description: '', abt_price: '',
+          buy_name: Sony Cyber-shot DSC-T300 Digital Camera - Black - DSCT300/B, buy_manufacturer: Sony,
+          buy_description: '', buy_price: $273.95}
+    expect: {same: "no"}

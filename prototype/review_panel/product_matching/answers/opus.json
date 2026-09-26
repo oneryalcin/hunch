@@ -1,0 +1,1122 @@
+[
+ {
+  "n": 1,
+  "same": "no"
+ },
+ {
+  "n": 2,
+  "same": "unclear"
+ },
+ {
+  "n": 3,
+  "same": "unclear"
+ },
+ {
+  "n": 4,
+  "same": "yes"
+ },
+ {
+  "n": 5,
+  "same": "yes"
+ },
+ {
+  "n": 6,
+  "same": "no"
+ },
+ {
+  "n": 7,
+  "same": "no"
+ },
+ {
+  "n": 8,
+  "same": "no"
+ },
+ {
+  "n": 9,
+  "same": "no"
+ },
+ {
+  "n": 10,
+  "same": "unclear"
+ },
+ {
+  "n": 11,
+  "same": "unclear"
+ },
+ {
+  "n": 12,
+  "same": "no"
+ },
+ {
+  "n": 13,
+  "same": "no"
+ },
+ {
+  "n": 14,
+  "same": "yes"
+ },
+ {
+  "n": 15,
+  "same": "no"
+ },
+ {
+  "n": 16,
+  "same": "no"
+ },
+ {
+  "n": 17,
+  "same": "yes"
+ },
+ {
+  "n": 18,
+  "same": "no"
+ },
+ {
+  "n": 19,
+  "same": "unclear"
+ },
+ {
+  "n": 20,
+  "same": "yes"
+ },
+ {
+  "n": 21,
+  "same": "yes"
+ },
+ {
+  "n": 22,
+  "same": "no"
+ },
+ {
+  "n": 23,
+  "same": "no"
+ },
+ {
+  "n": 24,
+  "same": "unclear"
+ },
+ {
+  "n": 25,
+  "same": "yes"
+ },
+ {
+  "n": 26,
+  "same": "unclear"
+ },
+ {
+  "n": 27,
+  "same": "no"
+ },
+ {
+  "n": 28,
+  "same": "no"
+ },
+ {
+  "n": 29,
+  "same": "unclear"
+ },
+ {
+  "n": 30,
+  "same": "unclear"
+ },
+ {
+  "n": 31,
+  "same": "no"
+ },
+ {
+  "n": 32,
+  "same": "unclear"
+ },
+ {
+  "n": 33,
+  "same": "unclear"
+ },
+ {
+  "n": 34,
+  "same": "no"
+ },
+ {
+  "n": 35,
+  "same": "unclear"
+ },
+ {
+  "n": 36,
+  "same": "no"
+ },
+ {
+  "n": 37,
+  "same": "no"
+ },
+ {
+  "n": 38,
+  "same": "yes"
+ },
+ {
+  "n": 39,
+  "same": "no"
+ },
+ {
+  "n": 40,
+  "same": "no"
+ },
+ {
+  "n": 41,
+  "same": "yes"
+ },
+ {
+  "n": 42,
+  "same": "unclear"
+ },
+ {
+  "n": 43,
+  "same": "no"
+ },
+ {
+  "n": 44,
+  "same": "no"
+ },
+ {
+  "n": 45,
+  "same": "unclear"
+ },
+ {
+  "n": 46,
+  "same": "unclear"
+ },
+ {
+  "n": 47,
+  "same": "unclear"
+ },
+ {
+  "n": 48,
+  "same": "yes"
+ },
+ {
+  "n": 49,
+  "same": "unclear"
+ },
+ {
+  "n": 50,
+  "same": "yes"
+ },
+ {
+  "n": 51,
+  "same": "yes"
+ },
+ {
+  "n": 52,
+  "same": "unclear"
+ },
+ {
+  "n": 53,
+  "same": "yes"
+ },
+ {
+  "n": 54,
+  "same": "unclear"
+ },
+ {
+  "n": 55,
+  "same": "no"
+ },
+ {
+  "n": 56,
+  "same": "no"
+ },
+ {
+  "n": 57,
+  "same": "no"
+ },
+ {
+  "n": 58,
+  "same": "no"
+ },
+ {
+  "n": 59,
+  "same": "no"
+ },
+ {
+  "n": 60,
+  "same": "unclear"
+ },
+ {
+  "n": 61,
+  "same": "yes"
+ },
+ {
+  "n": 62,
+  "same": "unclear"
+ },
+ {
+  "n": 63,
+  "same": "yes"
+ },
+ {
+  "n": 64,
+  "same": "no"
+ },
+ {
+  "n": 65,
+  "same": "yes"
+ },
+ {
+  "n": 66,
+  "same": "no"
+ },
+ {
+  "n": 67,
+  "same": "unclear"
+ },
+ {
+  "n": 68,
+  "same": "no"
+ },
+ {
+  "n": 69,
+  "same": "unclear"
+ },
+ {
+  "n": 70,
+  "same": "no"
+ },
+ {
+  "n": 71,
+  "same": "no"
+ },
+ {
+  "n": 72,
+  "same": "unclear"
+ },
+ {
+  "n": 73,
+  "same": "yes"
+ },
+ {
+  "n": 74,
+  "same": "yes"
+ },
+ {
+  "n": 75,
+  "same": "no"
+ },
+ {
+  "n": 76,
+  "same": "no"
+ },
+ {
+  "n": 77,
+  "same": "no"
+ },
+ {
+  "n": 78,
+  "same": "no"
+ },
+ {
+  "n": 79,
+  "same": "yes"
+ },
+ {
+  "n": 80,
+  "same": "unclear"
+ },
+ {
+  "n": 81,
+  "same": "yes"
+ },
+ {
+  "n": 82,
+  "same": "unclear"
+ },
+ {
+  "n": 83,
+  "same": "no"
+ },
+ {
+  "n": 84,
+  "same": "yes"
+ },
+ {
+  "n": 85,
+  "same": "no"
+ },
+ {
+  "n": 86,
+  "same": "no"
+ },
+ {
+  "n": 87,
+  "same": "no"
+ },
+ {
+  "n": 88,
+  "same": "no"
+ },
+ {
+  "n": 89,
+  "same": "no"
+ },
+ {
+  "n": 90,
+  "same": "no"
+ },
+ {
+  "n": 91,
+  "same": "no"
+ },
+ {
+  "n": 92,
+  "same": "unclear"
+ },
+ {
+  "n": 93,
+  "same": "yes"
+ },
+ {
+  "n": 94,
+  "same": "no"
+ },
+ {
+  "n": 95,
+  "same": "yes"
+ },
+ {
+  "n": 96,
+  "same": "no"
+ },
+ {
+  "n": 97,
+  "same": "no"
+ },
+ {
+  "n": 98,
+  "same": "no"
+ },
+ {
+  "n": 99,
+  "same": "unclear"
+ },
+ {
+  "n": 100,
+  "same": "no"
+ },
+ {
+  "n": 101,
+  "same": "no"
+ },
+ {
+  "n": 102,
+  "same": "no"
+ },
+ {
+  "n": 103,
+  "same": "no"
+ },
+ {
+  "n": 104,
+  "same": "no"
+ },
+ {
+  "n": 105,
+  "same": "no"
+ },
+ {
+  "n": 106,
+  "same": "no"
+ },
+ {
+  "n": 107,
+  "same": "unclear"
+ },
+ {
+  "n": 108,
+  "same": "yes"
+ },
+ {
+  "n": 109,
+  "same": "no"
+ },
+ {
+  "n": 110,
+  "same": "no"
+ },
+ {
+  "n": 111,
+  "same": "no"
+ },
+ {
+  "n": 112,
+  "same": "no"
+ },
+ {
+  "n": 113,
+  "same": "no"
+ },
+ {
+  "n": 114,
+  "same": "no"
+ },
+ {
+  "n": 115,
+  "same": "no"
+ },
+ {
+  "n": 116,
+  "same": "unclear"
+ },
+ {
+  "n": 117,
+  "same": "no"
+ },
+ {
+  "n": 118,
+  "same": "no"
+ },
+ {
+  "n": 119,
+  "same": "no"
+ },
+ {
+  "n": 120,
+  "same": "unclear"
+ },
+ {
+  "n": 121,
+  "same": "yes"
+ },
+ {
+  "n": 122,
+  "same": "no"
+ },
+ {
+  "n": 123,
+  "same": "yes"
+ },
+ {
+  "n": 124,
+  "same": "unclear"
+ },
+ {
+  "n": 125,
+  "same": "no"
+ },
+ {
+  "n": 126,
+  "same": "unclear"
+ },
+ {
+  "n": 127,
+  "same": "yes"
+ },
+ {
+  "n": 128,
+  "same": "yes"
+ },
+ {
+  "n": 129,
+  "same": "unclear"
+ },
+ {
+  "n": 130,
+  "same": "no"
+ },
+ {
+  "n": 131,
+  "same": "no"
+ },
+ {
+  "n": 132,
+  "same": "unclear"
+ },
+ {
+  "n": 133,
+  "same": "yes"
+ },
+ {
+  "n": 134,
+  "same": "unclear"
+ },
+ {
+  "n": 135,
+  "same": "no"
+ },
+ {
+  "n": 136,
+  "same": "no"
+ },
+ {
+  "n": 137,
+  "same": "yes"
+ },
+ {
+  "n": 138,
+  "same": "no"
+ },
+ {
+  "n": 139,
+  "same": "yes"
+ },
+ {
+  "n": 140,
+  "same": "yes"
+ },
+ {
+  "n": 141,
+  "same": "no"
+ },
+ {
+  "n": 142,
+  "same": "unclear"
+ },
+ {
+  "n": 143,
+  "same": "unclear"
+ },
+ {
+  "n": 144,
+  "same": "no"
+ },
+ {
+  "n": 145,
+  "same": "no"
+ },
+ {
+  "n": 146,
+  "same": "unclear"
+ },
+ {
+  "n": 147,
+  "same": "no"
+ },
+ {
+  "n": 148,
+  "same": "no"
+ },
+ {
+  "n": 149,
+  "same": "no"
+ },
+ {
+  "n": 150,
+  "same": "yes"
+ },
+ {
+  "n": 151,
+  "same": "unclear"
+ },
+ {
+  "n": 152,
+  "same": "no"
+ },
+ {
+  "n": 153,
+  "same": "no"
+ },
+ {
+  "n": 154,
+  "same": "no"
+ },
+ {
+  "n": 155,
+  "same": "yes"
+ },
+ {
+  "n": 156,
+  "same": "yes"
+ },
+ {
+  "n": 157,
+  "same": "unclear"
+ },
+ {
+  "n": 158,
+  "same": "yes"
+ },
+ {
+  "n": 159,
+  "same": "no"
+ },
+ {
+  "n": 160,
+  "same": "unclear"
+ },
+ {
+  "n": 161,
+  "same": "unclear"
+ },
+ {
+  "n": 162,
+  "same": "unclear"
+ },
+ {
+  "n": 163,
+  "same": "no"
+ },
+ {
+  "n": 164,
+  "same": "no"
+ },
+ {
+  "n": 165,
+  "same": "unclear"
+ },
+ {
+  "n": 166,
+  "same": "unclear"
+ },
+ {
+  "n": 167,
+  "same": "unclear"
+ },
+ {
+  "n": 168,
+  "same": "no"
+ },
+ {
+  "n": 169,
+  "same": "no"
+ },
+ {
+  "n": 170,
+  "same": "no"
+ },
+ {
+  "n": 171,
+  "same": "yes"
+ },
+ {
+  "n": 172,
+  "same": "unclear"
+ },
+ {
+  "n": 173,
+  "same": "no"
+ },
+ {
+  "n": 174,
+  "same": "yes"
+ },
+ {
+  "n": 175,
+  "same": "unclear"
+ },
+ {
+  "n": 176,
+  "same": "unclear"
+ },
+ {
+  "n": 177,
+  "same": "unclear"
+ },
+ {
+  "n": 178,
+  "same": "no"
+ },
+ {
+  "n": 179,
+  "same": "yes"
+ },
+ {
+  "n": 180,
+  "same": "unclear"
+ },
+ {
+  "n": 181,
+  "same": "unclear"
+ },
+ {
+  "n": 182,
+  "same": "no"
+ },
+ {
+  "n": 183,
+  "same": "yes"
+ },
+ {
+  "n": 184,
+  "same": "no"
+ },
+ {
+  "n": 185,
+  "same": "yes"
+ },
+ {
+  "n": 186,
+  "same": "unclear"
+ },
+ {
+  "n": 187,
+  "same": "unclear"
+ },
+ {
+  "n": 188,
+  "same": "no"
+ },
+ {
+  "n": 189,
+  "same": "unclear"
+ },
+ {
+  "n": 190,
+  "same": "unclear"
+ },
+ {
+  "n": 191,
+  "same": "unclear"
+ },
+ {
+  "n": 192,
+  "same": "no"
+ },
+ {
+  "n": 193,
+  "same": "no"
+ },
+ {
+  "n": 194,
+  "same": "no"
+ },
+ {
+  "n": 195,
+  "same": "no"
+ },
+ {
+  "n": 196,
+  "same": "no"
+ },
+ {
+  "n": 197,
+  "same": "no"
+ },
+ {
+  "n": 198,
+  "same": "no"
+ },
+ {
+  "n": 199,
+  "same": "unclear"
+ },
+ {
+  "n": 200,
+  "same": "no"
+ },
+ {
+  "n": 201,
+  "same": "no"
+ },
+ {
+  "n": 202,
+  "same": "yes"
+ },
+ {
+  "n": 203,
+  "same": "unclear"
+ },
+ {
+  "n": 204,
+  "same": "unclear"
+ },
+ {
+  "n": 205,
+  "same": "yes"
+ },
+ {
+  "n": 206,
+  "same": "unclear"
+ },
+ {
+  "n": 207,
+  "same": "yes"
+ },
+ {
+  "n": 208,
+  "same": "yes"
+ },
+ {
+  "n": 209,
+  "same": "no"
+ },
+ {
+  "n": 210,
+  "same": "unclear"
+ },
+ {
+  "n": 211,
+  "same": "unclear"
+ },
+ {
+  "n": 212,
+  "same": "unclear"
+ },
+ {
+  "n": 213,
+  "same": "yes"
+ },
+ {
+  "n": 214,
+  "same": "unclear"
+ },
+ {
+  "n": 215,
+  "same": "unclear"
+ },
+ {
+  "n": 216,
+  "same": "no"
+ },
+ {
+  "n": 217,
+  "same": "no"
+ },
+ {
+  "n": 218,
+  "same": "yes"
+ },
+ {
+  "n": 219,
+  "same": "yes"
+ },
+ {
+  "n": 220,
+  "same": "yes"
+ },
+ {
+  "n": 221,
+  "same": "no"
+ },
+ {
+  "n": 222,
+  "same": "yes"
+ },
+ {
+  "n": 223,
+  "same": "unclear"
+ },
+ {
+  "n": 224,
+  "same": "no"
+ },
+ {
+  "n": 225,
+  "same": "yes"
+ },
+ {
+  "n": 226,
+  "same": "unclear"
+ },
+ {
+  "n": 227,
+  "same": "unclear"
+ },
+ {
+  "n": 228,
+  "same": "no"
+ },
+ {
+  "n": 229,
+  "same": "no"
+ },
+ {
+  "n": 230,
+  "same": "yes"
+ },
+ {
+  "n": 231,
+  "same": "unclear"
+ },
+ {
+  "n": 232,
+  "same": "no"
+ },
+ {
+  "n": 233,
+  "same": "unclear"
+ },
+ {
+  "n": 234,
+  "same": "no"
+ },
+ {
+  "n": 235,
+  "same": "yes"
+ },
+ {
+  "n": 236,
+  "same": "no"
+ },
+ {
+  "n": 237,
+  "same": "no"
+ },
+ {
+  "n": 238,
+  "same": "unclear"
+ },
+ {
+  "n": 239,
+  "same": "unclear"
+ },
+ {
+  "n": 240,
+  "same": "unclear"
+ },
+ {
+  "n": 241,
+  "same": "no"
+ },
+ {
+  "n": 242,
+  "same": "unclear"
+ },
+ {
+  "n": 243,
+  "same": "no"
+ },
+ {
+  "n": 244,
+  "same": "no"
+ },
+ {
+  "n": 245,
+  "same": "no"
+ },
+ {
+  "n": 246,
+  "same": "no"
+ },
+ {
+  "n": 247,
+  "same": "no"
+ },
+ {
+  "n": 248,
+  "same": "no"
+ },
+ {
+  "n": 249,
+  "same": "no"
+ },
+ {
+  "n": 250,
+  "same": "no"
+ },
+ {
+  "n": 251,
+  "same": "no"
+ },
+ {
+  "n": 252,
+  "same": "no"
+ },
+ {
+  "n": 253,
+  "same": "unclear"
+ },
+ {
+  "n": 254,
+  "same": "yes"
+ },
+ {
+  "n": 255,
+  "same": "yes"
+ },
+ {
+  "n": 256,
+  "same": "no"
+ },
+ {
+  "n": 257,
+  "same": "no"
+ },
+ {
+  "n": 258,
+  "same": "no"
+ },
+ {
+  "n": 259,
+  "same": "no"
+ },
+ {
+  "n": 260,
+  "same": "unclear"
+ },
+ {
+  "n": 261,
+  "same": "yes"
+ },
+ {
+  "n": 262,
+  "same": "no"
+ },
+ {
+  "n": 263,
+  "same": "no"
+ },
+ {
+  "n": 264,
+  "same": "no"
+ },
+ {
+  "n": 265,
+  "same": "no"
+ },
+ {
+  "n": 266,
+  "same": "no"
+ },
+ {
+  "n": 267,
+  "same": "yes"
+ },
+ {
+  "n": 268,
+  "same": "yes"
+ },
+ {
+  "n": 269,
+  "same": "unclear"
+ },
+ {
+  "n": 270,
+  "same": "unclear"
+ },
+ {
+  "n": 271,
+  "same": "unclear"
+ },
+ {
+  "n": 272,
+  "same": "unclear"
+ },
+ {
+  "n": 273,
+  "same": "no"
+ },
+ {
+  "n": 274,
+  "same": "no"
+ },
+ {
+  "n": 275,
+  "same": "no"
+ },
+ {
+  "n": 276,
+  "same": "no"
+ },
+ {
+  "n": 277,
+  "same": "no"
+ },
+ {
+  "n": 278,
+  "same": "unclear"
+ },
+ {
+  "n": 279,
+  "same": "no"
+ },
+ {
+  "n": 280,
+  "same": "no"
+ }
+]

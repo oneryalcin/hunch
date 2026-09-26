@@ -443,6 +443,18 @@ If hunch is where teams choose between decision models, a model hunch doesn't sh
 - **Native prompts (step 4 of 07-plugins)**: the Ollama plugin's templates (`ollama:<model>#<template>`) ask a specialised model in its own format. Bespoke-MiniCheck on rag-answers: AUROC 0.265 generic (40-row sample) → 0.840 native (all 900), below Jev 0.941 and DeepSeek 0.907; 67.4% at a 0.5 cut (it flags too much). A plugin without `adapter` is now keyed by its package and version.
 - **Example plugin**: `hunch_engine_ollama`, ~40 lines, reusing `llm_prompt`/`llm_answer`. On the rag-answers recipe's 40 answers: Jev AUROC 0.918, `ollama:qwen2.5:0.5b` 0.528, `ollama:bespoke-minicheck` 0.265 — reliably inverted: a claim-checker trained to say "yes" for *supported* answered its own question, not the spec's. A specialised model needs its native prompt (the plugin's job); the measurement caught it before anything relied on it.
 
+## Findings, round 20: matching two product catalogues (2026-09-27)
+
+The first cookbook from the OpenChamber survey of Jev use cases (entity resolution: southbridge's pipeline, ledger reconciliation, 17k PR pair judgments), and the first built end to end as decisions as code. Abt-Buy (Leipzig, Creative Commons): 1,081 × 1,092 listings, 1,097 matches. `prototype/examples/product_matching/`, cookbook `docs-site/cookbooks/product-matching.mdx`.
+
+- **Rules first, in SQL** (`candidates.py`, a `py()` source): a shared model code, then name-word overlap; top 5 per Abt product → 5,396 pairs from 1.18M, keeping 1,061 of 1,097 matches (96.7%). Top 1 alone: F1 87.7%, the baseline.
+- **One noul per pair.** First wording: 96.6% on the raw key, AUROC 0.994, $0.117 for 5,396 pairs in 84 s. The most confident disagreements looked like key errors (500GB vs 1TB, EX85 vs EX81, S-650 vs S-450).
+- **Blind panel** (Opus, Sonnet, Sonnet reversed; random 100 + 180 disagreements; `review_panel/product_matching/`): on the disagreements key right 69, model 22, undecidable 89. The striking key errors were real and not typical. Reviewers split on hard pairs: one said "same" on 67 pairs the others called undecidable; majority vote.
+- **The wording was vague.** The model was strict on a shop's code suffixes (PM1327BK vs PM1327). Fix 1 ("letters for a colour, a finish or a region") was significantly worse on `diff` (21 fixed, 43 broken, p=0.008): it merged colours the key keeps apart. Fix 2 (letters yes, differing named colours no): 38 fixed, 11 broken, p<0.001. Estimated accuracy 98.7% → 99.3% (95% CI 95.5–99.3%) after a second panel round on its 11 new disagreements. At act 0.9: 91% of pairs settled, none wrong on gold; 590 to review. Each rewording $0.14.
+- **Matches in SQL** (`match.py`, `hunch.sql`): keep a yes pair when it is the likeliest for both its products. Against the raw key: precision 98.0%, recall 89.2%, F1 93.4% (rules alone 87.7%); `route = 'act'` only: 698 matches, all right.
+- **Distill failed**: AUROC 0.576 on held-out pairs. A sentence encoder over the concatenated pair loses code identity (EX85 vs EX81).
+- **Found in hunch**: `hunch.results()` returns the table of the last `run`, so after a spec edit (answers cached by `diff`) the panel script saw the old wording's answers and found 0 disagreements until `hunch run` was repeated. Recorded in 06-roadmap, "Features the cookbooks need".
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
