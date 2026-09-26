@@ -20,7 +20,7 @@ jobs:
       - name: Lint (ruff, pinned; config in pyproject.toml)
         run: uvx ruff@0.16.8 check .
       - name: Every spec key, CLI flag and environment variable is documented
-        run: uv run docs-site/check.py
+        run: uv run docs-site/check.py && uv run docs-site/benchmark.py --check
       - name: The quickstart's recipe is a valid spec
         run: uv run hunch lint src/hunch/recipes/agent_commands && uv run hunch lint src/hunch/recipes/tickets && uv run hunch lint src/hunch/recipes/rag_answers
       - name: The files hunch writes match their published schemas (batteries' results.json; a manifest from hunch docs)

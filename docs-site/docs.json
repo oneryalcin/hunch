@@ -98,6 +98,7 @@
             "group": "Running hunch",
             "pages": [
               "reference/engines",
+              "reference/benchmark",
               "reference/projects",
               "reference/store",
               "reference/server",

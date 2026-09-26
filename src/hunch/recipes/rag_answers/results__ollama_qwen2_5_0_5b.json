@@ -1,0 +1,275 @@
+{
+ "version": 1,
+ "command": "test",
+ "passed": false,
+ "sample": null,
+ "judgments": {
+  "answer_support": {
+   "spec_hash": "a4df19546b0a",
+   "model": "ollama:qwen2.5:0.5b",
+   "rows": 900,
+   "questions": {
+    "unsupported": {
+     "type": "noul",
+     "rows": 900,
+     "gold": {
+      "rows": 900,
+      "source": 900,
+      "review": 0,
+      "excluded": 0
+     },
+     "act": {
+      "threshold": {
+       "yes": 1.0,
+       "no": 0.7
+      },
+      "automated": 0.0289,
+      "judged": 26,
+      "wrong": 0.0
+     },
+     "spot_checks": 0,
+     "accuracy": {
+      "value": 0.2122,
+      "ci": null,
+      "basis": "gold"
+     },
+     "calibration_error": 0.6089,
+     "auroc": 0.434,
+     "dial": [
+      {
+       "threshold": 0.5,
+       "yes": {
+        "automated": 0.9589,
+        "wrong": 0.8181
+       },
+       "no": {
+        "automated": 0.0411,
+        "wrong": 0.0811
+       }
+      },
+      {
+       "threshold": 0.6,
+       "yes": {
+        "automated": 0.9289,
+        "wrong": 0.8182
+       },
+       "no": {
+        "automated": 0.0344,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.7,
+       "yes": {
+        "automated": 0.8467,
+        "wrong": 0.8281
+       },
+       "no": {
+        "automated": 0.0289,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.8,
+       "yes": {
+        "automated": 0.5889,
+        "wrong": 0.8547
+       },
+       "no": {
+        "automated": 0.0178,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.9,
+       "yes": {
+        "automated": 0.1211,
+        "wrong": 0.8532
+       },
+       "no": {
+        "automated": 0.0,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.95,
+       "yes": {
+        "automated": 0.0044,
+        "wrong": 0.75
+       },
+       "no": {
+        "automated": 0.0,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.99,
+       "yes": {
+        "automated": 0.0,
+        "wrong": 0.0
+       },
+       "no": {
+        "automated": 0.0,
+        "wrong": 0.0
+       }
+      }
+     ],
+     "mistakes": {
+      "total": 709,
+      "most_confident": [
+       {
+        "id": "15483",
+        "got": "yes",
+        "p": 0.957,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17285",
+        "got": "yes",
+        "p": 0.9551,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "12067",
+        "got": "yes",
+        "p": 0.9535,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "15484",
+        "got": "yes",
+        "p": 0.9499,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "14747",
+        "got": "yes",
+        "p": 0.9497,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "16796",
+        "got": "yes",
+        "p": 0.9495,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17251",
+        "got": "yes",
+        "p": 0.9473,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "12068",
+        "got": "yes",
+        "p": 0.9429,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "12330",
+        "got": "yes",
+        "p": 0.941,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "14772",
+        "got": "yes",
+        "p": 0.9403,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "14774",
+        "got": "yes",
+        "p": 0.9394,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "15718",
+        "got": "yes",
+        "p": 0.939,
+        "gold": [
+         "no"
+        ]
+       }
+      ]
+     },
+     "checks": [
+      {
+       "check": "min_accuracy",
+       "passed": false,
+       "value": 0.2122,
+       "limit": 0.8,
+       "severity": "error"
+      },
+      {
+       "check": "max_calibration_error",
+       "passed": true,
+       "value": 0.6089,
+       "limit": 1,
+       "severity": "error"
+      },
+      {
+       "check": "min_auroc",
+       "passed": true,
+       "value": 0.434,
+       "limit": 0,
+       "severity": "error"
+      }
+     ]
+    }
+   },
+   "examples": [
+    {
+     "name": "adds a number the passage doesn't have",
+     "passed": true,
+     "severity": "error",
+     "answers": [
+      {
+       "question": "unsupported",
+       "expected": "yes",
+       "got": "yes",
+       "p": 0.5945,
+       "passed": true
+      }
+     ]
+    },
+    {
+     "name": "says only what the passage says",
+     "passed": false,
+     "severity": "error",
+     "answers": [
+      {
+       "question": "unsupported",
+       "expected": "no",
+       "got": "yes",
+       "p": 0.6717,
+       "passed": false
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

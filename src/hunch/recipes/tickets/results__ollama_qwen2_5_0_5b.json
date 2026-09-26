@@ -1,0 +1,214 @@
+{
+ "version": 1,
+ "command": "test",
+ "passed": false,
+ "sample": null,
+ "judgments": {
+  "ticket_triage": {
+   "spec_hash": "91b14c2b5da1",
+   "model": "ollama:qwen2.5:0.5b",
+   "rows": 40,
+   "questions": {
+    "department": {
+     "type": "choice",
+     "rows": 40,
+     "gold": {
+      "rows": 40,
+      "source": 40,
+      "review": 0,
+      "excluded": 0
+     },
+     "act": {
+      "threshold": 0.8,
+      "automated": 0.0,
+      "judged": 0,
+      "wrong": null
+     },
+     "spot_checks": 0,
+     "accuracy": {
+      "value": 0.325,
+      "ci": null,
+      "basis": "gold"
+     },
+     "calibration_error": 0.2202,
+     "dial": [
+      {
+       "threshold": 0.5,
+       "automated": 0.625,
+       "wrong": 0.48
+      },
+      {
+       "threshold": 0.6,
+       "automated": 0.15,
+       "wrong": 0.3333
+      },
+      {
+       "threshold": 0.7,
+       "automated": 0.025,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.8,
+       "automated": 0.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.9,
+       "automated": 0.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.95,
+       "automated": 0.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.99,
+       "automated": 0.0,
+       "wrong": 0.0
+      }
+     ],
+     "mistakes": {
+      "total": 27,
+      "most_confident": [
+       {
+        "id": "17",
+        "got": "sales",
+        "p": 0.6381,
+        "gold": [
+         "technical"
+        ]
+       },
+       {
+        "id": "34",
+        "got": "sales",
+        "p": 0.6356,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "2",
+        "got": "sales",
+        "p": 0.5839,
+        "gold": [
+         "technical"
+        ]
+       },
+       {
+        "id": "35",
+        "got": "sales",
+        "p": 0.5684,
+        "gold": [
+         "technical"
+        ]
+       },
+       {
+        "id": "19",
+        "got": "sales",
+        "p": 0.5569,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "40",
+        "got": "sales",
+        "p": 0.5404,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "25",
+        "got": "sales",
+        "p": 0.5397,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "22",
+        "got": "sales",
+        "p": 0.536,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "13",
+        "got": "sales",
+        "p": 0.5286,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "20",
+        "got": "sales",
+        "p": 0.528,
+        "gold": [
+         "technical"
+        ]
+       },
+       {
+        "id": "31",
+        "got": "sales",
+        "p": 0.5273,
+        "gold": [
+         "billing"
+        ]
+       },
+       {
+        "id": "29",
+        "got": "sales",
+        "p": 0.505,
+        "gold": [
+         "technical"
+        ]
+       }
+      ]
+     },
+     "checks": [
+      {
+       "check": "min_accuracy",
+       "passed": false,
+       "value": 0.325,
+       "limit": 0.9,
+       "severity": "error"
+      },
+      {
+       "check": "max_calibration_error",
+       "passed": true,
+       "value": 0.2202,
+       "limit": 1,
+       "severity": "error"
+      }
+     ]
+    },
+    "urgent": {
+     "type": "noul",
+     "rows": 40,
+     "gold": {
+      "rows": 0,
+      "source": 0,
+      "review": 0,
+      "excluded": 0
+     },
+     "checks": []
+    },
+    "frustration": {
+     "type": "score",
+     "rows": 40,
+     "gold": {
+      "rows": 0,
+      "source": 0,
+      "review": 0,
+      "excluded": 0
+     },
+     "checks": []
+    }
+   }
+  }
+ }
+}
