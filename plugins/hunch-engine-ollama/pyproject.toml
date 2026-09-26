@@ -2,8 +2,23 @@
 name = "hunch-engine-ollama"
 version = "0.1.0"
 description = "A hunch engine plugin: local models served by Ollama, read through their token probabilities"
-requires-python = ">=3.11"
-dependencies = ["hunch-ai", "httpx"]
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["hunch-ai>=0.3", "httpx>=0.27"]
+keywords = ["hunch", "ollama", "llm", "local", "decision models", "evals"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Documentation = "https://fuguai.mintlify.site/reference/engines#engines-from-plugins"
+Source = "https://github.com/oneryalcin/hunch/tree/main/plugins/hunch-engine-ollama"
+Issues = "https://github.com/oneryalcin/hunch/issues"
 
 [project.entry-points."hunch.engines"]
 ollama = "hunch_engine_ollama:engine"      # model: ollama:<name>, e.g. ollama:qwen2.5:0.5b
@@ -11,3 +26,6 @@ ollama = "hunch_engine_ollama:engine"      # model: ollama:<name>, e.g. ollama:q
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+include = ["hunch_engine_ollama.py"]
