@@ -55,6 +55,7 @@
               "guides/share",
               "guides/change-a-spec",
               "guides/use-in-your-app",
+              "guides/sql",
               "guides/distill"
             ]
           }

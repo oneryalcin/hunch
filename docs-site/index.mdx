@@ -15,7 +15,7 @@ Each of these is a question with a small set of answers, asked of many rows, wit
 
 dbt turned SQL scattered across dashboards and scripts into a practice, analytics engineering: transformations written once, kept in git, run everywhere and tested on every change. hunch does the same for the judgment calls in your software. Call it decision engineering:
 
-- **Write the question once.** Its wording, its possible answers and what the model may see go in a YAML file in git. The same file answers a million rows in a batch, or one row inside your app as it happens, from the same cache.
+- **Write the question once.** Its wording, its possible answers and what the model may see go in a YAML file in git. The same file answers a million rows in a batch, a column in a SQL query or a dbt model, or one row inside your app as it happens, from the same cache.
 - **Act only when it's sure.** Every answer comes with a probability, and the spec sets the bar for acting on it. Below the bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong, so you choose it with numbers.
 - **Change it without breaking it.** Before an edit ships, `hunch diff` shows every answer it would flip, and the tests in CI fail when a decision gets worse. An app that relies on an answer's name is protected from a rename.
 - **Make it better from use.** `hunch review` shows you the few rows where a verdict teaches the most. Your verdicts become the answer key the next test measures against.

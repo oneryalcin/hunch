@@ -72,6 +72,7 @@ SHOW = 12  # rows listed per section; summaries always cover everything
 # --max-cost (USD per fill): refuse to start if the estimate is above it, and never send a request that could take
 # the charged cost above it (see worst_cost)
 MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None
+CHARGED = 0.0  # USD charged by every fill in this process, as the engines report it
 RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
@@ -1053,6 +1054,7 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             sem, gate = asyncio.Semaphore(CONCURRENCY), asyncio.Semaphore(CONCURRENCY)
 
             async def one(g: list[dict]) -> None:
+                global CHARGED
                 async with gate:
                     worst = worst_cost(model, g)
                     if MAX_COST is not None and (stop[0] or stats["cost"] + held[0] + worst > MAX_COST):
@@ -1068,6 +1070,7 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
                       [[it["key"], res["model"], json.dumps(res["answers"][it["rid"]]), tokens / len(g)] for it in g])
                 stats["tokens"] += tokens
                 stats["cost"] += res["cost"]
+                CHARGED += res["cost"]
                 stats["asked"] += len(g)
                 for it in g:
                     have[it["key"]] = res["answers"][it["rid"]]
