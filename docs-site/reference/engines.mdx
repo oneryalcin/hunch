@@ -11,6 +11,7 @@ The spec's `model` picks the engine. Every engine returns the same typed answers
 | `deepseek:<model id>` | DeepSeek's API, thinking disabled | `DEEPSEEK_API_KEY` |
 | `openrouter:<model id>[@provider]` | Any model on OpenRouter that returns log-probabilities | `OPENROUTER_API_KEY` |
 | `distilled:<folder>` | A local model trained by `hunch distill` on another engine's answers: a frozen MiniLM encoder and a linear layer per question, on the CPU | none |
+| `<prefix>:<model>` | An engine from an installed plugin package, registered under `<prefix>` | the plugin's own |
 
 ## LLM engines
 
@@ -44,6 +45,35 @@ Measured so far, Jev against DeepSeek (`deepseek-flash`) on the same specs and r
 | Claude Code turns, outcome / claims | 90% / 88% | 88% / 88% | no significant difference |
 
 DeepSeek cost about 1.5× Jev as billed. Both were well calibrated on BANKING77 (calibration error 0.043 for Jev, 0.032 for DeepSeek). Background in the [cookbooks](/cookbooks).
+
+## Engines from plugins
+
+Any package can add an engine. It registers an object under the entry-point group `hunch.engines`, and the entry point's name becomes the prefix a spec's `model` uses:
+
+```toml pyproject.toml
+[project.entry-points."hunch.engines"]
+ollama = "hunch_engine_ollama:engine"      # model: ollama:<name>
+```
+
+The object needs one async method, called once per row with every question for it:
+
+```python
+async def answer(self, model, state, questions) -> dict:
+    # questions: {id: {"type", "instructions", "criteria"}}, as hunch sends them to Jev
+    return {"answers": {id: answer, ...}, "cost": 0.0, "tokens": 0}
+```
+
+Answers take Jev's shapes (`{"type": "noul", "noul": p_yes}`, a choice's `choice`, `confidence` and `probabilities`, a score's `score`, `confidence`, `legend` and `probabilities`), and hunch checks each one before storing it (the shape, that probabilities are in [0, 1], that a choice is one of its options), naming the question and what is wrong; a broken plugin stops the run with that message instead of being retried. Optional attributes: `key`, the environment variable it needs; `worst_cost(model, state, questions)`, the most one call can be charged, so `--max-cost` holds (without it hunch treats the engine as free, and a capped run stops at the first call that reports a cost above what it reserved); `adapter`, a string in every answer's cache key, to change when the engine's prompt or parsing changes; `concurrency`, calls in flight at once. A spec (or an `escalate`) that names a prefix no engine has fails lint and lists the engines installed. A plugin can't take a built-in prefix (`openrouter`, `deepseek`, `distilled`): it is ignored, with a lint warning.
+
+`prototype/examples/engines/hunch_engine_ollama` is a complete plugin in about 40 lines: any model [Ollama](https://ollama.com) serves, asked with hunch's own LLM prompt and read from its token probabilities. On the 40 answers of the [rag-answers](/cookbooks/rag-answers) recipe, measured with the same command as any engine (`hunch test . --model ollama:<name>`), local and free:
+
+| Engine | AUROC | Accuracy |
+| --- | --- | --- |
+| `jev-1.13.0` | 0.918 | 80.0% |
+| `ollama:qwen2.5:0.5b` | 0.528 | 35.0% |
+| `ollama:bespoke-minicheck` | 0.265 | 45.0% |
+
+An AUROC well under 0.5 is a model that is reliably backwards. Bespoke-MiniCheck is a 7B model trained to answer one question, whether a document supports a claim, so its "yes" means supported, and it answered that instead of the spec's "does it say anything unsupported". A specialised model needs its own prompt, which is the plugin's to write; the number said so before anything shipped on it.
 
 ## Escalate
 

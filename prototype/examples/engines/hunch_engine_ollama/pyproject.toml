@@ -1,0 +1,13 @@
+[project]
+name = "hunch-engine-ollama"
+version = "0.1.0"
+description = "A hunch engine plugin: local models served by Ollama, read through their token probabilities"
+requires-python = ">=3.11"
+dependencies = ["hunch-ai", "httpx"]
+
+[project.entry-points."hunch.engines"]
+ollama = "hunch_engine_ollama:engine"      # model: ollama:<name>, e.g. ollama:qwen2.5:0.5b
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

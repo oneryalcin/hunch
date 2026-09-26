@@ -48,6 +48,8 @@ from pathlib import Path
 import httpx
 import yaml
 
+from hunch import engines
+
 API = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
 HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
@@ -431,7 +433,8 @@ def item(spec: dict, row: dict, qid: str, aq: dict | None = None, variant: str =
     return {"row": row, "id": str(row.get(spec["key"], "online")), "qid": qid, "rid": qid + variant, "spec": spec,
             "q": q, "aq": aq, "state": state, "shash": digest(state)[:16],
             "key": digest({"model": spec["model"], "state": state, "question": aq,
-                           **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else {})})}
+                           **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else
+                              {"adapter": a} if (a := getattr(engines.get(spec["model"]), "adapter", None)) else {})})}
 
 
 def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:
@@ -711,6 +714,15 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             errors += tag([f"missing {', '.join(missing)} (every judgment needs model, key, state and questions)"])
             columns[name] = None
             continue
+        for m in [spec["model"], *[q["escalate"]["model"] for q in spec["questions"].values()
+                                   if isinstance(q, dict) and isinstance(q.get("escalate"), dict) and "model" in q["escalate"]]]:
+            prefix = str(m).split(":", 1)[0] if ":" in str(m) else None
+            if prefix and prefix not in engines.RESERVED and prefix not in engines.loaded():
+                broken = {p: e for p, e in engines.installed().items() if isinstance(e, Exception)}
+                errors += tag([f"model {m!r}: no engine {prefix!r}"
+                               + (f" (its plugin failed to load: {broken[prefix]!r})" if prefix in broken else
+                                  f". Built in: jev-…, distilled:, {', '.join(p + ':' for p in ENDPOINTS)}; from plugins: "
+                                  f"{', '.join(p + ':' for p in engines.loaded()) or 'none installed'}")])
         from hunch import traces
         if source_kind(spec)[0] == "traces" and spec.get("view", "turns") not in traces.VIEWS:
             errors += tag([f"view must be one of {', '.join(traces.VIEWS)}, got {spec['view']!r}"])
@@ -740,6 +752,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
         name = project["order"][0]
         errors = [x.removeprefix(f"{name}: ") for x in errors]
         warnings = [x.removeprefix(f"{name}: ") for x in warnings]
+    warnings += [f"engine plugin {x} ignored: its prefix is built in" for x in engines.shadowed]
     return errors, warnings
 
 
@@ -820,6 +833,7 @@ ENDPOINTS = {  # OpenAI-compatible chat APIs that return top logprobs
     "deepseek": {"base": "https://api.deepseek.com", "key": "DEEPSEEK_API_KEY", "body": {"thinking": {"type": "disabled"}},
                  "price": (0.15e-6, 0.60e-6)},  # list price per token (in, out); cache hits and off-peak cost less
 }
+engines.RESERVED |= set(ENDPOINTS) | {"distilled"}
 LLM_ADAPTER = "logprobs-v1"  # part of an LLM answer's key: temperature 1, top-20, numbered options, question first
 LLM_OVERHEAD_TOKENS = 40  # prompt scaffolding per request beyond ~chars/4
 LLM_MAX_TOKENS = 256  # reply allowance per question: room for providers that reason briefly anyway
@@ -843,7 +857,9 @@ def llm_prices(model: str) -> tuple[float, float]:
         return endpoint(model)["price"]
     mid = llm_route(model)[0]
     if mid not in _llm_prices:
-        eps = httpx.get(f"{OPENROUTER}/models/{mid}/endpoints", timeout=30).json()["data"]["endpoints"]
+        eps = (httpx.get(f"{OPENROUTER}/models/{mid}/endpoints", timeout=30).json().get("data") or {}).get("endpoints")
+        if not eps:
+            raise SystemExit(f"openrouter: no model {mid!r} with a live endpoint (see openrouter.ai/models)")
         _llm_prices[mid] = (max(float(e["pricing"]["prompt"]) for e in eps),
                             max(float(e["pricing"].get("completion") or 0) for e in eps))
     return _llm_prices[mid]
@@ -865,6 +881,8 @@ def llm_route(model: str) -> tuple[str, dict]:
 def estimate_cost(model: str, groups: list[list[dict]]) -> float:
     if model.startswith("distilled:"):
         return 0.0
+    if engines.get(model):  # a plugin says only its worst case: estimate with that
+        return sum(worst_cost(model, g) for g in groups)
     if not is_llm(model):
         return estimate_tokens(groups) * PRICE_PER_INPUT_TOKEN
     tokens = sum((len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4 + LLM_OVERHEAD_TOKENS
@@ -883,6 +901,8 @@ def worst_cost(model: str, g: list[dict]) -> float:
     reply allowance."""
     if model.startswith("distilled:"):
         return 0.0
+    if e := engines.get(model):
+        return e.worst_cost(model, g[0]["state"], {it["rid"]: it["aq"] for it in g}) if hasattr(e, "worst_cost") else 0.0
     if not is_llm(model):
         return (_bytes(g[0]["state"]) + sum(_bytes(it["aq"]) for it in g) + REQUEST_OVERHEAD_TOKENS) * PRICE_PER_INPUT_TOKEN
     p_in, p_out = llm_prices(model)
@@ -970,6 +990,11 @@ async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
 
 async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions: dict) -> dict:
     """{answers: {rid: answer}, tokens, cost, model} for one row's questions."""
+    if e := engines.get(model):
+        async with sem:
+            got = await engines.call(e, model, state, questions)
+        return {"answers": engines.check(model, questions, got), "tokens": int(got.get("tokens") or 0),
+                "cost": float(got.get("cost") or 0.0), "model": model}
     if not is_llm(model):
         j = await post(client, sem, API, {"model": model, "state": state, "questions": questions})
         tokens = j["usage"]["input_tokens"]
@@ -1045,17 +1070,19 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
                              f"(~${est:.4f}), above --max-cost ${cap:.4g}; nothing asked")
         print(f"  asking {sum(map(len, group))} answers in {stats['requests']} requests (~${est:.4f})", file=sys.stderr)
-        var = endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
-        key = os.environ.get(var) or (None if is_llm(model) else os.environ.get("TYPESAFE_AI_API_KEY"))
+        plugin = engines.get(model)
+        var = getattr(plugin, "key", None) if plugin else endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
+        key = (os.environ.get(var) if var else "none needed") or (None if is_llm(model) or plugin else os.environ.get("TYPESAFE_AI_API_KEY"))
         if not key:
             raise SystemExit(f"{spec.get('judgment', '')}: set {var} to ask {model} ({len(group)} requests to send)")
         # The estimate can be low (chars/4 undercounts dense text: 20% on BANKING77, 41% on shell commands), so the
         # cap is also kept while asking: a request is sent only if the charged cost so far, plus the worst case of
         # every request in flight and of this one, stays within it. Asyncio runs one task at a time, so the check
         # and the reservation can't interleave.
-        held, stop = [0.0], [0]
+        held, stop, over = [0.0], [0], []
         async with httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=120) as client:
-            sem, gate = asyncio.Semaphore(CONCURRENCY), asyncio.Semaphore(CONCURRENCY)
+            n = getattr(plugin, "concurrency", None) or CONCURRENCY
+            sem, gate = asyncio.Semaphore(n), asyncio.Semaphore(n)
 
             async def one(g: list[dict]) -> None:
                 global CHARGED
@@ -1069,6 +1096,9 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
                         res = await ask(client, sem, model, g[0]["state"], {it["rid"]: it["aq"] for it in g})
                     finally:
                         held[0] -= worst
+                    if plugin and cap is not None and res["cost"] > worst + 1e-12:  # its worst case was wrong
+                        over.append((res["cost"], worst))
+                        stop[0] += 1
                 tokens = res["tokens"]
                 write(db, "insert or replace into answers (key, model, answer, input_tokens) values (?, ?, ?, ?)",
                       [[it["key"], res["model"], json.dumps(res["answers"][it["rid"]]), tokens / len(g)] for it in g])
@@ -1083,9 +1113,16 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             results = await asyncio.gather(*[one(g) for g in group], return_exceptions=True)
             dt = time.perf_counter() - t0
             retried = {k: v - r0.get(k, 0) for k, v in RETRIES.items() if v - r0.get(k, 0)}
-            print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {CONCURRENCY})"
+            print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {n})"
                   + (f"; retried {retried}" if retried else ""), file=sys.stderr)
         failed = [r for r in results if isinstance(r, BaseException)]
+        broke = next((r for r in failed if isinstance(r, engines.ContractError)), None)
+        if broke:  # a plugin's bug: retrying won't fix it
+            raise SystemExit(f"{spec.get('judgment', '')}: {broke} ({stats['asked']} answers saved)")
+        if over and cap is not None:
+            raise SystemExit(f"{spec.get('judgment', '')}: engine {model.split(':', 1)[0]!r} charged ${over[0][0]:.6f} for "
+                             f"one request, above the ${over[0][1]:.6f} its worst_cost allows, so --max-cost can't "
+                             f"hold; stopped after ${stats['cost']:.4f} ({stats['asked']} answers saved)")
         if failed:
             raise RuntimeError(f"{len(failed)}/{len(group)} requests failed; {stats['asked']} answers saved, "
                                f"re-run to retry only the rest. First error: {failed[0]}") from failed[0]
@@ -1556,7 +1593,8 @@ def cmd_compile(project: dict, args) -> None:
             print(llm_prompt(row_items[0]["aq"], row_items[0]["state"])[0])
         else:
             payload = {"model": model, "state": row_items[0]["state"], "questions": {it["qid"]: it["aq"] for it in row_items}}
-            print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once)")
+            print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once"
+                  + (f"; engine {model.split(':', 1)[0]!r} is a plugin and asks in its own way)" if engines.get(model) else ")"))
             print(json.dumps(payload, indent=2, ensure_ascii=False))
     total, expected_total = 0.0, 0.0
     print()

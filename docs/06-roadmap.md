@@ -134,7 +134,7 @@ Pre-v1, in this order (each one PR):
 
 **Not needed.** [Snapshots](https://docs.getdbt.com/docs/build/snapshots.md): the store keeps every answer under its exact input and `_hunch_row_answers` keeps each row's history across runs. [Source freshness](https://docs.getdbt.com/docs/deploy/source-freshness.md): an orchestration question, and re-running unchanged rows is free. [Jinja](https://docs.getdbt.com/docs/build/jinja-macros.md): a second language, confusion over whether answers are keyed on raw or rendered text, rendering-order bugs; YAML anchors, Python-generated specs (`hunch.load([...])`) and recipes cover the needs (environment variables, if asked, as one small feature). The semantic layer's dimensions, time spines and BI connectors.
 
-**Plugin strategy.** No hunch plugin registry before v1. Each extension point reuses an interface someone else maintains: sources through dlt and `py()`, engines through Pydantic AI's `DecisionModel` (the `pydantic:` adapter above), traces through OpenTelemetry, stores as SQLite now and Postgres later.
+**Plugin strategy.** No hunch plugin *registry* before v1. Engines are the exception, decided 2026-09-26: a Python entry-point group, `hunch.engines`, so a package adds `model: <prefix>:…` without hunch shipping it (04 round 19); that is what makes hunch the neutral place to compare decision models on your data. Otherwise each extension point reuses an interface someone else maintains: sources through dlt and `py()`, engines through Pydantic AI's `DecisionModel` (the `pydantic:` adapter above), traces through OpenTelemetry, stores as SQLite now and Postgres later.
 
 ## Later, with a trigger: extraction as propose, then verify (discussed 2026-09-25)
 
