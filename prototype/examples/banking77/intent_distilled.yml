@@ -2,7 +2,7 @@
 # sure of. hunch test intent_distilled.yml --source banking77_holdout.csv --max-cost 0 (free: the rest is cached)
 judgment: intent_distilled
 reviews: intent.reviews.csv     # the same answer key and reviews as intent.yml
-model: distilled:distilled/intent@fdd83792   # hunch distill intent.yml --source banking77_unlabeled.csv
+model: distilled:distilled/intent@55a07d9f   # hunch distill intent.yml --source banking77_unlabeled.csv
 source: banking77_sample.csv
 key: id
 state: [text]

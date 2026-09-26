@@ -17,13 +17,13 @@ hunch distill intent.yml --source banking77_unlabeled.csv
 ```
 
 ```text
-intent: distilled to distilled/intent@fdd83792
+intent: distilled to distilled/intent@55a07d9f
   intent: 3000 answers, 77 classes; rarest: 'contactless_not_working' (7)  ← few examples: measure what it misses (hunch test --model) before trusting it
-measure it (free, local): hunch test intent.yml --model distilled:distilled/intent@fdd83792
-use it: model: distilled:distilled/intent@fdd83792, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
+measure it (free, local): hunch test intent.yml --model distilled:distilled/intent@55a07d9f
+use it: model: distilled:distilled/intent@55a07d9f, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
 ```
 
-Each row's state goes through a small frozen encoder (MiniLM, on your CPU), and each question gets one linear layer, trained on your gold where a row has it and on the engine's answer everywhere else. One more number, a temperature, is fitted on answers each part of the data got from a model that never saw it, so the student's confidence means what it says: of the answers it gives at 0.9, about nine in ten are right. The rarest answer is reported because a student learns little from a handful of examples. The folder, 194 KB here, is the model; commit it with the spec.
+Each row's state goes through a small frozen encoder (MiniLM, on your CPU), and each question gets one linear layer, trained on your gold where a row has it and on the engine's answer everywhere else. One more number, a temperature, is fitted on answers each part of the data got from a model that never saw it, so the student's confidence means what it says: of the answers it gives at 0.9, about nine in ten are right. If those answers are almost never wrong, there is nothing to fit it on, and the confidence is left as it is. The rarest answer is reported because a student learns little from a handful of examples. The folder, 194 KB here, is the model; commit it with the spec.
 
 It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastembed and its runtime (onnxruntime, tokenizers and about 20 other packages). The encoder downloads once, about 90 MB, to `~/.cache/hunch/encoders` (or `FASTEMBED_CACHE_PATH`).
 
@@ -32,7 +32,7 @@ It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastemb
 A distilled model is an engine, `distilled:<folder>`, so every command measures it. On the 385 held-out messages, which it never saw:
 
 ```bash
-hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@fdd83792 --max-cost 0
+hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@55a07d9f --max-cost 0
 ```
 
 ```text
@@ -42,7 +42,7 @@ intent (choice, 385 rows)
        dial   automated   wrong among automated
        0.70       86.8%                    3.9%
        0.80       81.0%                    1.6%
-       0.90       73.0%                    1.1%  ← act
+       0.90       73.2%                    1.1%  ← act
        0.95       66.2%                    0.8%
 ```
 
@@ -53,7 +53,7 @@ On its own it is right 91.2% of the time, where Jev is right 97.9%. It knows whi
 `intent_distilled.yml` is `intent.yml` with the student in front and Jev behind it:
 
 ```yaml intent_distilled.yml
-model: distilled:distilled/intent@fdd83792
+model: distilled:distilled/intent@55a07d9f
 questions:
   intent:
     # type, instructions, criteria as in intent.yml
@@ -71,10 +71,10 @@ intent (choice, 385 rows)
   PASS calibration error 0.032 (raw source gold: 0.054) (max 0.05)
   PASS accuracy among auto-acted 99.1% on 88% of rows at act=0.9 (min 97%)
   PASS order stability: 0/300 answers flip (0.0%, 0 within noise band), mean |Δp| of original answer 0.000 (max flip rate 5%)
-  escalated to jev-1.13.0: 104/385 rows use its answer, 56 of them confident enough to act; right on 98/104 with gold
+  escalated to jev-1.13.0: 103/385 rows use its answer, 55 of them confident enough to act; right on 97/103 with gold
 ```
 
-Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. Nearly three messages in four (281 of 385) were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
+Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. Nearly three messages in four (282 of 385) were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
 
 The share that stays local grows with the answers you keep. Students trained on more of Jev's answers, measured on the same holdout with a script that calls hunch's own training, kept more:
 

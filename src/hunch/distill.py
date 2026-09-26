@@ -19,6 +19,7 @@ from pathlib import Path
 
 ENCODERS = {"minilm": "sentence-transformers/all-MiniLM-L6-v2"}
 MIN_ROWS = 20  # per question: fewer and there is nothing to learn from
+MIN_MISSES = 10  # held-out mistakes needed before the student's confidence is rescaled (see temperature)
 RARE = 30  # fewer examples of an answer than this and the student rarely learns to give it
 _encoders: dict = {}
 _models: dict = {}
@@ -84,8 +85,11 @@ def probs(W, b, X):
 def temperature(X, y, k: int, folds) -> float:
     """One number that makes the student's confidence an honest probability (temperature scaling): fit on
     predictions for rows each fold's model never saw, so it measures the student on new rows, not on what it
-    memorised. On BANKING77 the plain student was underconfident (calibration error 0.118 on the holdout); T=0.55
-    brought it to 0.048, with the same answers."""
+    memorised. On BANKING77 the plain student was underconfident (calibration error 0.118 on the holdout's raw
+    gold); T=0.55 brought it to 0.049 (0.033 on reviewed gold), with the same answers.
+    Held-out predictions that are almost never wrong can't say how sure to be: the fit would push T toward 0
+    and make the student certain of anything, off-topic text included. So below MIN_MISSES held-out mistakes it
+    stays 1, and T is kept within [0.25, 4]."""
     import numpy as np
     Z = np.zeros((len(y), k), np.float32)
     for f in set(folds.tolist()):
@@ -94,12 +98,14 @@ def temperature(X, y, k: int, folds) -> float:
             return 1.0
         W, b = fit(X[tr], y[tr], k)
         Z[~tr] = X[~tr] @ W + b
+    if int((Z.argmax(1) != y).sum()) < MIN_MISSES:
+        return 1.0
 
     def nll(t):
         L = Z / t
         L = L - L.max(1, keepdims=True)
         return -(L[np.arange(len(y)), y] - np.log(np.exp(L).sum(1))).mean()
-    grid = np.exp(np.linspace(np.log(0.05), np.log(20), 300))
+    grid = np.exp(np.linspace(np.log(0.25), np.log(4), 200))
     return round(float(grid[np.argmin([nll(t) for t in grid])]), 4)
 
 
