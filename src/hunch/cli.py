@@ -1,5 +1,5 @@
-"""The `hunch` command: `init` (install a recipe) and `skill` here, `ask` in hunch.ask, `hook` in hunch.hook, the rest
-in hunch.core."""
+"""The `hunch` command: `init` (install a recipe) and `skill` here, `ask` in hunch.ask, `hook` in hunch.hook,
+`plugins` and `install` in hunch.plugins, the rest in hunch.core."""
 import shutil
 import sys
 from pathlib import Path
@@ -52,6 +52,9 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "ask":
         from hunch.ask import main as ask_main
         return ask_main(sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] in ("plugins", "install"):
+        from hunch.plugins import main as plugins_main
+        return plugins_main(sys.argv[1:])
     if len(sys.argv) > 1 and sys.argv[1] == "hook":
         from hunch.hook import main as hook_main
         return hook_main(sys.argv[2:])
