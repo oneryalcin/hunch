@@ -23,6 +23,7 @@ hunch init [--list] RECIPE [DIR]
 | `suggest` | Asks an LLM to rewrite one question and keeps a rewrite only if it wins | Yes (writer and new answers) |
 | `init` | Copies a starter recipe into a folder | No |
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
+| `hook` | Guards a coding agent's shell commands: `install` wires it in, `run` is what the agent calls | Yes, per command |
 | `docs` | Writes a page people can read and search: each judgment's status, numbers and lineage | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
@@ -45,6 +46,18 @@ hunch skill ~/       # for every project on this machine
 ```
 
 Writes the hunch skill to `.claude/skills/hunch/SKILL.md` (Claude Code) and `.agents/skills/hunch/SKILL.md` (Codex; Cursor reads both). It tells the agent how to run the loop (`lint`, `compile`, `run` with a cost cap, `test`, `diff`) and what not to do: spend without `--max-cost`, write `*.reviews.csv`, or edit `.hunch/`. Each file prints `installed`, `updated` or `up to date`; an existing copy is replaced, so re-run after upgrading hunch and commit the result.
+
+### `hunch hook`
+
+```bash
+hunch hook install                   # Claude Code and Codex, in this folder
+hunch hook install --agent claude    # one agent: claude, codex or both
+hunch hook run hunch/command_guard.yml   # what the agent calls, with the event on stdin (--deny for Codex)
+```
+
+`install` copies the command guard (spec, 38 labelled commands, NOTICE) into `hunch/`, keeping files already there, adds `.hunch/` to `.gitignore`, and adds a `PreToolUse` hook with matcher `Bash` and a 30-second timeout to `.claude/settings.json` and `.codex/hooks.json`, keeping the rest of each file. It writes nothing if a settings file can't be read. The hook command finds the spec through `$CLAUDE_PROJECT_DIR` (Claude Code) or the git root (Codex), and ends in `|| echo` a warning, so a missing or older hunch lets commands through instead of blocking them.
+
+`run` reads the agent's event, judges the command with `request` (the last message the person typed, from a Claude Code transcript; empty otherwise), `cwd`, `description` and `command`, and logs the row, redacted by the spec's rules, for `--traffic`. When any answer is `yes` or routes to `review`, it replies `ask`, or `deny` with `--deny` (Codex, which cannot ask yet), with the reasons; otherwise it prints nothing. It never replies `allow`. On any error it prints a `systemMessage` warning and lets the command through. `HUNCH_MAX_COST` defaults to 0.01 per command. See [Guard your coding agent](/guides/guard-your-agent).
 
 ### `hunch docs`
 

@@ -17,4 +17,4 @@ hunch test .        # accuracy against gold_destroys, the act dial, the examples
 hunch review .      # rows where the model and the answer key disagree, plus spot checks
 ```
 
-Replace `commands.csv` with your own rows and the questions with your own; the docs' quickstart walks through it.
+Replace `commands.csv` with your own rows and the questions with your own; the docs' quickstart walks through it. To run the guard in front of Claude Code or Codex, `hunch hook install` in your project.

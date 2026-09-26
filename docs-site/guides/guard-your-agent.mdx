@@ -1,0 +1,59 @@
+---
+title: "Guard your coding agent"
+description: "Before Claude Code or Codex runs a shell command, ask whether a person should look first, and keep every decision so you can measure the guard on your own work."
+---
+
+A coding agent runs dozens of shell commands a session. You approve some, allow others by rule, and trust the rest. The one that matters is the `rm -rf` or `git push --force` you didn't expect. Permission rules match command names; they can't read what a command will do.
+
+The command guard reads it. Before each shell command, it asks three questions: would it destroy something that is hard to undo, would it change anything outside the project, would it send anything out. If any answer is yes, or an answer falls below its confidence bar (`act`, set on `destroys` as shipped), a person decides. It is the [quickstart](/quickstart)'s spec, measured on [1,315 real commands](/cookbooks/command-guard).
+
+## Install it
+
+In your project, with hunch installed (`uv tool install hunch-ai`) and `TYPESAFE_API_KEY` set:
+
+```bash
+hunch hook install
+```
+
+```text
+hunch/  the guard's questions and 38 labelled commands: edit them, commit them
+.claude/settings.json  runs the guard before every shell command
+.codex/hooks.json  runs the guard before every shell command
+.gitignore  .hunch/ (the store keeps the commands it judged: redacted, but yours)
+```
+
+It copies the guard into `hunch/` and adds one `PreToolUse` hook for shell commands to each agent's project settings, keeping everything already there and files you already have. Running it again changes nothing. If a settings file can't be read, nothing is changed and it prints the hook to add by hand. `--agent claude` or `--agent codex` installs for one agent only. Codex runs a new hook only after you trust it under `/hooks`.
+
+## What it does to a command
+
+The agent runs `hunch hook run hunch/command_guard.yml` before each shell command. The guard judges the command with the folder it runs in, the agent's description of it and, in Claude Code, the request the developer last typed, read from the session (Codex's session files aren't read yet, so there the request is empty):
+
+| The guard's answers | Claude Code | Codex |
+| --- | --- | --- |
+| Every question says no, confidently | Nothing: your own permission rules decide | Nothing: your own approval policy decides |
+| Any question says yes, or an answer is below its `act` bar | Asks you, with the reason | Refuses the command, with the reason, so the agent asks you |
+| hunch is missing or older than 0.3 | The command goes ahead, with a warning | The command goes ahead, with a warning |
+| The guard can't run (no key, cost cap, network) | The command goes ahead, with a warning | The command goes ahead, with a warning |
+
+When the agent asks to wipe a project after you change your mind about a framework, Claude Code shows:
+
+```text
+hunch command guard: destroys (p=0.94)
+```
+
+The guard never approves a command, so it can't loosen your permissions, only add a question. Codex can't ask before a command runs yet, so there the guard refuses it and tells the agent to get your confirmation. A command it has seen before takes about 0.1 seconds to judge, a new one about 0.4 seconds, at about $0.00003. Each command is capped at $0.01 unless `HUNCH_MAX_COST` says otherwise.
+
+## Measure it on your own work
+
+Every judged command is kept, with its request, in the store's traffic log, after the spec's `redact` rules have replaced secrets, email addresses and home folders (`[SECRET]`, `[EMAIL]`, `~`). The store is `.hunch/store.sqlite` at the project root, and `install` keeps it out of git. That turns the guard's miss rate on your commands into something you can measure:
+
+```bash
+hunch review hunch/command_guard.yml --traffic    # judge a few real commands yourself
+hunch test hunch/command_guard.yml --traffic      # how often the guard is right on them
+```
+
+Until you have reviewed some, `hunch test hunch/` measures it on the 38 labelled commands it came with.
+
+## Make it yours
+
+`hunch/command_guard.yml` is an ordinary spec. Change what counts as destructive in the criteria, raise `act` to be asked more often, add a question such as "does it touch production?", or pin commands that must always stop under `examples`. Before you commit a change, `hunch diff hunch/command_guard.yml --against git:HEAD --traffic` shows which of your real commands it would treat differently. [Change a spec safely](/guides/change-a-spec) walks through reading the result.

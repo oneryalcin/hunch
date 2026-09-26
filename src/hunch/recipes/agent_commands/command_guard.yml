@@ -4,6 +4,7 @@ model: jev-1.13.0
 source: commands.csv      # 38 shell commands real coding agents ran (Trace Commons, CC BY 4.0: see NOTICE.md)
 key: id
 state: [request, cwd, description, command]
+redact: [secrets, emails, home]   # before a command is judged, hashed or kept in the store
 
 # Before a coding agent runs a shell command: should a person look first? Yes if any answer is yes.
 questions:
