@@ -1,19 +1,39 @@
 ---
 title: "Introduction"
-description: "Software now asks models small questions all day and acts on the answers. hunch tells you how often those answers are right."
+description: "hunch turns a question into a decision your software can act on, and tells you how often it's right."
 ---
 
-A coding agent is about to run `rm -rf build dist node_modules`. Should it just run, or should a person look first?
+Software now makes judgment calls it used to leave to people.
 
-An agent finishes a task and says *"Fixed it."* Did it?
+A coding agent is about to run `rm -rf build dist node_modules`. Should a person look first? An alert fires at 3 a.m. Is it worth waking someone? A contract arrives. Does it renew itself? A chatbot cites a policy page. Does the page say that? Fifty thousand support calls sit in the warehouse. Which ones mention a competitor?
 
-A chatbot answers a customer and cites a policy page. Does the page say that?
+Each of these is a question with a small set of answers, asked of many rows, with something acted on at the end. A model can answer all of them in milliseconds for a fraction of a cent. What it can't tell you is how often it is wrong, whether it is sure this time, or whether yesterday's edit to the question made things worse.
 
-An alert fires at 3 a.m. Is it worth waking someone?
+**hunch turns a question into a decision your software can act on, and tells you how often it's right.**
 
-Software asks models questions like these thousands of times a day, and acts on the answers without anyone reading them. Each answer is a hunch: fast, cheap and usually right. How often is *usually*? And did yesterday's edit to the question make it better or worse? Nothing in the running system can tell you.
+## Decision engineering
 
-hunch can. You write the question down once. hunch asks it of every row, keeps every answer, and measures how often the answers are right. It works the way dbt treats a SQL transformation: a file in git that is run, tested and reviewed like code.
+dbt turned SQL scattered across dashboards and scripts into a practice, analytics engineering: transformations written once, kept in git, run everywhere and tested on every change. hunch does the same for the judgment calls in your software. Call it decision engineering:
+
+- **Write the question once.** Its wording, its possible answers and what the model may see go in a YAML file in git. The same file answers a million rows in a batch, or one row inside your app as it happens, from the same cache.
+- **Act only when it's sure.** Every answer comes with a probability, and the spec sets the bar for acting on it. Below the bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong, so you choose it with numbers.
+- **Change it without breaking it.** Before an edit ships, `hunch diff` shows every answer it would flip, and the tests in CI fail when a decision gets worse. An app that relies on an answer's name is protected from a rename.
+- **Make it better from use.** `hunch review` shows you the few rows where a verdict teaches the most. Your verdicts become the answer key the next test measures against.
+
+## Where decisions live
+
+The same shape, a question, a typed answer, a bar for acting and a person for the rest, turns up across a whole company:
+
+| Where | Decisions like |
+| --- | --- |
+| Coding and AI agents | Is this command safe to run? Did the agent really fix it? Should it stop or go on? |
+| Data pipelines | Turn text into columns you can query: which calls mention churn, which reviews are about quality, which contracts auto-renew |
+| Product | Does this post break the rules? Is this user eligible? Which requests are urgent? |
+| Operations and security | Is this alert worth paging for? Is this email phishing? Should this access request be approved? |
+| Risk and compliance | Is this expense within policy? Does this document meet the requirement? Is this claim covered? |
+| AI output checks | Is the answer supported by its source? Does it leak personal data? Did it follow the instructions? |
+
+Anywhere a model's answer decides what happens next, hunch is how you ship that decision and keep it honest.
 
 ## What it has found so far
 
@@ -42,7 +62,7 @@ Each of these is a real dataset worked through in a cookbook, with the spec and 
           └──────────── diff: which answers would this edit flip? ◄───┘
 ```
 
-**The question is a file.** The wording, the possible answers, and what the model gets to see go in a YAML spec, kept in git next to your code. Here is part of the command guard. It reads a coding agent's sessions and asks about each shell command before it runs:
+Here is part of the command guard. It reads a coding agent's sessions and asks about each shell command before it runs:
 
 ```yaml command_guard.yml
 judgment: command_guard
@@ -56,6 +76,7 @@ questions:
   destroys:
     type: noul
     instructions: Would running `command` delete, overwrite or reset something in a way that is hard to undo?
+    act: 0.90
   sends_out:
     type: noul
     instructions: Would running `command` send code, files or data from this machine to another one?
@@ -66,20 +87,12 @@ examples:
     expect: {destroys: "yes"}
 ```
 
-**Every answer is kept.** `hunch run` stores each answer under its exact input. Ask again and it comes from the store, free. Edit one question and only that question is asked again.
-
-**Accuracy comes with an honest range.** `hunch review` shows you the rows worth reading, such as disagreements with your labels plus a random few. Your verdicts become the answer key. `hunch test` then reports how often the model is right as a range, because 24 reviewed rows tell you less than 240. The examples must pass on every test, whatever else changes.
-
-**Changes are checked before they ship.** `hunch diff` runs the old and the new wording on the same rows and lists every answer that flips, and whether each flip fixed or broke a known answer.
-
-## Where the answers go
-
-Inside your app, the same spec answers one row at a time with [`hunch.judge()`](/guides/use-in-your-app), sharing the same store. A [Pydantic AI agent](/guides/use-in-your-app#from-a-pydantic-ai-agent) on a decision model can be tested exactly as it runs. And [`hunch docs`](/guides/share) turns a project into one page for whoever signs off on the policy: what each judgment decides, how well it is measured, and what depends on it.
+`hunch run` asks every row and stores each answer under its exact input, so asking again is free and editing one question re-asks only that one. Inside your app, [`hunch.judge()`](/guides/use-in-your-app) answers one row at a time from the same spec and store. A [Pydantic AI agent](/guides/use-in-your-app#from-a-pydantic-ai-agent) on a decision model can be tested exactly as it runs. And [`hunch docs`](/guides/share) turns a project into one page for whoever signs off on the policy.
 
 <Card title="Quickstart" icon="play" href="/quickstart">
-  Write, run, review and test a spec in about five minutes.
+  Build the command guard, measure it, change it and review it, in about five minutes.
 </Card>
 
 <Note>
-hunch is v0.2. It has been run on the real data above, but no one outside the project has used it yet. The [cookbooks](/cookbooks) say what was measured and what did not work.
+hunch is v0.2. It has been run on the real data above, but no one outside the project has used it yet. The examples in the table are where the same shape applies; the [cookbooks](/cookbooks) are where it has been measured, and more are coming.
 </Note>

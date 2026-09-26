@@ -33,6 +33,8 @@ Everything below gets prioritized against that workload.
 
 **Decided 2026-09-24: the AI engineer comes first** (evals over agent and LLM traces), then analytics engineers, then ops. Why: the SWE-agent result (39% of claimed fixes fail; confident "no" is 51/53 right) is the strongest evidence so far, and that audience feels the pain now. Still open: the named real workload and a reviewer.
 
+**Decided 2026-09-26: the category is decision engineering, and the market is every team shipping AI features.** hunch is not an eval tool; it is the default way to put decision models (Jev first) into software, the way dbt is for SQL. Core value, one sentence: *hunch turns a question into a decision your software can act on, and tells you how often it's right* (write once, act only when sure, change without breaking, improve from review). Breadth is shown from day one (agents, data pipelines, product, ops and security, risk and compliance, AI output checks), with worked examples following. The AI engineer stays the first user, and the wedge is the agent command guard: installable in one command, with a measured miss rate. Order: positioning in the docs → `hunch hook install` for the guard → judged columns written to DuckDB/Postgres/warehouses → batteries across the other columns (grounded, alert triage, a clause check, text-to-columns) → engine, source and sink plugins through Python entry points.
+
 Consequences for the phases below: trace ingestion (OpenTelemetry GenAI conventions) moves up from Phase 5 into Phase 3 as a batch source; asymmetric yes/no thresholds (Phase 1) and conditional nodes (Phase 2) matter most, because agent evals are mostly yes/no checks chained on earlier answers.
 
 ## Phase 1: trust the numbers: DONE 2026-09-24 ($0 new API spend)

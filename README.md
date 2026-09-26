@@ -1,14 +1,18 @@
 # hunch
 
-Your code asks a model small questions all day. Is this shell command safe to run? Did the agent's fix work? Does the cited page say that? hunch writes each question down as a spec, a short YAML file in git, and tells you how often the answers are right.
+**hunch turns a question into a decision your software can act on, and tells you how often it's right.**
 
-- `hunch run` asks the question of every row and stores each answer under its exact input, so a re-run costs nothing.
-- `hunch test` measures accuracy against gold, an answer key or your own reviews, as a range, not a single number.
-- `hunch diff` shows which rows a change to the question would flip, before you ship it.
-- `hunch review` shows you the rows worth reading, and your verdicts become gold.
-- `hunch docs` writes a page anyone can read and search: what each judgment decides, how well it was measured, and what depends on it.
+Software now makes judgment calls it used to leave to people. Is this command safe to run? Is this alert worth waking someone? Does this contract renew itself? Is the chatbot's answer supported by its source? Which of 50,000 calls mention a competitor? A model answers each in milliseconds for a fraction of a cent. It can't tell you how often it is wrong, or whether yesterday's edit to the question made things worse.
 
-If you know dbt, the idea will feel familiar: dbt did this for SQL; hunch does it for model judgments.
+dbt made SQL a practice, analytics engineering. hunch does the same for these decisions: **decision engineering**.
+
+- **Write the question once**, as a short YAML spec in git. The same spec answers a million rows in a batch (`hunch run`) or one row inside your app (`hunch.judge()`), from one cache.
+- **Act only when it's sure.** Every answer carries a probability; below the spec's bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong.
+- **Change it without breaking it.** `hunch diff` shows every answer an edit would flip before it ships; tests fail CI when a decision gets worse.
+- **Make it better from use.** `hunch review` shows the rows where your verdict teaches the most, and your verdicts become the answer key.
+- **Share it.** `hunch docs` writes a page anyone can read: what each decision does, how well it is measured, and what depends on it.
+
+Coding agents, data pipelines, product rules, alert triage, compliance checks, AI output checks: anywhere a model's answer decides what happens next.
 
 ## Install
 
