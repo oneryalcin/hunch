@@ -181,6 +181,24 @@ hunch.to_model(cls, answers: dict[str, dict])
 
 Builds an instance of `cls` from answers shaped `{question: {"label": ...}}`, converting each label to the type the field declares: `bool`, the `Literal` or `Enum` value, a list for `list[...]`, the `IntEnum` level, `None` for "none of these".
 
+## SQL
+
+Needs the `sql` extra: `uv add "hunch-ai[sql]"`. The [guide](/guides/sql) walks through it.
+
+### `hunch.sql.register`
+
+```python
+hunch.sql.register(con, path, *, name=None, max_cost=None) -> str
+```
+
+Adds the spec or project folder at `path` to the DuckDB connection `con` as a function, and returns its name: the judgment's, or the folder's for a project, unless `name` is given. The function takes the columns the specs read (every judgment's `state`, then the columns its `where` reads, less the answers upstream judgments add), as `VARCHAR`, in order; `hunch.sql.columns(hunch.load(path))` lists them. It returns a struct of questions, each `{label, p, route}`, or for a project a struct of judgments, NULL where a row never reached one.
+
+`max_cost` is the most the function may be charged in total on this connection, across every judgment and escalation, in USD; default `HUNCH_MAX_COST`, else no cap. A `hunch.sql.Budget(usd)` passed to several `register` calls is one budget they share. At the cap, the query fails (DuckDB raises `InvalidInputException` with hunch's message) and the answers already asked are saved.
+
+### dbt
+
+`hunch.dbt` is a [dbt-duckdb](https://github.com/duckdb/dbt-duckdb) plugin: `module: hunch.dbt` with `config: {specs: [...], max_cost: USD}` registers each spec on every connection dbt opens, all drawing from one budget.
+
 ## Also exported
 
 | Name | Signature | Use |

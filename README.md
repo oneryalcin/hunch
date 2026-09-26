@@ -6,7 +6,7 @@ Software now makes judgment calls it used to leave to people. Is this command sa
 
 dbt made SQL a practice, analytics engineering. hunch does the same for these decisions: **decision engineering**.
 
-- **Write the question once**, as a short YAML spec in git. The same spec answers a million rows in a batch (`hunch run`) or one row inside your app (`hunch.judge()`), from one cache.
+- **Write the question once**, as a short YAML spec in git. The same spec answers a million rows in a batch (`hunch run`), a column in SQL or a dbt model (`hunch.sql`), or one row inside your app (`hunch.judge()`), from one cache.
 - **Act only when it's sure.** Every answer carries a probability; below the spec's bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong.
 - **Change it without breaking it.** `hunch diff` shows every answer an edit would flip before it ships; tests fail CI when a decision gets worse.
 - **Make it better from use.** `hunch review` shows the rows where your verdict teaches the most, and your verdicts become the answer key.
