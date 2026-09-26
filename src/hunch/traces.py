@@ -12,7 +12,7 @@ Every format is read into one event stream per session, then viewed as rows:
               (Claude Code only). `request` is the last message the person typed before the command, including
               across a context compaction or a background notification, which the reader does not count as requests.
 
-Formats (detected from the file): Claude Code session .jsonl, Cursor agent .jsonl, OpenCode session .json,
+Formats (detected from the file): Claude Code session .jsonl, Codex rollout .jsonl, Cursor agent .jsonl, OpenCode session .json,
 OpenTelemetry GenAI spans (`gen_ai.input.messages` / `gen_ai.output.messages`, one trace per line or a
 list of spans; Langfuse and other OTel-based tools export this).
 
@@ -84,6 +84,36 @@ def claude_code(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
                        "calls": [{"name": b["name"], "input": b.get("input") or {}, "cwd": r.get("cwd", ""),
                                   **results.get(b.get("id"), {"rejected": "", "failed": ""})} for b in uses]})
     return [(path.stem, ev)]
+
+
+def codex(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Codex rollout (`~/.codex/sessions/**/rollout-*.jsonl`): one `{"type", "payload"}` record per line. What the
+    person typed is an `event_msg` `user_message`; sessions without those carry it only as a `response_item`
+    message with role `user`, next to the context Codex injects (`<environment_context>`, AGENTS.md), which
+    `human()` and the AGENTS.md prefix drop. The agent's text is `agent_message` (else its `response_item`
+    messages); its tools are the `response_item` calls. Shapes from Codex's own test fixtures (openai/codex,
+    codex-rs/thread-store/src/local/test_support.rs)."""
+    kinds = {(r.get("type"), (r.get("payload") or {}).get("type")) for r in lines}
+    typed, said = ("event_msg", "user_message") in kinds, ("event_msg", "agent_message") in kinds
+    ev, session = [], path.stem
+    for r in lines:
+        p, t, at = r.get("payload") or {}, r.get("type"), r.get("timestamp", "")
+        kind, role = p.get("type"), p.get("role")
+        if t == "session_meta":
+            session = p.get("id") or session
+        elif t == "event_msg" and kind == "user_message" or t == "response_item" and kind == "message" and role == "user" and not typed:
+            text = p.get("message") if t == "event_msg" else "\n".join(
+                c.get("text", "") for c in p.get("content") or [] if isinstance(c, dict) and c.get("type") == "input_text")
+            h = human(text or "")
+            if h and not h.startswith("# AGENTS.md"):
+                ev.append({"role": "human", "text": h, "tools": [], "at": at})
+        elif t == "event_msg" and kind == "agent_message" or t == "response_item" and kind == "message" and role == "assistant" and not said:
+            text = p.get("message") if t == "event_msg" else "\n".join(
+                c.get("text", "") for c in p.get("content") or [] if isinstance(c, dict) and c.get("type") == "output_text")
+            ev.append({"role": "agent", "text": (text or "").strip(), "tools": [], "at": at})
+        elif t == "response_item" and kind in ("function_call", "local_shell_call", "custom_tool_call"):
+            ev.append({"role": "agent", "text": "", "tools": [p.get("name") or "shell"], "at": at})
+    return [(session, ev)]
 
 
 def cursor(path: Path, lines: list[dict]) -> list[tuple[str, list[dict]]]:
@@ -164,6 +194,8 @@ def read(path: str | Path) -> list[tuple[str, list[dict]]]:
         for s in lines:
             traces.setdefault(s.get("trace_id") or s.get("traceId") or "", []).append(s)
         return otel(path, [{"trace_id": tid, "spans": spans} for tid, spans in traces.items()])
+    if "payload" in first and "type" in first:
+        return codex(path, lines)
     if "sessionId" in first or any("sessionId" in r for r in lines[:20]):
         return claude_code(path, lines)
     if "role" in first or any("role" in r for r in lines[:20]):

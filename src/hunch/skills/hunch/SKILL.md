@@ -11,10 +11,10 @@ Docs index: https://fuguai.mintlify.site/llms.txt. Add `.md` to any page URL for
 
 ## Rules
 
-1. **Never spend without a cap.** Every command except `lint`, `compile`, `init` and `skill` can ask the engine for missing answers, including `review --list`. Give each one `--max-cost USD`. Start with `--max-cost 0`: it answers from the cache and stops before asking if anything is missing. Raise it only to what `compile` estimated, and only after the user agrees to that amount; "run it" said before they knew the cost is not agreement. Also `export HUNCH_MAX_COST=0` at the start of a session: a command you forget to cap then stops instead of spending, and `--max-cost` still overrides it.
+1. **Never spend without a cap.** Every command except `lint`, `compile`, `init`, `skill`, `docs` and `distill` can ask the engine for missing answers, including `review --list`. Give each one `--max-cost USD`. Start with `--max-cost 0`: it answers from the cache and stops before asking if anything is missing. Raise it only to what `compile` estimated, and only after the user agrees to that amount; "run it" said before they knew the cost is not agreement. Also `export HUNCH_MAX_COST=0` at the start of a session: a command you forget to cap then stops instead of spending, and `--max-cost` still overrides it.
 2. **Never write verdicts.** `*.reviews.csv` is gold, a person's judgment. Do not create or edit it, and do not answer `hunch review` prompts. Show the queue with `hunch review PATH --list --max-cost 0` and let the person review. The one exception: the user explicitly asks you to review. Then say first that your verdicts are not human gold, and record them only under a name that says so (`--reviewer ai-agent`), never theirs.
 3. **Do not touch `.hunch/`.** `.hunch/store.sqlite` is a cache that hunch rebuilds; `.hunch/target/` holds results. Read them; never edit them.
-4. **Measure before and after a change.** Commit the spec before editing it, so `diff --against git:HEAD` has the old version (without git, copy the spec first and pass the copy: `--against old/ticket_triage.yml`). Run `test` before, `diff` after, and report the rows it flips, not only the new accuracy. A new or reworded question has no cached answers, so its `diff` costs what `compile` shows.
+4. **Measure before and after a change.** Commit the spec before editing it, so `diff --against git:HEAD` has the old version (without git, copy the spec first and pass the copy: `--against old/command_guard.yml`). Run `test` before, `diff` after, and report the rows it flips, not only the new accuracy. A new or reworded question has no cached answers, so its `diff` costs what `compile` shows.
 5. **Commit** the specs and `*.reviews.csv`, never `.hunch/`.
 
 ## The loop
@@ -34,6 +34,8 @@ hunch diff PATH --against git:HEAD --max-cost 0.01
 After `test`, read `.hunch/target/<tested path>.json` rather than parsing the terminal: per question the accuracy estimate and its interval, each check with pass or fail, metrics, examples, cost and git sha. Exit codes: 0 done (for `test`, every check passed); 1 a `FAIL`, or stopped with a message such as the cost cap (read the last line to tell which); 2 lint error or bad arguments.
 
 `hunch docs PATH` writes a page people can read and search (each judgment's status, numbers and lineage) to `.hunch/target/`; it asks nothing. Name what uses a judgment under `exposures:` so `diff` can say what a change affects; when app code branches on particular answers, write `uses: {department: [billing]}` so renaming one fails lint. If lint says an exposure relies on an answer that is gone, the app needs changing first: tell the user, don't just edit `uses`.
+
+To start from a question instead of YAML: `hunch ask "Would this command destroy data?" rows.csv --max-cost 0.01` (`--options a,b,c` for one of several answers, `--columns` for what the model sees). It writes `<name>.yml` and `<name>.answers.csv` and prints the rows it was least sure of; from there the spec goes through the loop above like any other.
 
 To start from a working example: `hunch init --list`, then `hunch init agent-commands DIR` (DIR must not exist yet). `hunch hook install` is the user's call, not yours: it changes how their agent runs commands. Suggest it; don't run it unasked.
 
@@ -58,9 +60,15 @@ A judgment can read another's answers with `source: ref(other)`, and `where:` li
 
 ```python
 import hunch
-answers = hunch.judge("specs/triage.yml", subject=..., body=...)   # ajudge inside an event loop
-if answers["department"]["route"] == "act":
-    ...
+answers = hunch.judge("hunch/command_guard.yml", request=..., cwd=..., description=..., command=...)  # ajudge in an event loop
+if answers["destroys"]["label"] == "yes" or answers["destroys"]["route"] == "review":
+    ...  # hold the command for a person
 ```
 
-The same store serves batch runs and the app, so a row seen in either costs nothing the second time. `HUNCH_MAX_COST` caps spend in a service.
+The same store serves batch runs, SQL and the app, so a row seen in any of them costs nothing the second time. `HUNCH_MAX_COST` caps spend in a service.
+
+In SQL (the `sql` extra): `hunch.sql.register(con, "hunch/command_guard.yml", max_cost=0.05)` adds a DuckDB function named after the judgment; `command_guard(request, cwd, description, command).destroys.label` is its answer for a row. `max_cost` is a total for everything the function asks. Read CSVs with `all_varchar = true`. In dbt-duckdb, the plugin `module: hunch.dbt` with `config: {specs: [...], max_cost: USD}` does the same; materialize such models as tables. See `guides/sql.md`.
+
+## A local model
+
+`hunch distill PATH --source rows.csv` (the `distill` extra) trains a small local model per question on the answers already in the store; it asks nothing. Use it as `model: distilled:<folder>` with `escalate: {model: <the original engine>}` and `act` from the dial, so what it isn't sure of goes to the engine. Measure it first (`hunch test PATH --model distilled:<folder> --max-cost 0`), and don't use it for a rare answer that is costly to miss (it warns under 30 examples). See `guides/distill.md`.

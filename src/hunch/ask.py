@@ -36,13 +36,18 @@ def name_of(question: str) -> str:
 def build(question: str, source: Path, options: list[str], columns: list[str] | None, name: str) -> dict:
     """The spec for this question over this CSV: every column but the key and gold_* is the state, unless
     `columns` says which."""
-    with open(source, newline="") as f:
-        reader = csv.reader(f)
-        header = next(reader, [])
-        if not header:
-            sys.exit(f"{source}: no header row")
-        if next(reader, None) is None:
-            sys.exit(f"{source}: no rows under the header")
+    try:  # read it all once: a bad byte deep in the file should stop here, not halfway through a run
+        with open(source, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            header = next(reader, [])
+            rows = sum(1 for _ in reader)
+    except UnicodeDecodeError as e:
+        sys.exit(f"{source}: not UTF-8 ({e.reason} at byte {e.start}); convert it first, e.g. "
+                 f"iconv -f latin1 -t utf-8 {source} > {source.stem}.utf8.csv")
+    if not header:
+        sys.exit(f"{source}: no header row")
+    if not rows:
+        sys.exit(f"{source}: no rows under the header")
     key = "id" if "id" in header else header[0]
     missing = [c for c in columns or [] if c not in header]
     if missing:

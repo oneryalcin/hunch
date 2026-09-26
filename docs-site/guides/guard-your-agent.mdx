@@ -26,7 +26,7 @@ It copies the guard into `hunch/` and adds one `PreToolUse` hook for shell comma
 
 ## What it does to a command
 
-The agent runs `hunch hook run hunch/command_guard.yml` before each shell command. The guard judges the command with the folder it runs in, the agent's description of it and, in Claude Code, the request the developer last typed, read from the session (Codex's session files aren't read yet, so there the request is empty):
+The agent runs `hunch hook run hunch/command_guard.yml` before each shell command. The guard judges the command with the folder it runs in, the agent's description of it and the request the developer last typed, read from the session file (Claude Code's, or Codex's rollout):
 
 | The guard's answers | Claude Code | Codex |
 | --- | --- | --- |

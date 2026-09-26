@@ -16,7 +16,7 @@ source: traces(sessions/*/*.jsonl)    # a glob, relative to the spec; ~ works
 view: turns                           # or runs: one row per session
 ```
 
-Claude Code, Cursor, OpenCode and OpenTelemetry GenAI files are recognised by their contents. The `turns` view gives one row per message a person typed, with `request` (what they asked), `final_reply` (the agent's last message for that turn) and `next_message` (what they wrote next), plus counts of tool calls and edits. Text the harness injects, such as IDE context and system reminders, is removed. The full list of views and columns is in the [spec reference](/reference/spec#view).
+Claude Code, Codex, Cursor, OpenCode and OpenTelemetry GenAI files are recognised by their contents. The `turns` view gives one row per message a person typed, with `request` (what they asked), `final_reply` (the agent's last message for that turn) and `next_message` (what they wrote next), plus counts of tool calls and edits. Text the harness injects, such as IDE context and system reminders, is removed. The full list of views and columns is in the [spec reference](/reference/spec#view).
 
 Look at the rows before writing a spec:
 

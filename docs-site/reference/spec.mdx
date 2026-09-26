@@ -130,7 +130,7 @@ Where the rows come from. Relative paths resolve from the spec's folder.
 | Form | Rows |
 | --- | --- |
 | `commands.csv` | One row per CSV line; every value is text. |
-| `traces(<glob>)` | Agent sessions: Claude Code and Cursor `.jsonl`, OpenCode `.json`, OpenTelemetry GenAI spans. `~` and `**` work. See [`view`](#view). |
+| `traces(<glob>)` | Agent sessions: Claude Code, Codex (rollout) and Cursor `.jsonl`, OpenCode `.json`, OpenTelemetry GenAI spans. `~` and `**` work. See [`view`](#view). |
 | `py(<file.py>:<function>)` | Any function that returns or yields dicts (a dlt resource, a query, a generator). Non-text values become text: `None` → empty, dicts and lists → JSON. |
 | `ref(<judgment>)` | Another judgment's output rows: its input columns plus its [answer columns](#columns-a-judgment-adds). See [Projects](/reference/projects). |
 
