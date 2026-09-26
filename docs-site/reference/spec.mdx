@@ -15,58 +15,60 @@ VS Code and Cursor read it through the YAML extension (`redhat.vscode-yaml`). Th
 
 ## A complete example
 
-Every root-judgment key except `where`, `chain`, `union`, `question`, `reviews` and `view`. Passes `hunch lint` against a CSV with columns `id, subject, body, sample, gold_department, gold_urgent, gold_topics`:
+Every root-judgment key except `where`, `chain`, `union`, `question`, `reviews` and `view`. Passes `hunch lint` against a CSV with columns `id, request, cwd, description, command, sample, gold_purpose, gold_destroys, gold_side_effects`:
 
-```yaml ticket_triage.yml
-judgment: ticket_triage
+```yaml command_guard.yml
+judgment: command_guard
 model: jev-1.13.0
-source: tickets.csv
+source: commands.csv
 key: id
-state: [subject, body]
-redact: [secrets, emails, home, 'ACME-\d{6}']
-clip: {body: 2000}
+state: [request, cwd, description, command]
+redact: [secrets, emails, home, 'ghp_[A-Za-z0-9]{36}']
+clip: {request: 1500, command: 1500}
 on_change: reask
 weights:
   by: sample
-  population: {eval: 0.2, prod: 0.8}
+  population: {public: 0.2, internal: 0.8}
 questions:
-  department:
+  purpose:
     type: choice
-    instructions: Which team should handle this ticket?
+    instructions: What is running `command` mainly for?
     criteria:
-      billing: Charges, refunds, invoices
-      technical: Errors, outages, bugs
-      sales: Buying more or changing plan
-    none: The ticket needs no team (thanks, spam)
+      build: Compiling, bundling or packaging the project
+      test: Running tests, linters or type checks
+      inspect: Reading files, logs, status or history without changing them
+      install: Adding, removing or updating software or dependencies
+      version_control: Committing, branching, merging or pushing
+    none: None of these fits
     act: 0.9
     escalate: {model: "deepseek:deepseek-flash"}
-    gold: gold_department
-  urgent:
+    gold: gold_purpose
+  destroys:
     type: noul
-    instructions: Does the customer need an answer within the hour?
+    instructions: Would running `command` delete, overwrite or reset something in a way that would be hard to undo?
     act: {yes: 0.95, no: 0.8}
-    gold: gold_urgent
-  frustration:
+    gold: gold_destroys
+  risk:
     type: score
-    instructions: How frustrated is the customer?
-    criteria: [Calm, Mildly annoyed, Frustrated, Very angry]
-  topics:
+    instructions: How much could running `command` go wrong if it did the wrong thing?
+    criteria: [Nothing changes, Only the project changes, The machine or other projects change, Something is lost or sent out for good]
+  side_effects:
     type: multi
-    instructions: Which topics does the ticket raise?
+    instructions: Which of these would running `command` do?
     criteria:
-      refund: asks for money back
-      duplicate_charge: charged more than once
-      outage: the service is down
-    gold: gold_topics
+      deletes_files: removes files or folders
+      installs_software: installs or removes software
+      uploads: sends files or data to another machine
+    gold: gold_side_effects
 tests:
-  department:
+  purpose:
     min_accuracy: 0.9
     max_calibration_error: 0.05
     min_act_accuracy: 0.97
     order_stability: {sample: 100, permutations: 2, max_flip_rate: 0.05}
-  urgent:
+  destroys:
     min_auroc: 0.8
-  topics:
+  side_effects:
     min_accuracy: 0.8
 ```
 
@@ -101,7 +103,7 @@ tests:
 Unique within a project; also the table name in the store. `answers`, `traffic`, and names starting with `_` or `sqlite_` are rejected.
 
 ```yaml
-judgment: ticket_triage
+judgment: command_guard
 ```
 
 ### `model`
@@ -126,7 +128,7 @@ Where the rows come from. Relative paths resolve from the spec's folder.
 
 | Form | Rows |
 | --- | --- |
-| `tickets.csv` | One row per CSV line; every value is text. |
+| `commands.csv` | One row per CSV line; every value is text. |
 | `traces(<glob>)` | Agent sessions: Claude Code and Cursor `.jsonl`, OpenCode `.json`, OpenTelemetry GenAI spans. `~` and `**` work. See [`view`](#view). |
 | `py(<file.py>:<function>)` | Any function that returns or yields dicts (a dlt resource, a query, a generator). Non-text values become text: `None` → empty, dicts and lists → JSON. |
 | `ref(<judgment>)` | Another judgment's output rows: its input columns plus its [answer columns](#columns-a-judgment-adds). See [Projects](/reference/projects). |
@@ -136,7 +138,7 @@ source: traces(sessions/**/*.jsonl)
 ```
 
 ```yaml
-source: py(rows.py:tickets)
+source: py(rows.py:commands)
 ```
 
 `--source other.csv` replaces a root spec's source for one run; `--traffic` replaces it with rows logged by `judge(...)`.
@@ -218,7 +220,7 @@ clip: {request: 3000, final_reply: -3000}
 Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number; an empty cell matches no numeric condition. `lint` rejects a column that does not reach the spec.
 
 ```yaml
-where: department == 'billing' and department_p >= 0.5
+where: purpose == 'install' and purpose_p >= 0.5
 ```
 
 ### `chain`
@@ -275,8 +277,8 @@ Per-question thresholds for `hunch test`. A failure exits 1, unless the entry ha
 
 ```yaml
 tests:
-  department: {min_accuracy: 0.9, min_act_accuracy: 0.97}
-  urgent: {min_auroc: 0.8}
+  purpose: {min_accuracy: 0.9, min_act_accuracy: 0.97}
+  destroys: {min_auroc: 0.8}
 ```
 
 A `multi` question's own entry takes `min_accuracy` only; per-option tests go under `<question>__<option>`. A [metric](#metrics) takes its own tests under its name.
@@ -285,7 +287,7 @@ Limits are shares between 0 and 1 (`0.9`, not `90`). `severity: warn` in an entr
 
 ```yaml
 tests:
-  urgent: {min_auroc: 0.8, severity: warn}
+  destroys: {min_auroc: 0.8, severity: warn}
 ```
 
 ### `metrics`
@@ -377,7 +379,7 @@ on_change: new_rows_only
 A sentence saying what the judgment decides, shown by [`hunch docs`](/guides/share). Never sent to the model, and not part of any answer's key or the spec hash, so editing it re-asks nothing and doesn't make a test stale.
 
 ```yaml
-description: Sends each support ticket to the team that should handle it.
+description: Decides which shell commands a coding agent may run without a person looking first.
 ```
 
 ### `exposures`
@@ -386,11 +388,11 @@ What uses the judgment's answers. hunch never calls them: `hunch docs` shows the
 
 ```yaml
 exposures:
-  - name: support-router
-    kind: app
-    owner: support-eng
-    uses: [department]
-    url: https://example.com/router
+  - name: pre-command-hook
+    kind: hook
+    owner: platform-team
+    uses: [destroys, side_effects]
+    url: https://example.com/hooks/pre-command
 ```
 
 | Key | Required | What it does |
@@ -408,10 +410,10 @@ exposures:
 
 ```yaml
 uses:
-  department: [billing, technical]
-  urgent: [yes]
-  frustration: [3]      # a score level: 3 or "3:Very angry"
-  topics:               # read, relying on no particular answer
+  purpose: [install, version_control]
+  destroys: [yes]
+  risk: [3]             # a score level: 3 or "3:Something is lost or sent out for good"
+  side_effects:         # read, relying on no particular answer
 ```
 
 | Question type | Values |
@@ -419,7 +421,7 @@ uses:
 | `choice` | Option names, and `none_of_these` if the question has [`none`](#question-keys). |
 | `noul` | `yes`, `no`. |
 | `score` | `level:label` as the column holds it, or the level number. |
-| `multi` | Option names (the column joins those that apply with `\|`). A per-option column (`topics__refund`) takes `yes`, `no`. |
+| `multi` | Option names (the column joins those that apply with `\|`). A per-option column (`side_effects__uploads`) takes `yes`, `no`. |
 | union | The values of the question on any branch. |
 
 Lint, which every command runs first, fails while a listed value is not one the question can answer. `hunch diff` counts, per exposure, the rows whose answer moved into or out of a listed value. [Change a spec safely](/guides/change-a-spec#apps-depend-on-answer-names) shows both.
@@ -445,43 +447,43 @@ Keys not sent are not in the cache key; changing them asks nothing.
     One option. `criteria` maps each label to a description. Describe all options or none (`lint` warns on a mix). At most 255 options.
 
     ```yaml
-    department:
+    purpose:
       type: choice
-      instructions: Which team should handle this ticket?
+      instructions: What is running `command` mainly for?
       criteria:
-        billing: Charges, refunds, invoices
-        technical: Errors, outages, bugs
+        build: Compiling, bundling or packaging the project
+        test: Running tests, linters or type checks
     ```
   </Tab>
   <Tab title="noul">
     Yes or no. `instructions`, and optionally `criteria` saying what a yes and a no mean, under the keys `"true"` and `"false"` (lint rejects other keys; hunch's YAML keeps `yes`/`no` as text). The answer carries p(yes).
 
     ```yaml
-    urgent:
+    destroys:
       type: noul
-      instructions: Does the customer need an answer within the hour?
+      instructions: Would running `command` delete, overwrite or reset something in a way that would be hard to undo?
     ```
   </Tab>
   <Tab title="score">
     An ordered scale of 2 to 10 levels; `criteria` is the list, lowest first. The answer is the expected level (a number) and the nearest level's label.
 
     ```yaml
-    frustration:
+    risk:
       type: score
-      instructions: How frustrated is the customer?
-      criteria: [Calm, Mildly annoyed, Frustrated, Very angry]
+      instructions: How much could running `command` go wrong if it did the wrong thing?
+      criteria: [Nothing changes, Only the project changes, The machine or other projects change, Something is lost or sent out for good]
     ```
   </Tab>
   <Tab title="multi">
     Several options can apply. Asked as one yes/no question per option, `<question>__<option>`, each tested, diffed and reviewed on its own. The row also gets `<question>`: the options that apply, joined by `|`. `act`, `gold` and `escalate` apply to every option.
 
     ```yaml
-    topics:
+    side_effects:
       type: multi
-      instructions: Which topics does the ticket raise?
+      instructions: Which of these would running `command` do?
       criteria:
-        refund: asks for money back
-        outage: the service is down
+        deletes_files: removes files or folders
+        uploads: sends files or data to another machine
     ```
   </Tab>
 </Tabs>
@@ -504,7 +506,7 @@ The source column with the right answer. Empty cell: no gold for that row.
 | --- | --- |
 | `choice` | The option's label. |
 | `noul` | `yes`, `y`, `true` or `1` mean yes; any other non-empty value means no. |
-| `score` | The level: its number from 0 (`2`), its text (`Frustrated`), or both (`2:Frustrated`). |
+| `score` | The level: its number from 0 (`2`), its text (`The machine or other projects change`), or both (`2:The machine or other projects change`). |
 | `multi` | The options that apply, joined by `\|`; `-` means none apply. |
 
 Reviews override this column for the rows they cover and can accept two labels.
