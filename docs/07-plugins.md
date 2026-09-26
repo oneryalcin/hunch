@@ -114,7 +114,8 @@ alerting on top without any plugin API. This is cheap and needs no permission fr
    fails a battery whose receipt is stale; `reference/files` is the contract; `results_comment.py` the example
    consumer.) **Document and version the artifacts** (`results.json`, `manifest.json`, `*.reviews.csv`): a JSON Schema, a
    version field, a changelog and one example consumer (a GitHub Action that comments a spec's numbers on a PR).
-3. **The benchmark table,** every battery × every engine, generated from the artifacts, not written by hand.
+3. (Done 2026-09-26: `docs-site/benchmark.py` writes `reference/benchmark` from every battery's receipts; CI fails
+   if the page and the receipts disagree. Jev, DeepSeek and a local Ollama model so far.) **The benchmark table,** every battery × every engine, generated from the artifacts, not written by hand.
 4. **Engines, only what pays now:** `adapter` defaults to the plugin package's version, so a changed prompt can't
    serve stale cached answers; the Ollama plugin becomes its own package, the reference implementation with a smoke
    test, able to use a model's native prompt. (`compile` already names a plugin engine; answers are already checked

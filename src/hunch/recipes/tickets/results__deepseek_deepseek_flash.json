@@ -1,0 +1,117 @@
+{
+ "version": 1,
+ "command": "test",
+ "passed": true,
+ "sample": null,
+ "judgments": {
+  "ticket_triage": {
+   "spec_hash": "d595550a190f",
+   "model": "deepseek:deepseek-flash",
+   "rows": 40,
+   "questions": {
+    "department": {
+     "type": "choice",
+     "rows": 40,
+     "gold": {
+      "rows": 40,
+      "source": 40,
+      "review": 0,
+      "excluded": 0
+     },
+     "act": {
+      "threshold": 0.8,
+      "automated": 1.0,
+      "judged": 40,
+      "wrong": 0.0
+     },
+     "spot_checks": 0,
+     "accuracy": {
+      "value": 1.0,
+      "ci": null,
+      "basis": "gold"
+     },
+     "calibration_error": 0.0023,
+     "dial": [
+      {
+       "threshold": 0.5,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.6,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.7,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.8,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.9,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.95,
+       "automated": 1.0,
+       "wrong": 0.0
+      },
+      {
+       "threshold": 0.99,
+       "automated": 0.925,
+       "wrong": 0.0
+      }
+     ],
+     "mistakes": {
+      "total": 0,
+      "most_confident": []
+     },
+     "checks": [
+      {
+       "check": "min_accuracy",
+       "passed": true,
+       "value": 1.0,
+       "limit": 0.9,
+       "severity": "error"
+      },
+      {
+       "check": "max_calibration_error",
+       "passed": true,
+       "value": 0.0023,
+       "limit": 1,
+       "severity": "error"
+      }
+     ]
+    },
+    "urgent": {
+     "type": "noul",
+     "rows": 40,
+     "gold": {
+      "rows": 0,
+      "source": 0,
+      "review": 0,
+      "excluded": 0
+     },
+     "checks": []
+    },
+    "frustration": {
+     "type": "score",
+     "rows": 40,
+     "gold": {
+      "rows": 0,
+      "source": 0,
+      "review": 0,
+      "excluded": 0
+     },
+     "checks": []
+    }
+   }
+  }
+ }
+}

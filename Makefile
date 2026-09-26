@@ -14,6 +14,7 @@ help:
 check: lint
 	! grep -n 'exclude-newer-package' uv.lock server/uv.lock
 	uv run docs-site/check.py
+	uv run docs-site/benchmark.py --check
 	uv run hunch lint src/hunch/recipes/agent_commands
 	uv run hunch lint src/hunch/recipes/tickets
 	uv run hunch lint src/hunch/recipes/rag_answers
