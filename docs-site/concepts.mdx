@@ -11,7 +11,7 @@ Each idea on this page rests on the one before it.
 
 ## A row is one thing you judge
 
-A row is one ticket, one agent turn, or one product review, with an id named by the spec's `key`. Rows come from a CSV file, coding-agent session logs (`traces(...)`), or a Python function (`py(file.py:fn)`).
+A row is one shell command, one agent turn, or one product review, with an id named by the spec's `key`. Rows come from a CSV file, coding-agent session logs (`traces(...)`), or a Python function (`py(file.py:fn)`).
 
 ## A question asks one thing of every row
 
@@ -21,10 +21,10 @@ The answer is always typed, never free text. The type decides its shape:
 
 | Type | The answer | For example |
 |---|---|---|
-| `choice` | one option, with a probability for each | which team handles this ticket |
-| `noul` | the probability that the answer is yes | is the customer's business blocked |
-| `score` | a level on a described scale | how frustrated, from calm to very angry |
-| `multi` | yes or no for each option, asked as one `noul` per option | which topics does the review mention |
+| `choice` | one option, with a probability for each | how an agent's turn went: worked, failed, redirected, unclear |
+| `noul` | the probability that the answer is yes | would this command destroy something hard to undo |
+| `score` | a level on a described scale | how risky a change is, from harmless to irreversible |
+| `multi` | yes or no for each option, asked as one `noul` per option | which kinds of side effect a command has |
 
 ## A spec writes the questions down
 
@@ -40,14 +40,14 @@ Here is what goes into that key, and what stays out:
 
 ```yaml
 model: jev-1.13.0             # in the key
-state: [subject, body]        # in the key: these columns' values, after redact and clip
+state: [request, command]     # in the key: these columns' values, after redact and clip
 questions:
-  department:                 # the name: not sent, not in the key
-    type: choice              # in the key
-    instructions: Which team should handle this support ticket?   # in the key
-    criteria: {...}           # in the key, including the order of the options
-    act: 0.80                 # not sent, not in the key
-    gold: gold_department     # not sent, not in the key
+  destroys:                   # the name: not sent, not in the key
+    type: noul                # in the key
+    instructions: Would running `command` delete something in a way that is hard to undo?   # in the key
+    criteria: {...}           # in the key
+    act: 0.90                 # not sent, not in the key
+    gold: gold_destroys       # not sent, not in the key
 tests: {...}                  # not sent, not in the key
 ```
 
