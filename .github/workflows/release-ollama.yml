@@ -1,0 +1,66 @@
+# Release hunch-engine-ollama (plugins/hunch-engine-ollama) to PyPI with trusted publishing, like release.yml does for
+# hunch-ai. Push a tag: git tag hunch-engine-ollama-v0.1.0 && git push origin hunch-engine-ollama-v0.1.0
+#
+# The tag must point at a commit on main and match the plugin's version, and the plugin's tests must pass against
+# the hunch-ai people will get from PyPI (so this job ignores the repository's uv cooldown).
+#
+# One-time PyPI setup (maintainer): pypi.org → Account → Publishing → add a pending publisher:
+# project hunch-engine-ollama, owner oneryalcin, repository hunch, workflow release-ollama.yml, environment pypi-ollama.
+name: release-ollama
+
+on:
+  push:
+    tags: ["hunch-engine-ollama-v*"]
+
+defaults:
+  run:
+    working-directory: plugins/hunch-engine-ollama
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      UV_NO_CONFIG: "1"  # the released hunch-ai, not the one the repository's cooldown would pick
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Tag commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "tag $GITHUB_REF_NAME is not on main"; exit 1; }
+      - name: Tag matches the plugin's version
+        run: |
+          PKG=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          TAG="${GITHUB_REF_NAME#hunch-engine-ollama-v}"
+          test "$PKG" = "$TAG" || { echo "tag $TAG != plugin version $PKG"; exit 1; }
+      - name: Build
+        run: uv build -o dist
+      - name: Check the metadata PyPI will show
+        run: uvx twine check --strict dist/*
+      - name: Tests, against hunch-ai from PyPI
+        run: |
+          uv venv -q /tmp/v && uv pip install -q --python /tmp/v dist/*.whl pytest
+          /tmp/v/bin/python -m pytest -q -p no:cacheprovider
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: plugins/hunch-engine-ollama/dist/
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi-ollama
+    permissions:
+      id-token: write  # OIDC for trusted publishing; attestations are on by default
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
