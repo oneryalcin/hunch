@@ -8,7 +8,7 @@ model: ollama:bespoke-minicheck#rag-unsupported   # the model's own format, from
 ```
 
 ```sh
-hunch install hunch-engine-ollama                  # once published; from a checkout: hunch install ./plugins/hunch-engine-ollama
+hunch install hunch-engine-ollama                  # from PyPI; or: uv tool install hunch-ai --with hunch-engine-ollama
 hunch plugins                                      # ollama:  hunch-engine-ollama==0.1.0  ok
 hunch test spec.yml --model ollama:qwen2.5:0.5b --max-cost 0 --receipt   # measured like any engine; costs nothing
 ```
