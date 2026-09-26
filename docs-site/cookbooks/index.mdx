@@ -1,6 +1,6 @@
 ---
 title: "Cookbooks"
-description: "Four real problems worked through with hunch, each with its spec, its numbers, and what did not work."
+description: "Seven real problems worked through with hunch, each with its spec, its numbers, and what did not work."
 ---
 
 Each cookbook starts from a real dataset and a question someone would want answered about it. It shows the spec, what was run, what came out, and where the approach fell short. Every number comes from a run in the repository: the example specs are in `prototype/examples/`, and the design notes behind them in `docs/04-design.md`.
@@ -11,6 +11,12 @@ Each cookbook starts from a real dataset and a question someone would want answe
   </Card>
   <Card title="Guard a coding agent's commands" icon="shield-halved" href="/cookbooks/command-guard">
     Stops 11.6% of 1,315 real commands and lets through an estimated 1% (0.2–6%) that needed a person.
+  </Card>
+  <Card title="Check RAG answers against their sources" icon="file-magnifying-glass" href="/cookbooks/rag-answers">
+    Passes 54% of 900 annotated answers as supported with 4 wrong, and ranks six models as the annotators do.
+  </Card>
+  <Card title="Read an NDA before a lawyer does" icon="file-contract" href="/cookbooks/nda-review">
+    One word in the criteria fixed 21 of 61 contracts; still a first pass, not a decision.
   </Card>
   <Card title="Route banking intents" icon="building-columns" href="/cookbooks/banking-intents">
     77 intents. The answer key turned out to be wrong more often than the model.

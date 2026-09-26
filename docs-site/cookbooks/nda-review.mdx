@@ -1,0 +1,67 @@
+---
+title: "Read an NDA before a lawyer does"
+description: "Five clauses a reviewer checks in every non-disclosure agreement, measured against lawyers' labels on 184 real NDAs: how one word fixed a whole class of mistakes, and why it is still a first pass, not a decision."
+---
+
+A company selling a business sends thirty NDAs to thirty bidders' lawyers, each on its own template. The questions a reviewer asks of each are the same every time. Does information have to be marked confidential to count? May it go to the bidder's advisors? May they copy it? When the deal dies and everything must be returned, may they keep a copy anyway? Do the obligations outlive the agreement?
+
+This cookbook asks a decision model those five questions of real NDAs and measures the answers against lawyers' labels. It ends as a first pass that sorts contracts for a lawyer, and on the way it shows the most common way a question goes wrong: the model answering a slightly different question from the one the labels answer.
+
+## The rows
+
+[ContractNLI](https://stanfordnlp.github.io/contract-nli/) (CC BY 4.0) holds 607 NDAs collected from the web, each labelled by lawyers against 17 fixed statements: the contract says so, says the opposite, or doesn't mention it. Its test split has 123 NDAs, and its dev split 61 more. The median NDA is 9,600 characters; the whole text is the state, and five choice questions share one request per contract:
+
+```yaml nda_review.yml
+judgment: nda_review
+model: jev-1.13.0
+source: contractnli_test.csv
+key: id
+state: [text]
+questions:
+  must_be_marked:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), must information be expressly identified or marked as confidential by the disclosing party to count as Confidential Information?
+    criteria:
+      says_so: …
+      says_otherwise: …
+      not_mentioned: …
+    gold: gold_must_be_marked
+  advisors_allowed: …
+  copies_allowed: …
+  may_keep_after_return: …
+  survives_termination: …
+```
+
+Reading all 123 contracts cost $0.016.
+
+## The first answers were worse than they looked
+
+Accuracy on the first run ran from 42% to 74%, and the model was sure of its mistakes: on `must_be_marked`, 27% of the answers it gave at 0.9 or above were wrong. The mistakes had one shape. Of 63 contracts the lawyers labelled `not_mentioned` for marking, the model said `says_otherwise` for 43. Reading them explains it: a contract that defines Confidential Information broadly never says unmarked information is protected, but a careful reader infers it. The same happened elsewhere: "return all information" read as "no copies may be kept"; a five-year confidentiality period read as "obligations survive termination".
+
+ContractNLI counts only what a contract says expressly. The questions never said so. The fix is in the criteria: `says_otherwise` became "the agreement expressly says…", and `not_mentioned` names the inference to avoid ("a broad definition of Confidential Information alone is not_mentioned"). Before adopting it, `hunch diff` shows what it changes:
+
+```text
+must_be_marked: 45/123 rows flip (8 within noise band)
+  gold accuracy on the 123 shared rows with gold 52.8% → 82.9%  (✓ 41 fixed, ✗ 4 broken, 0 wrong both times, 0 without gold)
+  paired sign test p=0.000 → significant
+```
+
+That number is flattering, because the new wording was written after reading these same 123 contracts' mistakes. The honest measure is the 61 dev contracts, which played no part in it:
+
+| Clause | First wording | Reworded | Rows fixed / broken |
+| --- | --- | --- | --- |
+| must be marked | 41.0% | 72.1% | 21 / 2 |
+| may go to advisors | 83.6% | 85.2% | 1 / 0 |
+| copies allowed | 34.4% | 49.2% | 9 / 0 |
+| may keep after return | 57.4% | 67.2% | 8 / 2 |
+| survives termination | 72.1% | 75.4% | 3 / 1 |
+
+The gain on marking holds (p < 0.001 on dev), and nothing got worse in a way the test can see. Rewording three of the others is within noise on 61 contracts.
+
+## Where it stands
+
+A first pass, not a decision. Two clauses are right about three times in four or better; copying is right half the time, and on the test set, of the copying answers it gave at 0.9 or above, a third were wrong. That is not a column software should act on. It can sort a pile: the contracts that clearly let advisors see the data, or clearly keep obligations alive, go to the bottom of the lawyer's stack, and the rest get read first.
+
+What would move it further is not more wording. The copying clause fails because permission to copy usually sits inside an exception to another clause ("except as necessary for the Purpose"), which is exactly the "negation by exception" the dataset's authors single out as hard. Two ways to try, each a spec change `diff` can judge: ask a narrower question per clause type (is copying mentioned at all, then is it allowed), or put the sentences that mention copies in the state instead of the whole contract.
+
+The spec, both CSVs and the first wording (`first/nda_review.yml`, for `hunch diff nda_review.yml --against first/nda_review.yml --source contractnli_dev.csv`) are in `prototype/examples/nda_review/`.

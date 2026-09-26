@@ -71,6 +71,8 @@
               "cookbooks/index",
               "cookbooks/claude-code-sessions",
               "cookbooks/command-guard",
+              "cookbooks/rag-answers",
+              "cookbooks/nda-review",
               "cookbooks/banking-intents",
               "cookbooks/swe-patches",
               "cookbooks/amazon-reviews"
