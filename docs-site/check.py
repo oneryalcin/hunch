@@ -51,4 +51,23 @@ drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}
 for name, (extra, absent) in drift.items():
     print(f"spec.schema.json {name}: " + ", ".join([f"not in the code {sorted(extra)}"] * bool(extra) + [f"missing {sorted(absent)}"] * bool(absent)))
 print(f"schema: {len(pairs)} key sets " + ("match the code" if not drift else "differ from the code"))
-sys.exit(1 if any(missing.values()) or drift else 0)
+# A battery's results.json must describe its spec as it is now: an edited battery ships re-measured numbers.
+# Receipts for other engines (results__<engine>.json, from --model) are checked against the spec with that engine,
+# since the spec hash includes the model. Every judgment must be measured, and nothing measured may be gone.
+stale = []
+receipts = sorted((SRC / "recipes").glob("*/results*.json"))
+for receipt in receipts:
+    project = core.load_project(receipt.parent)
+    got = json.loads(receipt.read_text())["judgments"]
+    where = f"recipes/{receipt.parent.name}/{receipt.name}"
+    for name, spec in project["nodes"].items():
+        j = got.get(name)
+        if j is None:
+            stale.append(f"{where}: no numbers for judgment {name!r}")
+        elif j["spec_hash"] != core.spec_hash({**spec, **({"model": j["model"]} if "model" in spec and j["model"] else {})}):
+            stale.append(f"{where}: {name!r} was measured on another version of the spec")
+    stale += [f"{where}: {name!r} is no longer in the battery" for name in got if name not in project["nodes"]]
+for s in stale:
+    print(f"{s}; re-run `hunch test . --receipt` (with --model <engine> for results__<engine>.json)")
+print(f"receipts: {len(receipts)} in {len({r.parent for r in receipts})} batteries, " + ("all current" if not stale else f"{len(stale)} problems"))
+sys.exit(1 if any(missing.values()) or drift or stale else 0)

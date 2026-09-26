@@ -90,7 +90,8 @@
               "reference/spec",
               "reference/cli",
               "reference/python",
-              "reference/environment"
+              "reference/environment",
+              "reference/files"
             ]
           },
           {

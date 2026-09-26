@@ -17,6 +17,9 @@ check: lint
 	uv run hunch lint src/hunch/recipes/agent_commands
 	uv run hunch lint src/hunch/recipes/tickets
 	uv run hunch lint src/hunch/recipes/rag_answers
+	uvx check-jsonschema@0.38.0 --schemafile src/hunch/results.schema.json src/hunch/recipes/*/results*.json
+	uv run hunch docs src/hunch/recipes/rag_answers > /dev/null
+	uvx check-jsonschema@0.38.0 --schemafile src/hunch/manifest.schema.json .hunch/target/src/hunch/recipes/rag_answers.manifest.json
 	cd docs-site && npx -y mint@latest validate
 	cd docs-site && npx -y mint@latest broken-links --check-anchors
 

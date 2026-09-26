@@ -1,7 +1,6 @@
 {
  "version": 1,
  "command": "test",
- "hunch": "0.3.0",
  "passed": true,
  "sample": null,
  "judgments": {

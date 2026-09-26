@@ -23,6 +23,11 @@ jobs:
         run: uv run docs-site/check.py
       - name: The quickstart's recipe is a valid spec
         run: uv run hunch lint src/hunch/recipes/agent_commands && uv run hunch lint src/hunch/recipes/tickets && uv run hunch lint src/hunch/recipes/rag_answers
+      - name: The files hunch writes match their published schemas (batteries' results.json; a manifest from hunch docs)
+        run: |
+          uvx check-jsonschema@0.38.0 --schemafile src/hunch/results.schema.json src/hunch/recipes/*/results*.json
+          uv run hunch docs src/hunch/recipes/rag_answers > /dev/null
+          uvx check-jsonschema@0.38.0 --schemafile src/hunch/manifest.schema.json .hunch/target/src/hunch/recipes/rag_answers.manifest.json
       - name: The site builds
         working-directory: docs-site
         run: npx -y mint@latest validate
