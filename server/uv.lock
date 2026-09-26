@@ -84,11 +84,15 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "duckdb", marker = "extra == 'sql'", specifier = ">=1.1" },
+    { name = "fastembed", marker = "extra == 'distill'", specifier = ">=0.7" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "numpy", marker = "extra == 'sql'" },
+    { name = "pyarrow", marker = "extra == 'sql'", specifier = ">=15" },
     { name = "pydantic", marker = "extra == 'pydantic'", specifier = ">=2" },
     { name = "pyyaml", specifier = ">=6" },
 ]
-provides-extras = ["pydantic"]
+provides-extras = ["distill", "pydantic", "sql"]
 
 [[package]]
 name = "hunch-server"
