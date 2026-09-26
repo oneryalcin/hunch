@@ -145,6 +145,29 @@ You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key. Everything bel
   </Step>
 </Steps>
 
+## Your own question, in one line
+
+The guard began as a YAML file. A question of your own can begin as a sentence:
+
+```sh
+hunch ask "Would running this command delete or overwrite files or data that can't easily be recovered?" \
+  commands.csv --columns request,command
+```
+
+```text
+Would running this command delete or overwrite files or data that can't easily be recovered?
+  no                       28  (74%)
+  yes                      10  (26%)
+  sure enough to act on (p ≥ 0.9): 22 of 38
+
+least sure (10 of 16):
+        21  yes          p=0.50  _moddi3_s.dep -DSHARED -DL_moddi3 -c /tmp/gcc-4.5.0/libgcc/../gcc/libgcc2.c \
+         8  yes          p=0.55  yes, build rollup from rust source | cd /tmp && rm -rf rollup-src && git clone -
+         …
+```
+
+38 answers cost $0.0008 and took under a second. `ask` wrote the spec a person would have written, `running_command_delete_overwrite.yml`, and every answer to `running_command_delete_overwrite.answers.csv`. The unsure rows are where to start: `hunch review` on the spec turns your verdicts into an answer key, and from there `test`, `diff` and everything above work on it. Without `--columns` the model sees every column but the key and `gold_*`; with `--options billing,technical,sales` it picks one of those instead of yes or no. Asking the same question again reads the store and costs nothing.
+
 ## With a coding agent
 
 If Claude Code, Codex or Cursor will work on your specs, `hunch skill` installs a skill that teaches it the same steps, with a cost cap on every run and your review verdicts left to you.
