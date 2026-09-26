@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# A first read of a non-disclosure agreement: five clauses a reviewer checks, each "says so", "says otherwise" or
+# "not mentioned". ContractNLI's test split (CC BY 4.0, see NOTICE.md): 123 real NDAs, labelled by lawyers.
+judgment: nda_review
+model: jev-1.13.0
+source: ../contractnli_test.csv
+key: id
+state: [text]
+clip: {text: 60000}
+questions:
+  must_be_marked:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), must information be expressly identified or marked as confidential by the disclosing party to count as Confidential Information?
+    criteria:
+      says_so: Only information that is marked, labelled or expressly identified as confidential (or confirmed as such in writing) is protected
+      says_otherwise: Information is protected even when it is not marked or identified, for example because of its nature or the circumstances
+      not_mentioned: The agreement doesn't address whether information must be marked or identified
+    gold: gold_must_be_marked
+  advisors_allowed:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), may the receiving party share confidential information with third parties such as consultants, agents, or professional advisors?
+    criteria:
+      says_so: Sharing with some third parties (consultants, agents, advisors, contractors) is allowed, even if on conditions
+      says_otherwise: Sharing with any third party is prohibited; only the receiving party (or its employees) may see it
+      not_mentioned: The agreement doesn't address sharing with third parties
+    gold: gold_advisors_allowed
+  copies_allowed:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), may the receiving party make copies of confidential information in some circumstances?
+    criteria:
+      says_so: Copies are allowed in some circumstances (for the purpose, with consent, as needed)
+      says_otherwise: Copying confidential information is prohibited
+      not_mentioned: The agreement doesn't address copies
+    gold: gold_copies_allowed
+  may_keep_after_return:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), when confidential information must be returned or destroyed, may the receiving party still keep some of it (for example archival copies, copies required by law, or automatic backups)?
+    criteria:
+      says_so: Some confidential information may be kept after the return or destruction obligation (archival, legal, backup or similar copies)
+      says_otherwise: Everything must be returned or destroyed, with no copies kept
+      not_mentioned: The agreement doesn't address keeping anything after return or destruction
+    gold: gold_may_keep_after_return
+  survives_termination:
+    type: choice
+    instructions: In this non-disclosure agreement (`text`), do some of the receiving party's obligations continue after the agreement ends or is terminated?
+    criteria:
+      says_so: Some obligations survive termination or expiry (for a period of years, or indefinitely)
+      says_otherwise: All obligations end when the agreement ends
+      not_mentioned: The agreement doesn't address what happens to its obligations after it ends
+    gold: gold_survives_termination
