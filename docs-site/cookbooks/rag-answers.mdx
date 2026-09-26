@@ -1,0 +1,83 @@
+---
+title: "Check RAG answers against their sources"
+description: "Before an answer is shown, ask whether it says anything its passages don't support; pass what is clearly grounded and send the rest to a person, with the miss rate measured on 900 annotated answers."
+---
+
+A search assistant is asked how automotive technicians get paid. It retrieves three passages and writes a fluent answer: pay varies by state, highest in Alaska at $23.70 an hour, "and the lowest average pay in Mississippi ($18.60 per hour or $38,900 per year)". Alaska is in the passages. Mississippi is not. The model made it up, and nothing in the answer's tone says so.
+
+A decision model can read the passages and the answer and say whether anything in the answer goes beyond them. This cookbook builds that check and measures it on answers people have already marked.
+
+## The rows
+
+[RAGTruth](https://github.com/ParticleMedia/RAGTruth) (MIT) holds answers that six models wrote to real search questions from the passages they were given, with every unsupported span marked by human annotators. Its QA test split has 900 answers; 160 contain something the passages don't support.
+
+```yaml answer_support.yml
+judgment: answer_support
+model: jev-1.13.0
+source: ragtruth_qa.csv
+key: id
+state: [question, passages, answer]
+questions:
+  unsupported:
+    type: noul
+    instructions: >-
+      `answer` was written to answer `question` using only `passages`. Does `answer` state anything that `passages`
+      do not support: a fact, number, name, date or detail that is missing from the passages, or that contradicts
+      them? Saying the passages don't contain the answer is supported. General wording and restating the question
+      are supported.
+    gold: gold_unsupported
+    act: {yes: 1.0, no: 0.7}
+```
+
+Checking all 900 took 15 seconds and cost $0.03. The Mississippi answer: `unsupported` yes, at 0.93.
+
+## How good is it
+
+```text
+unsupported (noul, 900 rows)
+  PASS accuracy 83.8% (min 80%)
+  PASS AUROC 0.941 (160 yes / 740 no; 0.5 = coin toss; unaffected by base rate) (min 0)
+       dial   act on yes: automated  wrong   │  act on no: automated  wrong
+       0.50                  30.0%  47.4%   │                70.0%   2.9%
+       0.60                  25.6%  39.6%   │                63.8%   1.9%
+       0.70                  21.1%  32.6%   │                54.3%   0.8%  ← act no
+       0.80                  16.0%  20.8%   │                37.7%   0.6%
+       0.90                  10.3%  14.0%   │                13.7%   0.0%
+```
+
+The two sides of the dial say different things. When the check is sure an answer is supported, it is right: at 0.7 it passes 489 of the 900 answers, and 4 of those had something the annotators marked. When it says unsupported, it is often stricter than the annotators: of the 270 answers it leans yes on, 142 were marked. So the spec never rejects on its own (`yes: 1.0`): a person sees every answer the check isn't sure is supported, 46% of them here, and 156 of the 160 marked answers are among them.
+
+Some of that strictness is the question working. Its most confident disagreement, at 0.96, is an answer on how the body's systems work together that adds "the skeletal system provides support and structure" and more, none of it in the passages. The annotators let textbook knowledge pass; the question asks about the passages only. Which rule you want is a product decision, and `hunch review` records it as gold either way.
+
+## Which model to ship
+
+The same check, grouped by the model that wrote the answer:
+
+| Model | Marked by annotators | Flagged by the check | Passed at 0.7 |
+| --- | --- | --- | --- |
+| Llama 2 7B chat | 35% | 55% | 23% |
+| Llama 2 13B chat | 24% | 41% | 35% |
+| Llama 2 70B chat | 23% | 41% | 46% |
+| Mistral 7B instruct | 21% | 32% | 54% |
+| GPT-3.5 turbo | 3% | 7% | 82% |
+| GPT-4 | 1% | 3% | 85% |
+
+It orders the six models as the annotators do, without their labels. That makes it a cheap way to compare a new model or a new retrieval setup on your own questions before switching.
+
+## Use it
+
+```sh
+hunch init rag-answers    # 40 of these answers, the spec, and two pinned examples; about $0.002 to run
+```
+
+In an app, before an answer is shown:
+
+```python
+a = hunch.judge("answer_support.yml", question=q, passages=passages, answer=answer)["unsupported"]
+if a["label"] == "no" and a["route"] == "act":   # sure it is supported
+    show(answer)
+else:
+    hold_for_review(answer, a["p"])
+```
+
+Replace the rows with your own questions, retrieved passages and answers, [review](/guides/review) a few dozen, and `hunch test` measures the check on your data instead of RAGTruth's.

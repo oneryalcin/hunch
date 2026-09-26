@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# Does a RAG answer say anything its passages don't support? 40 real answers from RAGTruth (MIT, see NOTICE.md).
+judgment: answer_support
+model: jev-1.13.0
+source: answers.csv
+key: id
+state: [question, passages, answer]
+clip: {passages: 12000}
+questions:
+  unsupported:
+    type: noul
+    instructions: >-
+      `answer` was written to answer `question` using only `passages`. Does `answer` state anything that `passages`
+      do not support: a fact, number, name, date or detail that is missing from the passages, or that contradicts
+      them? Saying the passages don't contain the answer is supported. General wording and restating the question
+      are supported.
+    gold: gold_unsupported
+    act: {yes: 1.0, no: 0.7}   # pass what it is sure is supported; a person sees every doubt
+
+tests:
+  unsupported:
+    min_accuracy: 0.75   # 80.0% on these 40; 83.8% on all 900 (a sample richer in unsupported answers)
+
+examples:                 # must pass on every test, whatever else changes
+  - name: adds a number the passage doesn't have
+    row: {question: 'When did the museum open?', passages: 'passage 1: The city museum opened in 1902 in the old town hall.',
+          answer: 'The museum opened in 1902 and now welcomes about 3 million visitors a year.'}
+    expect: {unsupported: "yes"}
+  - name: says only what the passage says
+    row: {question: 'When did the museum open?', passages: 'passage 1: The city museum opened in 1902 in the old town hall.',
+          answer: 'It opened in 1902, in the old town hall.'}
+    expect: {unsupported: "no"}

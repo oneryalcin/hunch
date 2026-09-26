@@ -22,7 +22,7 @@ jobs:
       - name: Every spec key, CLI flag and environment variable is documented
         run: uv run docs-site/check.py
       - name: The quickstart's recipe is a valid spec
-        run: uv run hunch lint src/hunch/recipes/agent_commands && uv run hunch lint src/hunch/recipes/tickets
+        run: uv run hunch lint src/hunch/recipes/agent_commands && uv run hunch lint src/hunch/recipes/tickets && uv run hunch lint src/hunch/recipes/rag_answers
       - name: The site builds
         working-directory: docs-site
         run: npx -y mint@latest validate
