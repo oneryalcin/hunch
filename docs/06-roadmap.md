@@ -100,6 +100,19 @@ Pydantic AI 2.50 generalises Jev into a `DecisionModel` interface and uses decis
 | Parked: hunch's LLM engine as a Pydantic AI `DecisionModel` | Any LLM read through token probabilities as a decision model (measured: 92.3% vs Jev's 95.8% on BANKING77). A distribution channel, but an engine is a different product from measurement | Revisit if asked, or offer upstream |
 | Rejected | Pydantic AI as hunch's core engine dependency (API changed within a week, cache keys would move with their releases); implementing routes, tools, hooks, streaming or compaction (a second, weaker agent framework) | |
 
+## Next up: the gaps against dbt (2026-09-26)
+
+Checked against the docs on 2026-09-26: graphs (`ref`, `where`, `chain`, `union`, `--node`), incremental runs (`on_change: new_rows_only`), `freeze`, contracts, exposures, unit tests (`examples`), metrics, docs and lineage already exist. Four things dbt has that hunch does not, in order:
+
+| Item | What it means | Example | dbt reference | Done when |
+|---|---|---|---|---|
+| **Decisions written where the data lives** | `run` writes each judgment's table into hunch's own SQLite store; `hunch.sql` puts answers in DuckDB. Nothing sends them to a warehouse, so analysts, dashboards and other jobs can't use them as ordinary columns | Support calls are in Snowflake and a `mentions_competitor` column should sit beside them; today it means export and load by hand | [materializations](https://docs.getdbt.com/docs/build/materializations.md) | A judgment's table reaches any destination through dlt (hunch results as a dlt resource, the "dlt interop" item in Phase 4), with lineage columns kept; then Postgres directly |
+| **Targets: dev and prod** | The same spec runs one way while it's being built and another in production, without editing it. Today the spec names one engine, and `--model` changes it for one command only | Measure the guard on Jev in dev; in prod answer with the `distilled:` student and escalate the unsure answers to Jev | [targets, `profiles.yml`](https://docs.getdbt.com/docs/core/connect-data-platform/connection-profiles) | Named targets (engine, store, cost cap) outside the spec, picked with `--target` or an environment variable, and shown in results and `hunch docs`. Must not change what a receipt measures: the spec's own engine stays the reference |
+| **A shared store (Postgres)** | Every answer is kept in one SQLite file per machine. Several servers or a team each pay for the same answers, and runs, traffic and history are split across files | Three app servers calling `judge()`: a row answered on one is asked again on the others | the warehouse is shared by design | `HUNCH_STORE=postgres://…` selects it (the "Stores" item in Phase 4); `run`, `judge()`, the server and `hunch.sql` share one cache and one run history |
+| **`hunch add` from git** | Install someone else's battery (question, rows, tests, receipts) from a repository. `hunch init` copies only the batteries bundled with hunch | `hunch add github.com/someone/phishing-check` | [packages, `dbt deps`](https://docs.getdbt.com/docs/build/packages.md) | Waits for its trigger (07-plugins): someone asks to install a battery that isn't bundled |
+
+The first two make "decisions as code" feel like dbt to a data team: decisions become columns where the data already is, and a spec moves from dev to prod the way a model does. Postgres follows when hunch runs on more than one machine, and fits with the first.
+
 ## Next up, from dbt (docs index read 2026-09-25, [llms.txt](https://docs.getdbt.com/llms.txt))
 
 **Lesson.** dbt did not spread through features. It spread through four things: a file format anyone can read, **machine-readable artifacts** that others built on ([`manifest.json`](https://docs.getdbt.com/reference/artifacts/manifest-json.md), [`run_results.json`](https://docs.getdbt.com/reference/artifacts/run-results-json.md); its docs site, [state comparison](https://docs.getdbt.com/docs/deploy/dbt-state-about.md), orchestrators and observability tools all read them), [packages](https://docs.getdbt.com/docs/build/packages.md), and [docs generated from the project](https://docs.getdbt.com/docs/explore/build-and-view-your-docs.md). Its plugin API (adapters) exists because warehouses differ. hunch should copy the four, not the adapter system.
@@ -194,12 +207,12 @@ Known engineering; do it once phases 1–3 have settled the shapes.
 - **Spec format**: JSON Schema, versioned; lint built on it. Moved up: see "Next up, from dbt".
 - ~~Lineage~~ DONE (04 round 12; per-question `<qid>_key` columns). **Lineage**: `_hunch_run_id` and `_hunch_key` on every materialized row; `_hunch_runs` table (spec hash, git sha, model, cost, status). Downstream reads complete runs only.
 - ~~Spec-change policy~~ DONE (04 round 12). **Spec-change policy**: `on_change: reask | new_rows_only | freeze`; `diff` shows the cost before you pay it.
-- **Stores**: SQLite (local), Postgres (shared), selected by one string.
+- **Stores**: SQLite (local), Postgres (shared), selected by one string. See "the gaps against dbt".
 - **dbt interop**: read `manifest.json` as sources; emit dbt `sources:` YAML for materialized judgments.
 - **Agent skill / MCP**: coding agents write specs and iterate with lint → test → diff. Moved up: see "Next up, from dbt" (skill first, MCP only if needed).
 - ~~Recipes as packages~~ first step DONE: `hunch init agent-eval` from the package (no `add`, no hub, no versioning yet). **Recipes as packages**: `hunch init agent-eval`, `hunch add <recipe>`; a recipe hub later. Recipes are versioned, have their own tests and gold, and are overridable (change a threshold or a question without forking).
 - **UX pass**: first-ten-minutes path timed with a new user; every error message says what to do next; a Python API (decorators, like dlt) that produces the same spec as the YAML.
-- **dlt interop**: dlt resources as sources; hunch results loadable by dlt to any destination.
+- **dlt interop**: dlt resources as sources (done: `py()`); hunch results loadable by dlt to any destination (next, see "the gaps against dbt").
 - **Run-level checks (built in, need run history)**: label-distribution drift vs the previous run, review-rate ceiling, confidence drift, cost budget per run. Generic checks on the output table (nulls, accepted values, ranges) are *not* built: documented as Great Expectations / Soda / dbt tests pointed at hunch's table.
 
 ## Ideas borrowed from Great Expectations (UX, not integration)
