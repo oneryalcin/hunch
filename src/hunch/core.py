@@ -48,6 +48,8 @@ from pathlib import Path
 import httpx
 import yaml
 
+from hunch import engines
+
 API = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
 HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
@@ -431,7 +433,8 @@ def item(spec: dict, row: dict, qid: str, aq: dict | None = None, variant: str =
     return {"row": row, "id": str(row.get(spec["key"], "online")), "qid": qid, "rid": qid + variant, "spec": spec,
             "q": q, "aq": aq, "state": state, "shash": digest(state)[:16],
             "key": digest({"model": spec["model"], "state": state, "question": aq,
-                           **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else {})})}
+                           **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else
+                              {"adapter": a} if (a := getattr(engines.get(spec["model"]), "adapter", None)) else {})})}
 
 
 def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:
@@ -711,6 +714,11 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             errors += tag([f"missing {', '.join(missing)} (every judgment needs model, key, state and questions)"])
             columns[name] = None
             continue
+        prefix = str(spec["model"]).split(":", 1)[0] if ":" in str(spec["model"]) else None
+        if prefix and prefix not in ENDPOINTS and prefix != "distilled" and prefix not in engines.installed():
+            errors += tag([f"model {spec['model']!r}: no engine {prefix!r}. Built in: jev-…, distilled:, "
+                           f"{', '.join(p + ':' for p in ENDPOINTS)}; from plugins: "
+                           f"{', '.join(p + ':' for p in engines.installed()) or 'none installed'}"])
         from hunch import traces
         if source_kind(spec)[0] == "traces" and spec.get("view", "turns") not in traces.VIEWS:
             errors += tag([f"view must be one of {', '.join(traces.VIEWS)}, got {spec['view']!r}"])
@@ -865,6 +873,8 @@ def llm_route(model: str) -> tuple[str, dict]:
 def estimate_cost(model: str, groups: list[list[dict]]) -> float:
     if model.startswith("distilled:"):
         return 0.0
+    if engines.get(model):  # a plugin says only its worst case: estimate with that
+        return sum(worst_cost(model, g) for g in groups)
     if not is_llm(model):
         return estimate_tokens(groups) * PRICE_PER_INPUT_TOKEN
     tokens = sum((len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4 + LLM_OVERHEAD_TOKENS
@@ -883,6 +893,8 @@ def worst_cost(model: str, g: list[dict]) -> float:
     reply allowance."""
     if model.startswith("distilled:"):
         return 0.0
+    if e := engines.get(model):
+        return e.worst_cost(model, g[0]["state"], {it["rid"]: it["aq"] for it in g}) if hasattr(e, "worst_cost") else 0.0
     if not is_llm(model):
         return (_bytes(g[0]["state"]) + sum(_bytes(it["aq"]) for it in g) + REQUEST_OVERHEAD_TOKENS) * PRICE_PER_INPUT_TOKEN
     p_in, p_out = llm_prices(model)
@@ -970,6 +982,11 @@ async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
 
 async def ask(client: httpx.AsyncClient, sem, model: str, state: dict, questions: dict) -> dict:
     """{answers: {rid: answer}, tokens, cost, model} for one row's questions."""
+    if e := engines.get(model):
+        async with sem:
+            got = await e.answer(model, state, questions)
+        return {"answers": engines.check(model, questions, got), "tokens": int(got.get("tokens") or 0),
+                "cost": float(got.get("cost") or 0.0), "model": model}
     if not is_llm(model):
         j = await post(client, sem, API, {"model": model, "state": state, "questions": questions})
         tokens = j["usage"]["input_tokens"]
@@ -1045,8 +1062,9 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
                              f"(~${est:.4f}), above --max-cost ${cap:.4g}; nothing asked")
         print(f"  asking {sum(map(len, group))} answers in {stats['requests']} requests (~${est:.4f})", file=sys.stderr)
-        var = endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
-        key = os.environ.get(var) or (None if is_llm(model) else os.environ.get("TYPESAFE_AI_API_KEY"))
+        plugin = engines.get(model)
+        var = getattr(plugin, "key", None) if plugin else endpoint(model)["key"] if is_llm(model) else "TYPESAFE_API_KEY"
+        key = (os.environ.get(var) if var else "none needed") or (None if is_llm(model) or plugin else os.environ.get("TYPESAFE_AI_API_KEY"))
         if not key:
             raise SystemExit(f"{spec.get('judgment', '')}: set {var} to ask {model} ({len(group)} requests to send)")
         # The estimate can be low (chars/4 undercounts dense text: 20% on BANKING77, 41% on shell commands), so the
@@ -1055,7 +1073,8 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         # and the reservation can't interleave.
         held, stop = [0.0], [0]
         async with httpx.AsyncClient(headers={"Authorization": f"Bearer {key}"}, timeout=120) as client:
-            sem, gate = asyncio.Semaphore(CONCURRENCY), asyncio.Semaphore(CONCURRENCY)
+            n = getattr(plugin, "concurrency", None) or CONCURRENCY
+            sem, gate = asyncio.Semaphore(n), asyncio.Semaphore(n)
 
             async def one(g: list[dict]) -> None:
                 global CHARGED
@@ -1083,7 +1102,7 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             results = await asyncio.gather(*[one(g) for g in group], return_exceptions=True)
             dt = time.perf_counter() - t0
             retried = {k: v - r0.get(k, 0) for k, v in RETRIES.items() if v - r0.get(k, 0)}
-            print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {CONCURRENCY})"
+            print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {n})"
                   + (f"; retried {retried}" if retried else ""), file=sys.stderr)
         failed = [r for r in results if isinstance(r, BaseException)]
         if failed:
@@ -1556,7 +1575,8 @@ def cmd_compile(project: dict, args) -> None:
             print(llm_prompt(row_items[0]["aq"], row_items[0]["state"])[0])
         else:
             payload = {"model": model, "state": row_items[0]["state"], "questions": {it["qid"]: it["aq"] for it in row_items}}
-            print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once)")
+            print(f"# {name}: request for row {its[0]['id']} (one request per row, all questions read once"
+                  + (f"; engine {model.split(':', 1)[0]!r} is a plugin and asks in its own way)" if engines.get(model) else ")"))
             print(json.dumps(payload, indent=2, ensure_ascii=False))
     total, expected_total = 0.0, 0.0
     print()
