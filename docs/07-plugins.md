@@ -104,7 +104,8 @@ alerting on top without any plugin API. This is cheap and needs no permission fr
 
 ## Suggested order
 
-1. **Batteries with receipts.** A battery ships all the labelled rows it was measured on (not a sample), its data
+1. **Batteries with receipts.** (Done 2026-09-26: `rag-answers` ships all 900 rows; `hunch test --receipt` writes
+   `results.json` beside a battery, and the three with data ship one; the skill lists the batteries.) A battery ships all the labelled rows it was measured on (not a sample), its data
    licence, and its results beside the spec (today `hunch test` writes them only under the git-ignored `.hunch/`,
    so a battery-level results path comes first), reproducible with `hunch test`. And it is found by agents: `hunch
    skill` teaches a coding agent the batteries that exist and when to reach for one, since the first users work in

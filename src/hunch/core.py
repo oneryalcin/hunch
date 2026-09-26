@@ -2201,6 +2201,8 @@ def cmd_test(project: dict, args) -> None:
     stats = merge_stats(*all_stats)
     print_stats(stats)
     write_results(project, report, check, stats)
+    if getattr(args, "receipt", False):
+        print(f"receipt: {write_receipt(project, report, check)}")
     sys.exit(1 if check.failed else 0)
 
 
@@ -2262,6 +2264,24 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     if os.environ.get("GITHUB_STEP_SUMMARY"):  # GitHub Actions: a table on the run's summary page
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write(summary_markdown(doc, path.relative_to(store_path(spec["_dir"]).parent / "target").with_suffix("")) + "\n")
+
+
+def receipt_path(project: dict) -> Path:
+    """Beside what was tested: `<spec>.results.json`, or `results.json` in a project folder; under --model with the
+    engine's suffix, as its tables have (`answer_support.results__ollama_qwen2_5_0_5b.json`)."""
+    tested = Path(project["path"]).resolve()
+    suffix = project["nodes"][project["order"][0]].get("_table_suffix", "")
+    return (tested / f"results{suffix}.json") if tested.is_dir() else tested.with_name(f"{tested.stem}.results{suffix}.json")
+
+
+def write_receipt(project: dict, report: dict, check: "Checks") -> Path:
+    """`test --receipt`: the numbers a battery ships with, to commit beside its spec. Only what the answers decide
+    (no time, cost or commit), so running it again on cached answers changes nothing and a diff shows real change."""
+    path = receipt_path(project)
+    doc = {"version": RESULTS_VERSION, "command": "test", "hunch": __import__("hunch").__version__,
+           "passed": not check.failed, "sample": SAMPLE, "judgments": report}
+    path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
+    return path
 
 
 def summary_markdown(doc: dict, name: Path) -> str:
@@ -2917,6 +2937,7 @@ def main() -> None:
     p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
     p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
     p.add_argument("--max-cost", type=float, help="USD: the most each set of asks may be charged (refused up front on the estimate, kept while asking)")
+    p.add_argument("--receipt", action="store_true", help="test: also write the numbers beside the spec (<spec>.results.json), to commit with a battery")
     p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
     args = p.parse_args()
     global MAX_COST, SAMPLE

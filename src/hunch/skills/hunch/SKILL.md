@@ -37,7 +37,18 @@ After `test`, read `.hunch/target/<tested path>.json` rather than parsing the te
 
 To start from a question instead of YAML: `hunch ask "Would this command destroy data?" rows.csv --max-cost 0.01` (`--options a,b,c` for one of several answers, `--columns` for what the model sees). It writes `<name>.yml` and `<name>.answers.csv` and prints the rows it was least sure of; from there the spec goes through the loop above like any other.
 
-To start from a working example: `hunch init --list`, then `hunch init agent-commands DIR` (DIR must not exist yet). `hunch hook install` is the user's call, not yours: it changes how their agent runs commands. Suggest it; don't run it unasked.
+## Batteries: start from a measured decision
+
+Before writing a spec, check whether a battery already makes the decision: `hunch init --list`, then `hunch init NAME DIR` (DIR must not exist yet). Each ships its spec, the labelled rows it was measured on, and `results.json`: what it measured (compare the user's `hunch test` against it, not against a guess).
+
+| Battery | Reach for it when | Measured |
+|---|---|---|
+| `agent-commands` | a coding agent's shell commands need a person's look before they run (destroys, reaches outside the project, sends data out) | `destroys` 97.4% on 38 real agent commands; live use is `hunch hook install` (the user's call) |
+| `rag-answers` | an app shows answers written from retrieved passages: does the answer say anything they don't support? | AUROC 0.941 on 900 annotated RAGTruth answers; acting on "no" at 0.7 passes 54% of answers with 0.8% wrong, the rest go to a person |
+| `agent-eval` | judge a coding agent's claimed fixes from its own traces (bring the traces) | none shipped: no public labelled traces |
+| `tickets` | a teaching example: choice, yes/no and score on 40 made-up tickets | not evidence of anything real |
+
+After swapping in the user's rows, the battery's numbers no longer apply: review a few dozen rows (`hunch review`) and `hunch test` again before anything acts on it. `hunch hook install` is the user's call, not yours: it changes how their agent runs commands. Suggest it; don't run it unasked.
 
 ## Writing a spec
 

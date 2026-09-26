@@ -1,5 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
-# Does a RAG answer say anything its passages don't support? 40 real answers from RAGTruth (MIT, see NOTICE.md).
+# Does a RAG answer say anything its passages don't support? All 900 answers of RAGTruth's QA test split (MIT, see
+# NOTICE.md), with every unsupported span marked by annotators. The numbers: results.json.
 judgment: answer_support
 model: jev-1.13.0
 source: answers.csv
@@ -19,7 +20,7 @@ questions:
 
 tests:
   unsupported:
-    min_accuracy: 0.75   # 80.0% on these 40; 83.8% on all 900 (a sample richer in unsupported answers)
+    min_accuracy: 0.80   # 83.8% measured
 
 examples:                 # must pass on every test, whatever else changes
   - name: adds a number the passage doesn't have
