@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# Did a commit leave a method's comment wrong? 3,944 real Java commits (Panthaplackel et al., AAAI 2021; see NOTICE.md):
+# the comment as it was, the method before and after the commit, and the signature change found by code (rows.py).
+judgment: stale_comment
+model: jev-1.13.0
+source: py(rows.py:rows)
+key: id
+state: [comment, signature_change, old_code, new_code]
+clip: {old_code: 6000, new_code: 6000}
+questions:
+  stale:
+    type: noul
+    instructions: >-
+      `comment` is the documentation of a Java method, written for `old_code`. A commit changed the method to
+      `new_code` and left `comment` as it was. `signature_change` lists what the commit changed in the method's
+      signature, found by a parser: renamed, added or removed parameters, changed types. Is `comment` now wrong or out
+      of date about `new_code`: does it describe a name, type, parameter, return value or behaviour that `new_code`
+      no longer has?
+    gold: gold_checked       # the 300 rows the authors checked by hand; gold_stale is the heuristic label on all
+    act: 0.9
+
+tests:
+  stale: {min_auroc: 0.9, min_accuracy: 0.85}
+
+examples:                 # must pass on every test, whatever else changes
+  - name: the return type changed under its @return
+    row:
+      comment: '@return org.parosproxy.paros.view.HttpPanel'
+      signature_change: return type HttpPanel → HttpPanelResponse
+      old_code: |
+        	public HttpPanel getResponsePanel() {
+        		if (responsePanel == null) {
+        			responsePanel = new HttpPanel(false);
+        		}
+        		return responsePanel;
+        	}
+      new_code: |
+        	public HttpPanelResponse getResponsePanel() {
+        		if (responsePanel == null) {
+        			responsePanel = new HttpPanelResponse(false, extension);
+        		}
+        		return responsePanel;
+        	}
+    expect: {stale: "yes"}
+  - name: a renamed parameter the summary never mentioned
+    row:
+      comment: Checks if toolitem is selected
+      signature_change: parameter w (ToolItem) removed; parameter toolItem (ToolItem) added
+      old_code: |
+        	public boolean isSelected(final ToolItem w) {
+        		return w.getSelection();
+        	}
+      new_code: |
+        	public boolean isSelected(final ToolItem toolItem) {
+        		return toolItem.getSelection();
+        	}
+    expect: {stale: "no"}

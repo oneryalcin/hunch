@@ -74,6 +74,7 @@
               "cookbooks/rag-answers",
               "cookbooks/nda-review",
               "cookbooks/product-matching",
+              "cookbooks/stale-comments",
               "cookbooks/banking-intents",
               "cookbooks/swe-patches",
               "cookbooks/amazon-reviews"

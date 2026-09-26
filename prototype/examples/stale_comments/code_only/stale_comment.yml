@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# The same question without the change: only the comment and the code as it is now, what a linter would see.
+judgment: stale_comment
+model: jev-1.13.0
+source: ../comments.csv
+key: id
+state: [comment, new_code]
+clip: {new_code: 6000}
+reviews: ../stale_comment.reviews.csv
+questions:
+  stale:
+    type: noul
+    instructions: >-
+      `comment` is the documentation of the Java method `new_code`. Is `comment` wrong or out of date about
+      `new_code`: does it describe a name, type, parameter, return value or behaviour that `new_code` does not have?
+    gold: gold_checked       # the 300 rows the authors checked by hand; gold_stale is the heuristic label on all
+    act: 0.9

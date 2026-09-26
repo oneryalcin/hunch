@@ -456,6 +456,16 @@ The first cookbook from the OpenChamber survey of Jev use cases (entity resoluti
 - **Adversarial review (Fable, 11 findings, fixed)**: the one-to-one query used `qualify p = max(p)`, which keeps every tied pair (Jev's p has few distinct values): one Abt product matched all five candidates, 14 of the 20 wrong matches were ties; now `row_number()` with a rank tie-break and an assertion. "None wrong at act" was a rounding of 1 in 4,806; the wording quoted test rows and was tuned on the scored rows, undisclosed; the panel's prompt wasn't committed and carried a suffix hint; both diff blocks predated later reviews and the first fix wasn't in the repo; "Run it" failed without the `sql` extra; the lost-match and recall-ceiling claims were inaccurate; the licence wasn't in the root NOTICE.
 - **Found in hunch**: `hunch.results()` returns the table of the last `run`, so after a spec edit (answers cached by `diff`) the panel script saw the old wording's answers and found 0 disagreements until `hunch run` was repeated. Recorded in 06-roadmap, "Features the cookbooks need".
 
+## Findings, round 21: comments a change left wrong (2026-09-27)
+
+Second cookbook from the OpenChamber survey ("rules a linter can't check": jev-lint, ESLint rules as questions, rule-scoring coding agents). Data: Panthaplackel et al., AAAI 2021 (MIT), test split, 3,944 Java commits (summary 1,066, @param 1,038, @return 1,840); labels are a heuristic (comment edited in the same commit; 17-20% noise by the authors' count); gold = the authors' 300 hand-checked rows (50/50 per kind). `prototype/examples/stale_comments/`, cookbook `docs-site/cookbooks/stale-comments.mdx`.
+
+- **What the model sees decides most of it.** Same question, three states, on the 300: comment + current code 72.7% (AUROC 0.814); + the code before the commit 82.3% (0.875; diff 52 fixed / 23 broken, p=0.001); + `signature_change` found by a parser in the `py()` source 86.7% (0.921; 22 / 9, p=0.029). Paper: best trained model 87.8%, rule-based 75.7%, code-only CodeBERT 66.9%. Untrained, within a point of the trained model.
+- **Code finds facts, the model judges.** A plain @param rule (named parameter removed or retyped) was 87/100 where the before/after spec had 75; with the parser's facts in state the spec reached 89. @return went 84 → 80 with the facts: a fact can mislead.
+- **Act on one side.** At 0.9: "stale" on 20.3% of rows, 1.6% wrong; "fine" on 9.0%, 7.4% wrong. `check_change.py` fails on a sure "stale", lists unsure ones, ignores "fine". Against the heuristic label on all rows: 77.4%, consistent with its noise; the most confident disagreements are the label's (`@return true if it's ok` on a method now returning void).
+- **Cost:** $0.09-0.13 per spec for 3,944 rows (66 s). Total $0.34.
+- **Found in hunch:** a CSV pre-trimmed to the `clip` length is not the same input as the full text clipped (62 of 3,944 keys changed), so trimming committed data to save space re-asks those rows. `hunch.judge()` prints its "asking …" lines on stderr for every call, which clutters a CLI built on it, and a script judging several rows calls it once per row, serially.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:

@@ -1,0 +1,127 @@
+---
+title: "Catch comments a change left wrong"
+description: "A commit changes a Java method and leaves its documentation behind. Code finds what changed in the signature, one question judges whether each comment still holds: 86.7% right on 300 hand-checked commits, with no training, and a script that fails CI on the ones it is sure of."
+---
+
+A developer changes `getResponsePanel()` to return an `HttpPanelResponse`. The Javadoc above it still says `@return org.parosproxy.paros.view.HttpPanel`. The build passes, the tests pass, the review looks at the code. The next person to read that comment believes it.
+
+A linter can catch part of this. Java's own documentation checker reports a `@param` that names no parameter. It cannot tell whether "Creates elastic node as single member of a cluster" is still what a method does after a commit rewrote it. That is a judgment about meaning, and it is the kind of rule this cookbook turns into code: one spec, measured on real commits, and a script that runs it on a change.
+
+## The rows
+
+[Panthaplackel et al. (AAAI 2021)](https://github.com/panthap2/deep-jit-inconsistency-detection) (MIT) collected commits from open-source Java projects on GitHub. Each row is a method's comment, the method before the commit, and the method after it. The test split has 3,944 rows from hundreds of projects, for three kinds of comment: the summary sentence (1,066), `@param` lines (1,038) and `@return` lines (1,840).
+
+Each row's label says whether the commit left the comment wrong, and it is a heuristic: "wrong" means the developer edited the comment in the same commit. Developers also reword comments that were fine, and forget ones that weren't. The authors checked a random 300 by hand, 50 wrong and 50 fine of each kind, and estimate the rest carry 17–20% wrong labels. So those 300 are the gold here (`gold_checked`), and the heuristic label (`gold_stale`) is kept beside them.
+
+The authors also report their own models on the same 300, which gives this cookbook something to measure against: their best, trained on this dataset's training split, is right 87.8% of the time; a rule comparing the comment's words with what the commit deleted, 75.7%; a CodeBERT classifier that sees only the comment and the current code, 66.9%.
+
+## What the question needs to see
+
+The question is the same in every spec below: is the comment now wrong about the method? What changes is what the model sees. `code_only/stale_comment.yml` shows it the comment and the method as it is now, which is all a linter has:
+
+```yaml code_only/stale_comment.yml
+state: [comment, new_code]
+questions:
+  stale:
+    type: noul
+    instructions: >-
+      `comment` is the documentation of the Java method `new_code`. Is `comment` wrong or out of date about
+      `new_code`: does it describe a name, type, parameter, return value or behaviour that `new_code` does not have?
+    gold: gold_checked
+```
+
+72.7% on the 300. `before_after/stale_comment.yml` adds the method before the commit, and says the comment was written for it. `hunch diff` compares the two on every row:
+
+```text
+stale: 982/3944 rows flip (245 within noise band)
+  gold accuracy on the 300 shared rows with gold 72.7% → 82.3%  (✓ 52 fixed, ✗ 23 broken, 0 wrong both times, 907 without gold)
+  paired sign test p=0.001 → significant
+```
+
+A comment is wrong about a change, not about a method, so the change has to be in view. The paper found the same: every model that saw the change beat every model that didn't.
+
+## Code finds the facts, the model judges
+
+By kind, the before-and-after spec was right on 88 summaries, 84 `@return` lines and 75 `@param` lines of each 100. The `@param` lines are the odd ones out, and they are also where a plain rule works: a `@param` names a parameter, and a parser can tell exactly whether that parameter is gone or has a new type. That rule alone is right on 87 of the 100.
+
+So the rule's facts go to the model instead of competing with it. `rows.py` is the spec's source: it reads the rows and adds `signature_change`, what the commit did to the method's signature, found by parsing:
+
+```text
+summary | Creates elastic node as single member of a cluster. | parameter settings (Settings) added
+summary | Marshal the aggregator values of to a JSONArray that w… | return type JSONArray → byte[]
+return  | @return org.parosproxy.paros.view.HttpPanel            | return type HttpPanel → HttpPanelResponse
+```
+
+```yaml stale_comment.yml
+judgment: stale_comment
+model: jev-1.13.0
+source: py(rows.py:rows)
+key: id
+state: [comment, signature_change, old_code, new_code]
+clip: {old_code: 6000, new_code: 6000}
+questions:
+  stale:
+    type: noul
+    instructions: >-
+      `comment` is the documentation of a Java method, written for `old_code`. A commit changed the method to
+      `new_code` and left `comment` as it was. `signature_change` lists what the commit changed in the method's
+      signature, found by a parser: renamed, added or removed parameters, changed types. Is `comment` now wrong or out
+      of date about `new_code`: does it describe a name, type, parameter, return value or behaviour that `new_code`
+      no longer has?
+    gold: gold_checked
+    act: 0.9
+```
+
+```text
+stale: 370/3944 rows flip (176 within noise band)
+  gold accuracy on the 300 shared rows with gold 82.3% → 86.7%  (✓ 22 fixed, ✗ 9 broken, 0 wrong both times, 339 without gold)
+  paired sign test p=0.029 → significant
+```
+
+86.7%: 91 summaries, 89 `@param` lines, 80 `@return` lines of each 100. The facts made `@param` better than the rule on its own, and summaries better too; `@return` went from 84 to 80, so a fact can also mislead. All 3,944 rows took 66 seconds and $0.13; each of the three specs cost between $0.09 and $0.13 to ask of every row.
+
+That is within about a point of the paper's best model, which was trained on thousands of this dataset's examples. This spec was trained on nothing: a question, and a parser's facts.
+
+## How sure it is
+
+```text
+stale (noul, 3944 rows)
+  gold: 300 rows (300 from source, 0 from review)
+  PASS accuracy 86.7% (min 85%)
+  PASS AUROC 0.921 (150 yes / 150 no; 0.5 = coin toss; unaffected by base rate) (min 0.9)
+       dial   act on yes: automated  wrong   │  act on no: automated  wrong
+       0.80                  33.7%   5.0%   │                23.0%  10.1%
+       0.90                  20.3%   1.6%   │                 9.0%   7.4%  ← act yes  ← act no
+       0.95                  11.7%   2.9%   │                 2.0%  16.7%
+```
+
+The two sides say different things. When it is sure a comment is stale, at 0.9 or more, it is right: that covers a fifth of the rows, and 1 in 61 of them is wrong. When it says a comment is fine it is less reliable, and nothing needs to happen on a "fine" anyway. So a check built on it acts on one side only: fail on a sure "stale", list an unsure one for a person, and stay quiet otherwise.
+
+Against the heuristic label on all 3,944 rows it agrees 77.4% of the time, which is about what 17–20% wrong labels allow. Its most confident disagreements show why: `@return true if it's ok` above a method the commit changed to return `void`, and `@param context The application's context.` above one whose `context` parameter the commit removed. Both are labelled fine, because nobody edited the comment.
+
+## Run it on a change
+
+`check_change.py` takes two versions of a Java file. For every method whose code changed while its Javadoc did not, it judges each part of the Javadoc (the summary sentence, each `@param`, the `@return`), the same units the spec was measured on, and exits 1 when one is surely stale. `example/Before.java` and `example/After.java` hold two methods from the dataset, wrapped in a class with a few Javadoc lines added:
+
+```sh
+uv run python prototype/examples/stale_comments/check_change.py \
+  prototype/examples/stale_comments/example/Before.java prototype/examples/stale_comments/example/After.java
+```
+
+```text
+CHECK  getResponsePanel: Gets the response panel.   (p=0.65; return type HttpPanel → HttpPanelResponse)
+STALE  getResponsePanel: @return org.parosproxy.paros.view.HttpPanel   (p=0.96; return type HttpPanel → HttpPanelResponse)
+CHECK  isSelected: @param w the tool item   (p=0.88; parameter w (ToolItem) removed; parameter toolItem (ToolItem) added)
+```
+
+The `@return` fails the check. The `@param w` line is stale too, since `w` is now `toolItem`, but at 0.88 it is below the bar, so it is listed for a person rather than failing the build. The summary "Checks if toolitem is selected" was not flagged: the rename didn't make it wrong. In CI, the two versions are the file at the base of a pull request and at its head (`git show origin/main:path/Foo.java`). Two rows are pinned in the spec's `examples`, so a later edit to the question can't quietly stop catching either case.
+
+## What did not work
+
+**Facts can mislead.** `@return` comments got worse with `signature_change` (84 → 80 of 100). A changed return type does not always make a `@return` line wrong, and the fact seems to pull the answer towards "stale".
+
+**Java only, methods only.** The parser in `rows.py` reads Java method headers with regular expressions: it gave up on 4 of the 3,944, and it doesn't know about fields, classes or other languages. The question itself says nothing Java-specific beyond the word.
+
+**One person checked the gold.** The 300 were checked by one of the paper's authors, who also dropped rows whose label was uncertain from the limited context. The spec is wrong on 40 of the 300; with a single checker, some of those may be the gold's.
+
+**A whole Javadoc was never measured.** `check_change.py` judges each part of a Javadoc separately, as the rows were measured. The parts of a comment can depend on each other, and its method-finding regular expression is a sketch, not a Java parser.

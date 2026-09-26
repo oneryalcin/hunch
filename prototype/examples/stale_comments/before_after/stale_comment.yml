@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# The same question with the method before and after the commit, and no facts from code.
+judgment: stale_comment
+model: jev-1.13.0
+source: ../comments.csv
+key: id
+reviews: ../stale_comment.reviews.csv
+state: [comment, old_code, new_code]
+clip: {old_code: 6000, new_code: 6000}
+questions:
+  stale:
+    type: noul
+    instructions: >-
+      `comment` is the documentation of a Java method, written for `old_code`. A commit changed the method to
+      `new_code` and left `comment` as it was. Is `comment` now wrong or out of date about `new_code`: does it describe
+      a name, type, parameter, return value or behaviour that `new_code` no longer has?
+    gold: gold_checked       # the 300 rows the authors checked by hand; gold_stale is the heuristic label on all
+    act: 0.9
