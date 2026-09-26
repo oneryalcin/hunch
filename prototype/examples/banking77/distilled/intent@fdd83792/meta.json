@@ -85,7 +85,8 @@
         "wrong_exchange_rate_for_cash_withdrawal"
       ],
       "legend": null,
-      "trained_on": 3000
+      "trained_on": 3000,
+      "temperature": 0.5537
     }
   },
   "trained": [

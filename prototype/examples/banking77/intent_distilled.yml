@@ -2,7 +2,7 @@
 # sure of. hunch test intent_distilled.yml --source banking77_holdout.csv --max-cost 0 (free: the rest is cached)
 judgment: intent_distilled
 reviews: intent.reviews.csv     # the same answer key and reviews as intent.yml
-model: distilled:distilled/intent@e60839c7   # hunch distill intent.yml --source banking77_unlabeled.csv
+model: distilled:distilled/intent@fdd83792   # hunch distill intent.yml --source banking77_unlabeled.csv
 source: banking77_sample.csv
 key: id
 state: [text]
@@ -89,8 +89,8 @@ questions:
       why_verify_identity: Whether or why identity verification is required, or using the account before verification has passed
       wrong_amount_of_cash_received: An ATM gave them less cash than requested or charged
       wrong_exchange_rate_for_cash_withdrawal: The exchange rate applied to a cash withdrawal seems wrong
-    act: 0.70
-    escalate: {model: jev-1.13.0}    # below 0.70, the teacher answers
+    act: 0.90
+    escalate: {model: jev-1.13.0}    # below 0.90, the teacher answers
     gold: gold_intent
 
 tests:
