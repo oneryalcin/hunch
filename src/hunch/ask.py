@@ -29,7 +29,7 @@ FILLER = set("a an the is are was were be do does did would will should could ca
 
 def name_of(question: str) -> str:
     """"Would running this command delete files?" → running_command_delete_files."""
-    words = [w for w in re.findall(r"[a-z0-9]+", question.lower()) if w not in FILLER]
+    words = [w for w in re.findall(r"\w+", question.lower()) if w not in FILLER]  # any script, not only Latin
     return "_".join(words[:4]) or "question"
 
 
@@ -37,9 +37,12 @@ def build(question: str, source: Path, options: list[str], columns: list[str] | 
     """The spec for this question over this CSV: every column but the key and gold_* is the state, unless
     `columns` says which."""
     with open(source, newline="") as f:
-        header = next(csv.reader(f), [])
-    if not header:
-        sys.exit(f"{source}: no header row")
+        reader = csv.reader(f)
+        header = next(reader, [])
+        if not header:
+            sys.exit(f"{source}: no header row")
+        if next(reader, None) is None:
+            sys.exit(f"{source}: no rows under the header")
     key = "id" if "id" in header else header[0]
     missing = [c for c in columns or [] if c not in header]
     if missing:
@@ -60,50 +63,61 @@ def main(argv: list[str]) -> None:
     p.add_argument("--name", help="the spec's name (default: from the question's first words)")
     p.add_argument("--max-cost", type=float, help="USD: refuse or stop above this (default: $HUNCH_MAX_COST)")
     a = p.parse_args(argv)
+    if not a.question.strip():
+        sys.exit("the question is empty")
+    if a.name and not re.fullmatch(r"[\w-]+", a.name.removesuffix(".yml")):
+        sys.exit(f"--name {a.name!r}: letters, digits, _ and - only (it names the spec file)")
     if not a.source.is_file():
         sys.exit(f"{a.source}: no such file")
     if a.max_cost is not None:
         core.MAX_COST = a.max_cost
-    name = a.name or name_of(a.question)
-    options = [o.strip() for o in a.options.split(",") if o.strip()] if a.options else []
+    name = a.name.removesuffix(".yml") if a.name else name_of(a.question)
+    options = list(dict.fromkeys(o.strip() for o in a.options.split(",") if o.strip())) if a.options else []
     if a.options and len(options) < 2:
-        sys.exit("--options needs at least two answers, comma-separated")
+        sys.exit("--options needs at least two different answers, comma-separated")
     path = Path(f"{name}.yml")
     spec = build(a.question, Path(os.path.relpath(a.source.resolve(), Path.cwd())), options,
                  [c.strip() for c in a.columns.split(",")] if a.columns else None, name)
     text = core.spec_yaml(spec)
     if path.exists() and path.read_text() != text:
-        sys.exit(f"{path} exists with another question or columns; --name another, or edit it and `hunch run {path}`")
+        sys.exit(f"{path} exists and differs (another question or columns, or your edits); --name another, "
+                 f"or `hunch run {path}`")
+    new = not path.exists()
     path.write_text(text)
-
     project = core.load_project(path.resolve())
-    errors, _ = core.lint(project)
+    errors, warnings = core.lint(project)
+    for w in warnings:
+        print(f"lint warning: {w}", file=sys.stderr)
     if errors:
-        sys.exit("\n".join(errors))
+        if new:  # nothing left behind for a spec that can't run
+            path.unlink()
+        sys.exit("\n".join(f"lint error: {e}" for e in errors))
     core.cmd_run(project, argparse.Namespace())
     res = core.execute(project, dry=True)[name]  # everything is in the store now: nothing is asked
     rows = []
     for it in res["items"]:
         label, _, _ = core.decide(res["answers"][it["key"]])
         conf = core.conf_of(it, res["answers"][it["key"]])
+        # named as `hunch run`'s table names them: <question>, <question>_p, <question>_route
         rows.append({**{c: it["row"].get(c, "") for c in [spec["key"], *spec["state"]]},
-                     "answer": label, "p": round(conf, 3), "route": core.route(it["q"], res["answers"][it["key"]])})
-    counts = Counter(r["answer"] for r in rows)
+                     name: label, f"{name}_p": round(conf, 3), f"{name}_route": core.route(it["q"], res["answers"][it["key"]])})
+    counts = Counter(r[name] for r in rows)
     print(f"\n{a.question}")
     for label, n in counts.most_common():
         print(f"  {label:<20} {n:>6}  ({n / len(rows):.0%})")
-    unsure = sorted((r for r in rows if r["route"] == "review"), key=lambda r: r["p"])
+    unsure = sorted((r for r in rows if r[f"{name}_route"] == "review"), key=lambda r: r[f"{name}_p"])
     print(f"  sure enough to act on (p ≥ {ACT}): {len(rows) - len(unsure)} of {len(rows)}")
     if unsure:
         print(f"\nleast sure ({min(SHOW, len(unsure))} of {len(unsure)}):")
         for r in unsure[:SHOW]:
             shown = " | ".join(str(r[c]) for c in spec["state"]).replace("\n", " ")
-            print(f"  {r[spec['key']]!s:>8}  {r['answer']:<12} p={r['p']:.2f}  {shown[:80]}")
+            print(f"  {r[spec['key']]!s:>8}  {r[name]:<12} p={r[f'{name}_p']:.2f}  {shown[:80]}")
     out = Path(f"{name}.answers.csv")
     with open(out, "w", newline="") as f:
-        w = csv.DictWriter(f, list(rows[0]) if rows else [spec["key"], "answer", "p", "route"])
+        w = csv.DictWriter(f, list(rows[0]))
         w.writeheader()
         w.writerows(rows)
     print(f"\nanswers: {out}   spec: {path}\n"
           f"next: `hunch review {path}` (a verdict on the rows that teach the most), then `hunch test {path}` "
-          f"(how often it's right, and where to set act); edit the question and `hunch diff {path} --against git:HEAD`")
+          f"(how often it's right, and where to set act); commit it, and after an edit `hunch diff {path} --against git:HEAD` "
+          f"shows every answer the edit flips")

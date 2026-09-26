@@ -38,7 +38,7 @@ hunch ask "Which team should handle this?" messages.csv --options billing,techni
 hunch ask "Is this urgent?" messages.csv --columns subject,body --name urgent --max-cost 0.05
 ```
 
-Writes `<name>.yml` in the current folder (the name defaults to the question's first four words that aren't filler, `command_destroy_data` above), runs it like `run`, prints how the answers split and the ten rows it was least sure of, and writes every row's `answer`, `p` and `route` to `<name>.answers.csv`. The key is the `id` column, else the first; the model sees `--columns`, else every column but the key and `gold_*`. Each question gets `act: 0.9`, so "unsure" means below 0.9. If `<name>.yml` exists with a different question or columns, it stops: pass `--name`, or edit the spec and `hunch run` it.
+Writes `<name>.yml` in the current folder (the name defaults to the question's first four words that aren't filler, `command_destroy_data` above), runs it like `run`, prints how the answers split and the ten rows it was least sure of, and writes every row's answer to `<name>.answers.csv`, in columns named as `run`'s tables name them: `<name>`, `<name>_p`, `<name>_route`. The key is the `id` column, else the first; the model sees `--columns`, else every column but the key and `gold_*`. Each question gets `act: 0.9`, so "unsure" means below 0.9. If `<name>.yml` exists and differs from what `ask` would write (another question or columns, or your own edits), it stops: pass `--name`, or `hunch run` the spec. A spec that fails lint isn't left behind.
 
 ### `hunch init`
 
