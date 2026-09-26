@@ -65,17 +65,20 @@ async def answer(self, model, state, questions) -> dict:
     return {"answers": {id: answer, ...}, "cost": 0.0, "tokens": 0}
 ```
 
-Answers take Jev's shapes (`{"type": "noul", "noul": p_yes}`, a choice's `choice`, `confidence` and `probabilities`, a score's `score`, `confidence`, `legend` and `probabilities`), and hunch checks each one before storing it (the shape, that probabilities are in [0, 1], that a choice is one of its options), naming the question and what is wrong; a broken plugin stops the run with that message instead of being retried. Optional attributes: `key`, the environment variable it needs; `worst_cost(model, state, questions)`, the most one call can be charged, so `--max-cost` holds (without it hunch treats the engine as free, and a capped run stops at the first call that reports a cost above what it reserved); `adapter`, a string in every answer's cache key, to change when the engine's prompt or parsing changes; `concurrency`, calls in flight at once. A spec (or an `escalate`) that names a prefix no engine has fails lint and lists the engines installed. A plugin can't take a built-in prefix (`openrouter`, `deepseek`, `distilled`): it is ignored, with a lint warning.
+Answers take Jev's shapes (`{"type": "noul", "noul": p_yes}`, a choice's `choice`, `confidence` and `probabilities`, a score's `score`, `confidence`, `legend` and `probabilities`), and hunch checks each one before storing it (the shape, that probabilities are in [0, 1], that a choice is one of its options), naming the question and what is wrong; a broken plugin stops the run with that message instead of being retried. Optional attributes: `key`, the environment variable it needs; `worst_cost(model, state, questions)`, the most one call can be charged, so `--max-cost` holds (without it hunch treats the engine as free, and a capped run stops at the first call that reports a cost above what it reserved); `adapter`, a string in every answer's cache key, to change when the engine's prompt or parsing changes (without it, the key holds the plugin package's name and version, so an upgrade never serves an older version's answers); `concurrency`, calls in flight at once. A spec (or an `escalate`) that names a prefix no engine has fails lint and lists the engines installed. A plugin can't take a built-in prefix (`openrouter`, `deepseek`, `distilled`): it is ignored, with a lint warning.
 
-`prototype/examples/engines/hunch_engine_ollama` is a complete plugin in about 40 lines: any model [Ollama](https://ollama.com) serves, asked with hunch's own LLM prompt and read from its token probabilities. On 40 answers from the [rag-answers](/cookbooks/rag-answers) battery (a sample, to keep the local runs short), measured with the same command as any engine (`hunch test . --model ollama:<name>`), local and free:
+`plugins/hunch-engine-ollama` is the reference plugin, a package of its own: any model [Ollama](https://ollama.com) serves, asked with hunch's own LLM prompt and read from its token probabilities, with smoke tests CI runs against this hunch. It also shows the case a plugin exists for: a specialised model that answers one question in its own format.
+
+Bespoke-MiniCheck is a 7B model trained to say whether a document supports a claim. Asked the [rag-answers](/cookbooks/rag-answers) battery's question in hunch's generic prompt, it scored AUROC 0.265 on a 40-answer sample: reliably backwards, since its "yes" means supported and it answered its own question, not the spec's "does it say anything unsupported". The plugin's template asks it natively (`Document: {passages}` / `Claim: {answer}`) and turns its Yes into the spec's no; the template's name is part of the model, `ollama:bespoke-minicheck#rag-unsupported`, so its answers are cached and benchmarked apart. On all 900 answers, locally and for free:
 
 | Engine | AUROC | Accuracy |
 | --- | --- | --- |
-| `jev-1.13.0` | 0.918 | 80.0% |
-| `ollama:qwen2.5:0.5b` | 0.528 | 35.0% |
-| `ollama:bespoke-minicheck` | 0.265 | 45.0% |
+| `jev-1.13.0` | 0.941 | 83.8% |
+| `deepseek:deepseek-flash` | 0.907 | 77.3% |
+| `ollama:bespoke-minicheck#rag-unsupported` | 0.840 | 67.4% |
+| `ollama:qwen2.5:0.5b` | 0.434 | 21.2% |
 
-An AUROC well under 0.5 is a model that is reliably backwards. Bespoke-MiniCheck is a 7B model trained to answer one question, whether a document supports a claim, so its "yes" means supported, and it answered that instead of the spec's "does it say anything unsupported". A specialised model needs its own prompt, which is the plugin's to write; the number said so before anything shipped on it.
+In its own format it ranks unsupported answers well, below Jev and DeepSeek on this data. The number said the generic prompt was wrong before anything relied on it; the [benchmark](/reference/benchmark) keeps these side by side.
 
 ## Escalate
 

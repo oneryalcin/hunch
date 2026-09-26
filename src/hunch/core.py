@@ -434,7 +434,7 @@ def item(spec: dict, row: dict, qid: str, aq: dict | None = None, variant: str =
             "q": q, "aq": aq, "state": state, "shash": digest(state)[:16],
             "key": digest({"model": spec["model"], "state": state, "question": aq,
                            **({"adapter": LLM_ADAPTER} if is_llm(spec["model"]) else
-                              {"adapter": a} if (a := getattr(engines.get(spec["model"]), "adapter", None)) else {})})}
+                              {"adapter": a} if (a := engines.adapter(spec["model"])) else {})})}
 
 
 def plan(spec: dict, rs: list[dict] | None = None) -> list[dict]:

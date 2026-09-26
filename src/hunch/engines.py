@@ -26,7 +26,8 @@ and, optionally:
     worst_cost(model, state, questions) -> USD
                       the most one call can be charged, for --max-cost (without it: 0, a local engine)
     adapter: str      how it asks, as part of every answer's cache key: change it when the engine's prompt or
-                      parsing changes, so old answers aren't reused as if nothing had
+                      parsing changes, so old answers aren't reused as if nothing had. Without it the key holds the
+                      plugin package's name and version, so an upgrade never serves the old version's answers
     concurrency: int  calls in flight at once (default: hunch's, 16); a local model may want 1
 
 Answers are cached, measured and compared like any engine's: `hunch test spec.yml --model ollama:qwen2.5:0.5b`,
@@ -37,6 +38,7 @@ from importlib.metadata import entry_points
 
 RESERVED: set[str] = set()  # the built-in prefixes (core fills it in): a plugin can't take them over
 _loaded: dict | None = None
+_package: dict[str, str] = {}  # prefix → "name==version" of the package that registered it
 shadowed: list[str] = []  # plugins that tried to take a built-in prefix, for lint to report
 
 
@@ -54,6 +56,8 @@ def installed() -> dict:
             if ep.name in RESERVED:  # its answers would be stored under the built-in's cache keys
                 shadowed.append(f"{ep.name} ({ep.value})")
                 continue
+            if ep.dist is not None:
+                _package[ep.name] = f"{ep.dist.name}=={ep.dist.version}"
             try:
                 _loaded[ep.name] = ep.load()
             except Exception as e:  # noqa: BLE001 — kept, raised when a spec asks for it
@@ -83,6 +87,14 @@ async def call(engine, model: str, state, questions: dict) -> dict:
 
 def _p(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and 0.0 <= x <= 1.0
+
+
+def adapter(model: str) -> str | None:
+    """What goes in the cache key for a plugin engine's answers: its own `adapter`, else its package and version."""
+    engine = get(model)
+    if engine is None:
+        return None
+    return getattr(engine, "adapter", None) or _package.get(model.split(":", 1)[0]) or "unversioned"
 
 
 def check(model: str, questions: dict, got) -> dict:
