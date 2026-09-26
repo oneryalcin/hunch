@@ -32,9 +32,16 @@ and, optionally:
 Answers are cached, measured and compared like any engine's: `hunch test spec.yml --model ollama:qwen2.5:0.5b`,
 `hunch diff spec.yml --model ollama:bespoke-minicheck` against the spec's own engine.
 """
+import inspect
 from importlib.metadata import entry_points
 
+RESERVED: set[str] = set()  # the built-in prefixes (core fills it in): a plugin can't take them over
 _loaded: dict | None = None
+shadowed: list[str] = []  # plugins that tried to take a built-in prefix, for lint to report
+
+
+class ContractError(Exception):
+    """A plugin broke the engine contract: retrying won't help, so the fill stops with this message."""
 
 
 def installed() -> dict:
@@ -44,6 +51,9 @@ def installed() -> dict:
     if _loaded is None:
         _loaded = {}
         for ep in entry_points(group="hunch.engines"):
+            if ep.name in RESERVED:  # its answers would be stored under the built-in's cache keys
+                shadowed.append(f"{ep.name} ({ep.value})")
+                continue
             try:
                 _loaded[ep.name] = ep.load()
             except Exception as e:  # noqa: BLE001 — kept, raised when a spec asks for it
@@ -60,18 +70,49 @@ def get(model: str):
     return engine
 
 
-def check(model: str, questions: dict, got: dict) -> dict:
-    """The plugin's answers, or a SystemExit naming what is wrong with them: a missing answer or a wrong shape
-    would otherwise surface far away, as a KeyError in `test`."""
+def loaded() -> list[str]:
+    return [p for p, e in installed().items() if not isinstance(e, Exception)]
+
+
+async def call(engine, model: str, state, questions: dict) -> dict:
+    got = engine.answer(model, state, questions)
+    if not inspect.isawaitable(got):
+        raise ContractError(f"{model}: the plugin's answer() must be async (async def answer(...))")
+    return await got
+
+
+def _p(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and 0.0 <= x <= 1.0
+
+
+def check(model: str, questions: dict, got) -> dict:
+    """The plugin's answers, or a ContractError naming what is wrong with them: a missing answer, a wrong shape or
+    a value that isn't a probability would otherwise surface far away, as a TypeError in `test`."""
     answers = got.get("answers") if isinstance(got, dict) else None
     if not isinstance(answers, dict):
-        raise RuntimeError(f"{model}: answer() must return {{'answers': {{id: answer}}, …}}, got {type(got).__name__}")
+        raise ContractError(f"{model}: answer() must return {{'answers': {{id: answer}}, …}}, got {type(got).__name__}")
+    if not isinstance(got.get("cost", 0) or 0, (int, float)) or (got.get("cost") or 0) < 0:
+        raise ContractError(f"{model}: 'cost' must be a number of USD ≥ 0, got {got.get('cost')!r}")
     for rid, q in questions.items():
         a = answers.get(rid)
         need = {"noul": ("noul",), "choice": ("choice", "confidence", "probabilities"),
                 "score": ("score", "confidence", "legend", "probabilities")}[q["type"]]
         if not isinstance(a, dict) or a.get("type") != q["type"] or any(k not in a for k in need):
-            raise RuntimeError(f"{model}: answer for {rid!r} must be a {q['type']} with {list(need)}, got {a!r}")
-        if q["type"] == "choice" and a["choice"] not in (q.get("criteria") or {}) and a["choice"] != "none_of_these":
-            raise RuntimeError(f"{model}: {rid!r} answered {a['choice']!r}, not one of its options")
+            raise ContractError(f"{model}: answer for {rid!r} must be a {q['type']} with {list(need)}, got {a!r}")
+        bad = None
+        if q["type"] == "noul":
+            bad = None if _p(a["noul"]) else f"noul {a['noul']!r} is not a probability in [0, 1]"
+        else:
+            probs, allowed = a["probabilities"], (set(q.get("criteria") or {}) | {"none_of_these"} if q["type"] == "choice"
+                                                  else {str(i) for i in range(len(q.get("criteria") or []))})
+            if not _p(a["confidence"]):
+                bad = f"confidence {a['confidence']!r} is not a probability in [0, 1]"
+            elif not isinstance(probs, dict) or not all(_p(v) for v in probs.values()) or set(probs) - allowed:
+                bad = f"probabilities must map its {'options' if q['type'] == 'choice' else 'levels 0…n-1'} to [0, 1], got {probs!r}"
+            elif q["type"] == "choice" and a["choice"] not in allowed:
+                bad = f"answered {a['choice']!r}, not one of its options"
+            elif q["type"] == "score" and not (isinstance(a["score"], (int, float)) and 0 <= a["score"] <= len(allowed) - 1):
+                bad = f"score {a['score']!r} is outside its levels 0…{len(allowed) - 1}"
+        if bad:
+            raise ContractError(f"{model}: {rid!r}: {bad}")
     return answers
