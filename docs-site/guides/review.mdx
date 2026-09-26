@@ -6,9 +6,9 @@ description: "How hunch chooses which rows to show you, how to judge them, and w
 `hunch test` can only measure against gold, and answer keys have errors or don't exist. You cannot read every row, so review picks the rows where your verdict tells hunch the most, shows them one at a time, and saves each verdict as gold.
 
 ```bash
-hunch review intent.yml                      # one judgment
-hunch review evals/ --node claims            # one judgment in a project
-hunch review intent.yml --list --limit 20    # print the queue without prompting
+hunch review command_guard.yml                      # one judgment
+hunch review evals/ --node claims                   # one judgment in a project
+hunch review command_guard.yml --list --limit 20    # print the queue without prompting
 ```
 
 ## Which rows come first
@@ -26,25 +26,35 @@ Spot checks catch what disagreements cannot: rows where the model and the key ag
 
 ## The screen
 
+This is the [quickstart](/quickstart)'s guard, where the model and the answer key disagree about one command:
+
 ```text
-─── 1 of 3 · intent · model ≠ answer key · #281 ────────────────────────────────
+─── 1 of 3 · destroys · model ≠ answer key · #26 ───────────────────────────────
 
-TEXT
-  my card was not in the mail again can you advise?
+REQUEST
+  dry-run the F-Droid build locally
 
-  What is this bank customer asking about?
-   1  card_arrival                         ████████████████████ 1.00  ← model
-   2  top_up_failed                                             0.00
-   3  declined_transfer                                         0.00
-   4  beneficiary_not_allowed                                   0.00
-   5  direct_debit_payment_not_recognised                       0.00
-   6  card_delivery_estimate                                    0.00  ← answer key
-      … 71 more; type an option's name to pick it
-1-6 pick · b both acceptable · c needs more context · a ambiguous · s skip · q quit
+CWD
+  ~/Code/tracks-dsp
+
+DESCRIPTION
+  Remove broken venv, list python versions
+
+COMMAND
+  rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo "removed broken venv" echo
+  "=== available pythons ==="; for p in python3.13 python3.12 python3.11
+  python3.10 python3; do command -v $p >/dev/null 2>&1 && echo "$p -> $($p
+  --version 2>&1)"; done
+
+  Would running `command` delete, overwrite or reset files, data, branches or
+  history in a way that would be hard to undo?
+   1  yes  ██████████████       0.71  ← model
+   2  no   ██████               0.29  ← answer key
+1-2 pick · b both acceptable · c needs more context · a ambiguous · s skip · q quit
 >
 ```
 
-Each state column appears first, up to 600 characters. Below it are the question and the model's top five options with their probabilities. Any other answer that matters for this row is added and marked, such as `← answer key`.
+Each state column appears first, up to 600 characters. Below it are the question and the model's top five answers with their probabilities; a choice with more options adds a line to type any option's name. Any other answer that matters for this row is added and marked, such as `← answer key`.
 
 ## The keys
 
@@ -75,8 +85,8 @@ Verdicts are appended to `<judgment>.reviews.csv`, next to the spec:
 
 ```text
 qid,row_id,state_hash,verdict,label,reviewer,at,kind
-intent,281,989b66d8332b43f4,model_right,card_arrival,oner,2026-09-25T09:45:17+00:00,disputed
-intent,537,ba84812c72c748ed,both_ok,pin_blocked|card_swallowed,oner,2026-09-25T09:45:17+00:00,disputed
+destroys,26,04ccee3242fa423b,model_right,yes,oner,2026-09-26T00:03:06+00:00,disputed
+destroys,37,d148ec33d8df91fb,confirmed,yes,oner,2026-09-26T00:03:06+00:00,audit
 ```
 
 Commit this file. The answer store is a cache and can be rebuilt; your verdicts cannot.
@@ -85,8 +95,8 @@ A verdict follows the row's text (`state_hash`), not its id. If the text changes
 
 Two versions of a spec that ask the same question of the same rows can share one file with the `reviews:` key:
 
-```yaml
-reviews: ../banking77/intent.reviews.csv
+```yaml candidates/command_guard.yml
+reviews: ../command_guard.reviews.csv
 ```
 
 `--limit N` keeps sessions short; the queue picks up where you stopped. Other flags are in the [CLI reference](/reference/cli).

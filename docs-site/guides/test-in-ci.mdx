@@ -9,30 +9,32 @@ A unit test checks that a function returns what you expect. A judgment can't be 
 
 Add a `tests:` block, keyed by question:
 
-```yaml prototype/examples/banking77/intent.yml
+```yaml prototype/examples/swe_agent/patch_eval.yml
 tests:
-  intent:
-    min_accuracy: 0.85
-    max_calibration_error: 0.05
-    min_act_accuracy: 0.97
+  passes_tests:
+    min_auroc: 0.70
+    max_calibration_error: 0.10
 ```
 
 `hunch test` checks each one, prints `PASS` or `FAIL`, and exits 1 if any fails. A check marked `severity: warn` prints `WARN` instead and never fails the build: for something you want to see on every run without blocking on it.
 
-Here is the BANKING77 intent spec, run against its answer key:
+Here is a judgment that reads a coding agent's patch and predicts whether it will pass the project's tests, from the [SWE-agent cookbook](/cookbooks/swe-patches), run against the real test results:
 
-```text
-intent (choice, 770 rows)
-  gold: 770 rows (770 from source, 0 from review)
-  PASS accuracy 85.5% (min 85%)
-  FAIL calibration error 0.085 (max 0.05)
-  ...
-  FAIL accuracy among auto-acted 91.8% on 83% of rows at act=0.9 (min 97%)
+```bash
+hunch test prototype/examples/swe_agent/patch_eval.yml --max-cost 0
 ```
 
-Accuracy passes, yet the spec fails twice. The model is more confident than it should be. Of the answers it gave at confidence 0.9 or above, only 91.8% were right, and those are the ones the code acts on without a person looking. Accuracy alone would not have shown that.
+```text
+passes_tests (noul, 200 rows)
+  gold: 200 rows (200 from source, 0 from review)
+  PASS accuracy 77.8% [weighted to the population] (min 0%)
+  FAIL calibration error 0.147 [weighted to the population] (max 0.1)
+  PASS AUROC 0.831 (100 yes / 100 no; 0.5 = coin toss; unaffected by base rate) (min 0.7)
+```
 
-The other tests are `min_auroc` for yes/no questions and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no tests still gets its numbers printed; nothing can fail.
+The model ranks patches well: a passing patch usually gets a higher probability than a failing one. Yet the spec fails. When the model says a patch will pass, it is more confident than it has reason to be, and a pipeline that skipped the tests on its confident "yes" would ship broken patches. Ranking alone would not have shown that.
+
+The other tests are `min_accuracy`, `min_act_accuracy` (accuracy among the answers acted on without a person) and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no tests still gets its numbers printed; nothing can fail.
 
 Two more kinds of check live in the same spec. [Examples](/reference/spec#examples) pin rows whose answers must not change. [Metrics](/reference/spec#metrics) check a rule built from several answers, such as "stop the command if any question says yes", against gold, with limits like `max_missed`.
 
@@ -93,10 +95,10 @@ To see what a pull request does to the answers, add a step with `hunch diff eval
 | 1 | A check failed, or `test` stopped before asking |
 | 2 | A spec has a lint error |
 
-Exit 1 has two causes, and the last line of the log tells them apart. Run with `--max-cost 0`, the same spec ends like this, because its `order_stability` test needs answers the store doesn't have:
+Exit 1 has two causes, and the last line of the log tells them apart. Here is the [quickstart](/quickstart)'s guard tested with `--max-cost 0` on a fresh store, before any answers exist:
 
 ```text
-intent: would ask 300 answers in 150 requests (~$0.0217), above --max-cost $0.0; nothing asked
+command_guard: would ask 114 answers in 38 requests (~$0.0010), above --max-cost $0.0; nothing asked
 ```
 
 A script can tell them apart without reading the log. A finished `test` writes its results to `.hunch/target/`, as JSON with a `passed` field; a stopped one writes nothing. See [the results file](/reference/cli#the-results-file).
