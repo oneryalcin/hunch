@@ -6,6 +6,7 @@ environment: in a uv tool install it rebuilds the tool with the package added (u
 package installed beside the tool would be dropped by the next `uv tool upgrade`); anywhere else it installs into
 the interpreter hunch runs on. Plugin packages are named `hunch-engine-<name>` on PyPI.
 """
+import re
 import shutil
 import subprocess
 import sys
@@ -38,10 +39,22 @@ def tool_receipt() -> Path | None:
 
 
 def spec_of(req: dict) -> str | None:
-    """A requirement from uv's receipt as a command-line spec; None for one a spec can't say (git, a path, a URL)."""
-    if any(k in req for k in ("git", "path", "url", "directory", "editable")):
+    """A requirement from uv's receipt as a command-line spec (a folder or a file as its path, git and URLs as
+    `name @ …`); None for an editable install, which `--with` can't restate."""
+    if "editable" in req:
         return None
+    if "directory" in req or "path" in req:
+        return req.get("directory") or req["path"]
+    if "git" in req:
+        return f"{req['name']} @ " + (req["git"] if req["git"].startswith("git+") else f"git+{req['git']}")
+    if "url" in req:
+        return f"{req['name']} @ {req['url']}"
     return req["name"] + (f"[{','.join(req['extras'])}]" if req.get("extras") else "") + (req.get("specifier") or "")
+
+
+def _name(spec: str) -> str:
+    """A package's name from a spec (`hunch-engine-foo>=1`, `hunch_engine_foo[x]`), normalized as PyPI does."""
+    return re.split(r"[\[<>=!~ @;]", spec.strip(), maxsplit=1)[0].lower().replace("_", "-").replace(".", "-")
 
 
 def install_command(packages: list[str]) -> tuple[list[str] | None, str]:
@@ -51,10 +64,11 @@ def install_command(packages: list[str]) -> tuple[list[str] | None, str]:
         reqs = tomllib.loads(receipt.read_text())["tool"]["requirements"]
         specs = [spec_of(r) for r in reqs]
         if None in specs or not reqs:
-            return None, (f"hunch is a uv tool built from a source a command line can't restate ({receipt}); "
+            return None, (f"hunch's uv tool has an editable install a command line can't restate ({receipt}); "
                           f"add the plugin with: uv tool install <how you installed hunch> "
                           + " ".join(f"--with {s}" for s in (*[s for s in specs[1:] if s], *packages)))
-        keep = [s for s in specs[1:] if s.split("[")[0].split("=")[0].split(">")[0].split("<")[0] not in packages]
+        new = {_name(p) for p in packages} | set(packages)  # installing one again replaces it, whatever its source
+        keep = [spec for req, spec in zip(reqs[1:], specs[1:]) if _name(req["name"]) not in new and spec not in new]
         cmd = ["uv", "tool", "install", specs[0], *[x for s in (*keep, *packages) for x in ("--with", s)]]
         return cmd, "rebuilds hunch's uv tool environment with the plugin added"
     if shutil.which("uv"):
