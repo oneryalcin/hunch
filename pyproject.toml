@@ -1,7 +1,7 @@
 [project]
 name = "hunch-ai"  # the PyPI name `hunch` is a placeholder someone else holds; import and command stay `hunch`
 dynamic = ["version"]  # from src/hunch/__init__.py, so the package and the release tag can't disagree
-description = "Write the questions your code asks a model as specs, then test, diff and review the answers like code"
+description = "Decision engineering: turn a question into a decision your software can act on, and measure how often it's right"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
