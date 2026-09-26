@@ -33,7 +33,7 @@ hunch run . --max-cost 0.01        # about $0.001
 hunch test .
 ```
 
-Working with a coding agent? `hunch skill` teaches Claude Code, Codex or Cursor the same loop.
+Using Claude Code or Codex? `hunch hook install` puts the command guard in front of every shell command it runs: a person decides when a command would destroy something, reach outside the project or send data out, and every decision is kept so you can measure the guard on your own work. `hunch skill` teaches the agent the hunch loop itself.
 
 A spec looks like this:
 

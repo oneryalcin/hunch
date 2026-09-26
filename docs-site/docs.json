@@ -48,6 +48,7 @@
           {
             "group": "Guides",
             "pages": [
+              "guides/guard-your-agent",
               "guides/write-a-spec",
               "guides/review",
               "guides/test-in-ci",
