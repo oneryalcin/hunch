@@ -88,7 +88,7 @@ destroys:
   escalate: {model: "deepseek:deepseek-flash"}
 ```
 
-When the first answer is below `act`, the same question goes to the `escalate` model. Its answer replaces the first only if it clears `act` itself; otherwise the first stays and routes to `review`. Both are kept in the store, and the batch table's `destroys_by` column records which engine answered.
+When the first answer is below `act`, the same question goes to the `escalate` model. Its answer replaces the first only if it clears `act` itself; otherwise the first stays and routes to `review`. Behind a [distilled](/guides/distill) model, the escalated answer always replaces it. Both are kept in the store, and the batch table's `destroys_by` column records which engine answered.
 
 ## Capping the cost
 

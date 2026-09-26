@@ -852,6 +852,8 @@ def llm_route(model: str) -> tuple[str, dict]:
 
 
 def estimate_cost(model: str, groups: list[list[dict]]) -> float:
+    if model.startswith("distilled:"):
+        return 0.0
     if not is_llm(model):
         return estimate_tokens(groups) * PRICE_PER_INPUT_TOKEN
     tokens = sum((len(json.dumps(it["state"])) + len(json.dumps(it["aq"]))) / 4 + LLM_OVERHEAD_TOKENS
@@ -994,6 +996,14 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
     stats = {"cached": sum(it["key"] in have for it in items), "asked": 0, "tokens": 0, "cost": 0.0,
              "requests": sum(len(g) for g in group) if is_llm(model) else len(group)}
 
+    if group and model.startswith("distilled:"):  # a local student (hunch distill): no key, no cost, no network
+        from hunch import distill
+        got = distill.answer(spec, model, [it for g in group for it in g])
+        write(db, "insert or replace into answers (key, model, answer, input_tokens) values (?, ?, ?, 0)",
+              [[k, model, json.dumps(a)] for k, a in got.items()])
+        have.update(got)
+        stats["asked"] += len(got)
+        return have, stats
     if group:
         for w in oversized([it for g in group for it in g])[:5]:
             print(f"  size warning: {w}", file=sys.stderr)
@@ -1390,7 +1400,8 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
 async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict, dry: bool,
                    hits: set) -> tuple[dict, dict, dict]:
     """escalate: {model: X} on a question re-asks, on engine X, only the answers that fall below `act`; the
-    escalated answer replaces the original when it clears `act` itself. Both stay in the store; the returned
+    escalated answer replaces the original when it clears `act` itself. Behind a distilled student it always does:
+    the teacher is the better model, and a student's confidence is not comparable with its teacher's. Both stay in the store; the returned
     answers are the combined system's, `by` says which key was answered by which engine. Escalated answers that
     were already stored are added to `hits`."""
     todo: dict[str, list[dict]] = {}
@@ -1412,7 +1423,7 @@ async def escalate(spec: dict, db, items: list[dict], answers: dict, stats: dict
         stats = merge_stats(stats, estats)
         for it, e in zip(its, eitems):
             ea = got.get(e["key"])
-            if ea and route(it["q"], ea, it.get("path_p", 1.0)) == "act":
+            if ea and (route(it["q"], ea, it.get("path_p", 1.0)) == "act" or spec["model"].startswith("distilled:")):
                 it["key"] = e["key"]  # the row's answer is now the escalated one (lineage, drift and tests follow)
                 final[e["key"]], by[e["key"]] = ea, model
     return final, by, stats
@@ -1941,7 +1952,9 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         flips, noisy, dp = [], 0, []
         for v in variants:
             b = by_id[v["id"]]
-            (bl, bp, bm), (vl, _, vm) = decide(answers[b["key"]]), decide(vans[v["key"]])
+            ba = answers.get(item(b["spec"], b["row"], qid)["key"]) or answers[b["key"]]  # the base engine's own answer,
+            # not an escalated one: permutations are asked of the base engine, so that is what they must match
+            (bl, bp, bm), (vl, _, vm) = decide(ba), decide(vans[v["key"]])
             dp.append(abs(bp - vans[v["key"]]["probabilities"][bl]))
             if bl != vl:
                 flips.append((b, v))
@@ -1952,7 +1965,7 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
               f"mean |Δp| of original answer {sum(dp) / len(dp):.3f} (max flip rate {order.get('max_flip_rate', 1):.0%})",
               "order_stability", rate, order.get("max_flip_rate", 1))
         for b, v in flips[:SHOW]:
-            print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
+            print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers.get(item(b['spec'], b['row'], qid)['key']) or answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
     out["checks"] = check.log[first_check:]
     return out
 
@@ -2072,6 +2085,7 @@ def cmd_test(project: dict, args) -> None:
             kind = f"union of {', '.join(spec['union'])}" if "union" in spec else f"{res['input']} rows in{where}"
             print(f"\n══ {n} ({kind})")
         attach_gold(res["items"], load_reviews(spec))  # just before testing: a union shares its branches' items
+        ungrade(project, n, res["items"])
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
             rep["questions"][qid] = test_question(spec, qid, its, res["answers"], check, all_stats)
@@ -2082,8 +2096,9 @@ def cmd_test(project: dict, args) -> None:
             if its and "escalate" in its[0]["q"]:
                 gold = [it for it in esc if it["gold"]]
                 acc = f"; right on {sum(hit(it, res['answers'][it['key']]) for it in gold)}/{len(gold)} with gold" if gold else ""
-                print(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows now act on its "
-                      f"answer{acc} (the rest stay in review)")
+                acting = sum(route(it["q"], res["answers"][it["key"]], it.get("path_p", 1.0)) == "act" for it in esc)
+                print(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows use its answer, "
+                      f"{acting} of them confident enough to act{acc}")
         for parent, labels in spec.get("_multi", {}).items():
             rep.setdefault("multi", {})[parent] = test_multi(spec, parent, labels, res, check)
         for mname, m in (spec.get("metrics") or {}).items():
@@ -2098,6 +2113,30 @@ def cmd_test(project: dict, args) -> None:
 
 
 RESULTS_VERSION = 1
+
+
+def ungrade(project: dict, name: str, items: list[dict]) -> None:
+    """A distilled student (the judgment's engine, or a union branch's) is graded only on rows it never trained on."""
+    spec = project["nodes"][name]
+    for s in [project["nodes"][u] for u in spec["union"]] if "union" in spec else [spec]:
+        if str(s.get("model", "")).startswith("distilled:"):
+            from hunch import distill
+            if k := distill.ungrade_trained(s, items):
+                print(f"  {k} gold answers were training data for {s['model']}: not graded")
+
+
+def cmd_distill(project: dict, args) -> None:
+    """A small local model per question, trained on the answers already in the store; asks nothing."""
+    from hunch import distill
+    node = args.node or next((n for n in reversed(project["order"]) if "union" not in project["nodes"][n]), "")
+    if node not in project["nodes"] or "union" in project["nodes"][node]:
+        sys.exit(f"--node {node!r}: pick a judgment with questions ({', '.join(project['order'])})")
+    out, report = distill.distill(project, node)
+    rel = os.path.relpath(out, project["nodes"][node]["_dir"])
+    print(f"{node}: distilled to {out}\n" + "\n".join(report))
+    print(f"measure it (free, local): hunch test {args.path} --model distilled:{rel}\n"
+          f"use it: model: distilled:{rel}, with escalate: {{model: {project['nodes'][node]['model']}}} and act "
+          f"on each question, so answers it isn't sure of go to {project['nodes'][node]['model']}")
 
 
 def cmd_docs(project: dict, args) -> None:
@@ -2296,6 +2335,8 @@ def cmd_diff(project: dict, args) -> None:
         reviews = load_reviews(spec)  # gold is about the data, so both sides use today's reviews
         attach_gold(new_r[n]["items"], reviews)
         attach_gold(old_r[o]["items"], reviews)
+        ungrade(project, n, new_r[n]["items"])
+        ungrade(old, o, old_r[o]["items"])
         old_qs, changed = question_of(ospec), {}
         for qid in question_of(spec):
             new_its = [it for it in new_r[n]["items"] if it["qid"] == qid]
@@ -2765,7 +2806,7 @@ def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = No
 
 def main() -> None:
     commands = {"lint": cmd_lint, "compile": cmd_compile, "run": cmd_run, "test": cmd_test, "suggest": cmd_suggest,
-                "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs}
+                "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs, "distill": cmd_distill}
     p = argparse.ArgumentParser(prog="hunch")
     p.add_argument("--version", action="version", version=f"hunch {__import__('hunch').__version__}")
     p.add_argument("command", choices=list(commands))
