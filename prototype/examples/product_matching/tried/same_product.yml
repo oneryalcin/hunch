@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# Abt-Buy (Leipzig entity-resolution benchmark, see NOTICE.md): is an Abt listing the same product as a Buy listing?
+# The first attempted fix, kept so its `hunch diff` against first/ can be rerun: it merged colours the key keeps apart.
+judgment: same_product
+model: jev-1.13.0
+source: py(../candidates.py:pairs)
+key: id
+reviews: ../same_product.reviews.csv
+state: [abt_name, abt_description, abt_price, buy_name, buy_manufacturer, buy_description, buy_price]
+questions:
+  same:
+    type: noul
+    instructions: >-
+      Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with
+      `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
+      model? A different model number, size or capacity is a different product, and so is an accessory made for it.
+      The two shops word names differently, and a price may be missing. Shops also add their own letters to the
+      same model's code, for a colour, a finish or a region (PM1327BK and PM1327, DU1100SS and DU1100XTPS): when the
+      rest of the code and the product agree, it is the same product.
+    gold: gold_same
+    act: 0.9

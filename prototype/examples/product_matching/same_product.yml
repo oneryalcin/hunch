@@ -14,7 +14,7 @@ questions:
       `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
       model? A different model number, size or capacity is a different product, and so is an accessory made for it.
       The two shops word names differently, and a price may be missing. A shop may also add its own letters to the
-      end of the same model's code (PM1327BK and PM1327, DU1100SS and DU1100XTPS): when the rest of the code and the
+      end of the same model's code (AB123 in one shop, AB123XY in the other): when the rest of the code and the
       product agree, it is the same product. But when both listings name a colour and the colours differ, they are
       different products.
     gold: gold_same

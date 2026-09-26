@@ -1,0 +1,52 @@
+{
+ "questions": {
+  "same": {
+   "question": "Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same model? A different model number, size or capacity is a different product, and so is an accessory made for it. The two shops word names differently, and a price may be missing. A shop may also add its own letters to the end of the same model's code (AB123 in one shop, AB123XY in the other): when the rest of the code and the product agree, it is the same product. But when both listings name a colour and the colours differ, they are different products.",
+   "yes": "They are the same product.",
+   "no": "They are different products.",
+   "unclear": "The two listings don't show enough to tell."
+  }
+ },
+ "rows": [
+  {
+   "n": 4,
+   "abt_name": "Canon Black Ink Cartridge - Black - PG40BK",
+   "abt_description": "Canon Black Ink Cartridge - PG40BK/ Compatible With The Pixma iP1600, MP170 Printers",
+   "abt_price": "$19.00",
+   "buy_name": "Canon PG-40 Black Ink Cartridge - PG-40-BK-TWIN",
+   "buy_manufacturer": "Canon",
+   "buy_description": "Black",
+   "buy_price": "$41.46"
+  },
+  {
+   "n": 3,
+   "abt_name": "Yamaha 5.1 Channel Home Theater In A Box System In Black  - YHT390BK",
+   "abt_description": "Yamaha 5.1 Channel Home Theater In A Box System In Black - YHT390BK/ New Scene, Compressed Music Enhancer/ iPod Compatibility/ 600W Powerful Surround Sound/ Silent Cinema/ 192kHz/24-Bit DACs For All Channels/ Black Finish",
+   "abt_price": "$399.00",
+   "buy_name": "Yamaha YHT-390BL Home Theater System - YHT-390bl",
+   "buy_manufacturer": "Yamaha",
+   "buy_description": ", 5.1 Speakers - Progressive Scan - 600W RMS - Black",
+   "buy_price": "$319.96"
+  },
+  {
+   "n": 2,
+   "abt_name": "Sennheiser Orange And Silver In Ear Headphones - CX380",
+   "abt_description": "Sennheiser Orange And Silver In Ear Headphones - CX380/ Massive Sound Despite Their Small Size/ Sweat-Proof Coating/ Noise Isolating Design/ Dynamic Drivers Guarantee Impressive Bass/ Includes Ear Adapters & Carrying Case/ Orange & Silver Finish",
+   "abt_price": "$79.95",
+   "buy_name": "Sennheiser CX380 Sennheiser CX 380 Sport II Grey/Orange",
+   "buy_manufacturer": "Sennheiser",
+   "buy_description": "",
+   "buy_price": ""
+  },
+  {
+   "n": 1,
+   "abt_name": "LG LFC23760ST 22.6 Cu. Ft. Stainless Steel French Door Bottom Freezer Refrigerator - LFC23760SS",
+   "abt_description": "LG LFC23760ST 22.6 Cu. Ft. Stainless Steel French Door Bottom Freezer Refrigerator - LFC23760SS/ 4 Split Tempered Glass Shelves/ Upfront Digital Temperature Controls/ 2 OptiBin Clear Humidity Crispers/ Multi-Air Flow Cooling/ IcePlus Accelerated Freezing Function/ LoDecibel Quiet Operation/ BioShield Anti-Bacterial Door Seal/ Pull-Out Freezer Drawer/ Stainless Steel Finish",
+   "abt_price": "",
+   "buy_name": "LG 22 Cu.Ft. Total Capacity",
+   "buy_manufacturer": "LG Electronics",
+   "buy_description": "",
+   "buy_price": ""
+  }
+ ]
+}

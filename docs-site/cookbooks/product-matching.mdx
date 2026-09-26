@@ -1,6 +1,6 @@
 ---
 title: "Match two product catalogues"
-description: "Find which of two shops' listings are the same product: cheap rules in SQL narrow 1.18 million pairs to 5,396, one question decides each, and SQL keeps one match per product. 98% of matches right, and the answer key was wrong more often than it looked."
+description: "Find which of two shops' listings are the same product: cheap rules in SQL narrow 1.18 million pairs to 5,396, one question decides each, and SQL keeps one match per product. 99% of the matches are right, and the 682 it is sure of are all right."
 ---
 
 One shop lists `Sony Turntable - PSLX350H`. Another lists `Sony PS-LX350H Belt-Drive Turntable`. They are the same record player, written two ways. The same two shops also list `Sony Cyber-Shot Black Digital Camera - DSCT500B` and `Sony Cyber-shot DSC-T300 Digital Camera - Black`: one digit apart, and two different cameras.
@@ -29,9 +29,9 @@ Comparing every Abt product with every Buy product is 1,081 × 1,092 = 1.18 mill
 5396 candidate pairs; 1061 of 1097 true matches among them
 ```
 
-From 1.18 million pairs to 5,396, and 96.7% of the true matches are still among them. The 36 that are gone are the price of cheap rules: listings that share no code and almost no words.
+From 1.18 million pairs to 5,396, and 96.7% of the true matches are still among them. The 36 that are gone share a word or more with their match, three typically, but a long Buy name dilutes the share of words they have in common until five other listings rank above them.
 
-The rules alone can also match: take each Abt product's best candidate. That is right 955 times out of 1,081, an F1 of 87.7%. It is the number the decision has to beat.
+The rules alone can also match: take each Abt product's best candidate. That is right 955 times out of 1,081, an F1 of 87.7%. It is the number the decision has to beat. (For 51 Abt products the two best candidates tie on both signals, and the lower id wins.)
 
 ## One question for each pair
 
@@ -51,14 +51,14 @@ questions:
       `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
       model? A different model number, size or capacity is a different product, and so is an accessory made for it.
       The two shops word names differently, and a price may be missing. A shop may also add its own letters to the
-      end of the same model's code (PM1327BK and PM1327, DU1100SS and DU1100XTPS): when the rest of the code and the
+      end of the same model's code (AB123 in one shop, AB123XY in the other): when the rest of the code and the
       product agree, it is the same product. But when both listings name a colour and the colours differ, they are
       different products.
     gold: gold_same
     act: 0.9
 ```
 
-All 5,396 pairs took 89 seconds and cost $0.14. The last three sentences of the instructions were not there at first. How they got there is the most useful part of this cookbook.
+All 5,396 pairs took 91 seconds and cost $0.14. The last three sentences of the instructions were not there at first. How they got there is the most useful part of this cookbook.
 
 ## The answer key disagreed 180 times
 
@@ -71,9 +71,9 @@ The first wording stopped after "a price may be missing". Against the benchmark'
 | Sony … Headphones - MDREX**85**LPBLK | Sony MDREX**81**LP … Headphones | same |
 | Weber … Summit S-**650** Grill | Weber Summit Series S-**450** … Grill | same |
 
-A few striking rows prove nothing about the rest, so the disagreements went to a blind panel: three AI reviewers (one Claude Opus, two Claude Sonnet, one of them reading in reverse order) who saw what the model saw and the question, and neither the model's answer nor the key's. They reviewed all 180 disagreements beyond a random 100, and the majority vote became the [reviews file](/reference/files#verdicts).
+A few striking rows prove nothing about the rest, so the disagreements went to a blind panel: three AI reviewers (one Claude Opus, two Claude Sonnet, one of them reading in reverse order) who saw what the model saw and the question, and neither the model's answer nor the key's. They reviewed a random 100 pairs and all 180 other disagreements, and the majority vote became the [reviews file](/reference/files#verdicts).
 
-On the 180 disagreements, the key was right 69 times and the model 22. The other 89 could not be decided from the listings at all: a Buy name with no description, two codes that might or might not be one product. Those rows are dropped from scoring rather than guessed. On the random 100, the panel sided with both the model and the key on 96.
+On the 180 disagreements, the key was right 69 times and the model 22. On 81 more, two of the three reviewers said the listings don't show enough to tell: a Buy name with no description, two codes that might or might not be one product. On the last 8 the reviewers split three ways. Those 89 are dropped from scoring rather than guessed. On the random 100, the panel sided with both the model and the key on 96.
 
 So the striking rows were real, and they were not typical. The model's own mistakes had a pattern.
 
@@ -87,65 +87,69 @@ Onkyo 6 Disc CD Player Changer - DXC390B         ONKYO 6-DISC CD CHANGER W/VLSC,
 Whirlpool 24' Built-In Dishwasher - DU1100SS     Whirlpool DU1100XTPS 24' Undercounter Dishwasher
 ```
 
-The question said a different model number is a different product, and nothing about letters a shop adds for a colour or finish, so the model was strict. The first fix said so: "Shops also add their own letters to the same model's code, for a colour, a finish or a region … it is the same product." `hunch diff` asked it of every pair and compared it with the first wording on all the gold, the key and the panel's verdicts together:
+The question said a different model number is a different product, and nothing about letters a shop adds for a colour or finish, so the model was strict. The first fix said so, with these rows as its examples: "Shops also add their own letters to the same model's code, for a colour, a finish or a region (PM1327BK and PM1327, DU1100SS and DU1100XTPS) … it is the same product." `hunch diff` asked it of every pair and compared it with the first wording on all the gold, the key and the panel's verdicts together:
 
 ```text
 same: 68/5396 rows flip (40 within noise band)
-  gold accuracy on the 5291 shared rows with gold 98.7% → 98.3%  (✓ 21 fixed, ✗ 43 broken, 0 wrong both times, 4 without gold)
-  paired sign test p=0.008 → significant
+  gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
+  paired sign test p=0.043 → significant
   ✗ #33471~208154550                              no 0.65 → yes 0.76                                    Sony Silver Cyber-Shot Digital Camera -…
 ```
 
-Worse, and significantly so. It fixed the mounts and the dishwashers, and it broke cameras: a silver and a gold Cyber-shot DSC-W150 are two products in the key, and "a colour" in the new sentence told the model they were one. The second fix kept the letters and drew the line where the key draws it: when both listings name a colour and the colours differ, they are different products.
+Worse, and significantly so. It fixed the mounts and the dishwashers, and it broke cameras: a silver and a gold Cyber-shot DSC-W150 are two products in the key, and "a colour" in the new sentence told the model they were one. The second fix kept the letters, drew the line where the key draws it (when both listings name a colour and the colours differ, they are different products), and gave a made-up code as its example instead of rows from the data:
 
 ```text
-same: 53/5396 rows flip (34 within noise band)
-  gold accuracy on the 5291 shared rows with gold 98.7% → 99.2%  (✓ 38 fixed, ✗ 11 broken, 0 wrong both times, 4 without gold)
+same: 48/5396 rows flip (30 within noise band)
+  gold accuracy on the 5286 shared rows with gold 98.6% → 99.2%  (✓ 35 fixed, ✗ 4 broken, 0 wrong both times, 9 without gold)
   paired sign test p=0.000 → significant
 ```
 
-Each rewording cost $0.14 to ask of every pair; the comparison itself asked nothing. The first wording is kept as `first/same_product.yml`, so the diff can be run again. The new wording disagreed with the key on 11 pairs no one had reviewed, so those went to the same panel before any number below was written: 7 decided, 4 undecidable.
+Each wording cost $0.14 to ask of every pair; the comparisons asked nothing. Both earlier wordings are kept, `first/same_product.yml` and `tried/same_product.yml`, so either diff can be run again. Each time a wording disagreed with the key on pairs no one had reviewed, those went to the same panel before any number here was written: 11 pairs, then 4.
+
+<Note>
+The wording was chosen on the same pairs it is scored on: the pattern was found in the panel's verdicts, and each fix was judged by `diff` against them. That makes the numbers below somewhat optimistic for listings like these that it has not seen. The panel also had a hint the first wording lacked: its instructions said model codes can differ "only in formatting (… a trailing colour/region suffix …)", which is close to the rule the final wording added. The prompt is in `prototype/review_panel/product_matching/PROMPT.md`.
+</Note>
 
 ## How good the decision is
 
 ```text
 same (noul, 5396 rows)
-  PASS estimated accuracy 99.3% (95% CI 95.5%–99.3%) from reviews of 96/5224 agreeing rows, 63/63 disagreeing rows
-       not the headline: on current gold 99.3% (trusts unreviewed rows), on the raw answer key 97.2%
-  PASS AUROC 1.000 (1024 yes / 4263 no; 0.5 = coin toss; unaffected by base rate) (min 0.98)
+  PASS estimated accuracy 99.2% (95% CI 95.4%–99.2%) from reviews of 96/5215 agreeing rows, 71/71 disagreeing rows (min 0%)
+       not the headline: on current gold 99.2% (trusts unreviewed rows), on the raw answer key 97.1%
+  PASS AUROC 1.000 (1023 yes / 4263 no; 0.5 = coin toss; unaffected by base rate) (min 0.98)
        dial   act on yes: automated  wrong   │  act on no: automated  wrong
-       0.80                  16.4%   0.1%   │                79.4%   0.1%
-       0.90                  13.3%   0.0%   │                77.6%   0.0%  ← act yes  ← act no
-       0.95                   7.5%   0.0%   │                74.2%   0.0%
+       0.80                  16.1%   0.0%   │                79.5%   0.1%
+       0.90                  13.0%   0.0%   │                77.8%   0.0%  ← act yes  ← act no
+       0.95                   6.8%   0.0%   │                74.9%   0.0%
   PASS accuracy among auto-acted 100.0% on 91% of rows at act=0.9 (min 99%)
 ```
 
-At `act: 0.9` the decision settles 91% of the pairs on its own, and none of those it settles is wrong against the gold. The other 590 pairs, about one in nine, route to `review`: a person looks at them, or code leaves them unmatched. The estimate has a wide interval below 99.3% because it rests on 100 random reviews; the dial is on every pair with gold.
+At `act: 0.9` the decision settles 4,797 of the 5,396 pairs on its own. Two of them are wrong against the gold, both a confident "no" for the same product under a shop's own code (a Maytag microwave listed as MMV4205BT and MMV4205BAQ, and a Sanus wall mount), which rounds to the 0.0% above. Against the benchmark's key alone, 15 are wrong, and the panel called 12 of those the key's mistake. The other 599 pairs, about one in nine, route to `review`: a person looks at them, or code leaves them unmatched. The estimate's interval reaches down to 95.4% because it rests on 100 random reviews.
 
-Three rows are pinned as `examples`, so a future edit can't quietly undo what the two fixes taught:
+Three rows are pinned as `examples`, so a future edit can't quietly undo what the fixes taught. They are pairs from the data, so they pin behaviour; they are not evidence of it:
 
 ```text
 examples (3)
-  PASS the shop's own letters on the same model code: same yes 0.88
-  PASS the same camera in two colours: same no 0.85
+  PASS the shop's own letters on the same model code: same yes 0.60
+  PASS the same camera in two colours: same no 0.86
   PASS one digit apart, another model: same no 0.97
 ```
 
 ## From pairs to matches, in SQL
 
-A decision on each pair is not yet a list of matches: an Abt product can have two candidates that both look like it. `match.py` does the last step where the data is, in DuckDB. [`hunch.sql`](/guides/sql) makes the spec a function, each candidate pair gets its decision as a column, and a pair is kept when the model says yes and it is the likeliest pair for both of its products:
+A decision on each pair is not yet a list of matches: an Abt product can have two candidates that both look like it. `match.py` does the last step where the data is, in DuckDB. [`hunch.sql`](/guides/sql) makes the spec a function, each candidate pair gets its decision as a column, and a pair is kept when the model says yes and it is the likeliest pair for both of its products. Probabilities tie often, so a tie goes to the better-ranked candidate:
 
 ```sql
 create table decided as
-select abt_id, buy_id, d.same.label as label, d.same.route as route,
+select abt_id, buy_id, rank, d.same.label as label, d.same.route as route,
        case when d.same.label = 'yes' then d.same.p else 1 - d.same.p end as p_yes
 from (select *, same_product(abt_name, abt_description, abt_price, buy_name, buy_manufacturer,
                              buy_description, buy_price) as d
       from pairs);
 
-select * from decided
-where label = 'yes'
-qualify p_yes = max(p_yes) over (partition by abt_id) and p_yes = max(p_yes) over (partition by buy_id);
+select * from (select * from decided where label = 'yes'
+               qualify row_number() over (partition by abt_id order by p_yes desc, rank::int, buy_id) = 1)
+qualify row_number() over (partition by buy_id order by p_yes desc, rank::int, abt_id) = 1;
 ```
 
 Scored against the benchmark's own answer key, as entity-resolution results usually are:
@@ -153,10 +157,10 @@ Scored against the benchmark's own answer key, as entity-resolution results usua
 | | Matches | Right | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- |
 | Rules alone: each product's best candidate | 1,081 | 955 | 88.3% | 87.1% | 87.7% |
-| hunch: the decision, one match per product | 998 | 978 | 98.0% | 89.2% | 93.4% |
-| hunch, only matches it is sure of (`route = 'act'`) | 698 | 698 | 100% | 63.6% | 77.8% |
+| hunch: the decision, one match per product | 980 | 971 | 99.1% | 88.5% | 93.5% |
+| hunch, only matches it is sure of (`route = 'act'`) | 682 | 682 | 100% | 62.2% | 76.7% |
 
-The decision's gain is mostly precision: 20 wrong matches instead of 126. Recall can't pass 96.7%, the matches the rules kept, and some of what it misses is the panel's "can't tell from the listings". The last line is the one to automate: 698 matches, all right against the key, with the rest for a person.
+The decision's gain is mostly precision: 9 wrong matches instead of 126. Recall has a ceiling below 100%: the rules keep 1,061 matches, and since 16 Abt products have more than one match in the key, one match per product can reach at most 1,044 of the 1,097 (95.2%). Some of what it misses is the panel's "can't tell from the listings". The last line is the one to automate: 682 matches, all right against the key, with the rest for a person.
 
 ## What did not work
 
@@ -164,15 +168,17 @@ The decision's gain is mostly precision: 20 wrong matches instead of 126. Recall
 
 **The rules lose matches before anything is asked.** 36 of the 1,097 are never candidates. More candidates per product would keep more and cost more; `candidates.py` has `TOP = 5`.
 
-**The panel is not people.** The reviewers are Claude models, and on the hard pairs they split: one said "same" on 67 pairs where the other two said the listings don't show enough. The majority vote settles each row; a person reviewing the 590 `review` pairs is the better answer key for your own catalogues.
+**The panel is not people.** The reviewers are Claude models, and on the hard pairs they split: one said "same" on 60 pairs where the other two said the listings don't show enough. The majority vote settles each row; a person reviewing the 599 `review` pairs is the better answer key for your own catalogues.
 
 ## Run it
 
+The rows come from DuckDB, so every command needs the `sql` extra (`uv add "hunch-ai[sql]"`, or `uv run --extra sql` in the repository):
+
 ```sh
 uv run --extra sql python prototype/examples/product_matching/match.py    # about $0.14 the first time, then free
-hunch test prototype/examples/product_matching/same_product.yml --max-cost 0
-hunch diff prototype/examples/product_matching/same_product.yml \
+uv run --extra sql hunch test prototype/examples/product_matching/same_product.yml --max-cost 0
+uv run --extra sql hunch diff prototype/examples/product_matching/same_product.yml \
   --against prototype/examples/product_matching/first/same_product.yml --max-cost 0
 ```
 
-For your own lists, change the two `read_csv` lines and the columns in `candidates.py`, keep the question, and [review](/guides/review) a few dozen of your own pairs: `hunch test` then measures it on your products instead of Abt's and Buy's.
+For your own lists, change the three `read_csv` lines and the columns in `candidates.py`, keep the question, and [review](/guides/review) a few dozen of your own pairs: `hunch test` then measures it on your products instead of Abt's and Buy's.

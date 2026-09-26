@@ -12,3 +12,12 @@ This product includes third-party data:
 - prototype/review_panel/claude_code/packets/*.json: excerpts of Trace Commons — Agent Traces
   (https://huggingface.co/datasets/trace-commons/agent-traces), licensed CC BY 4.0.
   See prototype/examples/claude_code/NOTICE.md.
+- src/hunch/recipes/rag_answers/answers.csv and prototype/examples/rag_answers/ragtruth_qa.csv: the QA test split of
+  RAGTruth by ParticleMedia (https://github.com/ParticleMedia/RAGTruth), MIT licence, Copyright (c) 2023 ParticleMedia.
+  See prototype/examples/rag_answers/NOTICE.md.
+- prototype/examples/nda_review/contractnli_*.csv: built from ContractNLI by Hitachi America, Ltd.
+  (https://stanfordnlp.github.io/contract-nli/), licensed CC BY 4.0. See prototype/examples/nda_review/NOTICE.md.
+- prototype/examples/product_matching/{abt,buy,matches}.csv and prototype/review_panel/product_matching/packets/*.json:
+  the Abt-Buy entity-resolution benchmark by the database group of Prof. Erhard Rahm, University of Leipzig
+  (https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), made available under the
+  Creative Commons license (no version named). See prototype/examples/product_matching/NOTICE.md.

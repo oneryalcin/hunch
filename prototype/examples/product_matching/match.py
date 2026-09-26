@@ -28,12 +28,12 @@ from (select *, same_product(abt_name, abt_description, abt_price, buy_name, buy
 """)
 
 # One match per product on each side: a pair is kept when the model says yes and it is the likeliest pair for both
-# its Abt product and its Buy product.
+# its Abt product and its Buy product. Probabilities tie often, so ties go to the better candidate rank, then the id.
 con.execute("""
 create table matched as
-select * from decided
-where label = 'yes'
-qualify p_yes = max(p_yes) over (partition by abt_id) and p_yes = max(p_yes) over (partition by buy_id)
+select * from (select * from decided where label = 'yes'
+               qualify row_number() over (partition by abt_id order by p_yes desc, rank::int, buy_id) = 1)
+qualify row_number() over (partition by buy_id order by p_yes desc, rank::int, abt_id) = 1
 """)
 con.execute("create table rule as select abt_id, buy_id from pairs where rank = '1'")
 
@@ -51,3 +51,4 @@ print("hunch: decision on each pair, one per product  ", score("matched"))
 print("hunch, only matches it is sure of (route act)  ", score("matched", "route = 'act'"))
 routes = con.execute("select route, count(*) from decided group by 1 order by 1").fetchall()
 print("pairs by route:", dict(routes))
+assert con.execute("select count(*) = count(distinct abt_id) and count(*) = count(distinct buy_id) from matched").fetchone()[0]
