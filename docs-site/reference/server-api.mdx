@@ -44,10 +44,10 @@ Judges one row, the same as [`ajudge`](/reference/python#ajudge).
 
 ```json
 {
-  "path": "features/triage.yml",
-  "row": {"subject": "Charged twice", "body": "I see two identical charges for March. Please refund one."},
-  "node": "triage",
-  "shadow": "features_v2/",
+  "path": "claude_code/command_guard.yml",
+  "row": {"request": "tidy up", "cwd": "/srv/app", "description": "Remove old logs", "command": "rm -rf /var/log/app/*.gz"},
+  "node": "command_guard",
+  "shadow": "claude_code/candidates/command_guard.yml",
   "log": false
 }
 ```
@@ -64,13 +64,15 @@ The response is what `ajudge` returns: `label`, `p`, `margin`, `route` and `cach
 
 ```sh
 curl -s -H "Authorization: Bearer secret" -X POST localhost:8765/v1/judge \
-  -d '{"path": "features/triage.yml", "row": {"subject": "Charged twice", "body": "I see two identical charges for March. Please refund one."}}'
+  -d '{"path": "claude_code/command_guard.yml",
+       "row": {"request": "forget I even mentioned RemixJS just do SolidJS", "cwd": "D:\\IceBerg", "description": "",
+               "command": "rm -rf Dockerfile README.md app node_modules package-lock.json package.json public react-router.config.ts tsconfig.json vite.config.ts .gitignore .dockerignore .react-router .claude && echo \"done\""}}'
 ```
 
 ```json
-{"dept": {"label": "billing", "p": 1.0, "margin": 1.0, "route": "act", "cached": true},
- "topics__refund": {"label": "yes", "p": 0.99, "margin": 0.98, "route": "", "cached": true},
- "...": "one entry per question"}
+{"destroys": {"label": "yes", "p": 0.95, "margin": 0.9, "route": "", "cached": true},
+ "reaches_outside": {"label": "no", "p": 0.86, "margin": 0.72, "route": "", "cached": true},
+ "sends_out": {"label": "no", "p": 0.98, "margin": 0.96, "route": "", "cached": true}}
 ```
 
 ### `GET /v1/runs?path=`
@@ -78,9 +80,12 @@ curl -s -H "Authorization: Bearer secret" -X POST localhost:8765/v1/judge \
 The project's runs, newest first, at most 50, from the store's `_hunch_runs` table.
 
 ```json
-[{"run_id": "2026-09-24T18:58:36-0bc797", "judgment": "triage", "spec_hash": "8fe15b24a108",
-  "git_sha": "3775349", "model": "jev-1.13.0", "rows": 6, "asked": 0, "cost": 0.0,
-  "status": "complete", "started_at": "2026-09-24T18:58:36", "finished_at": "2026-09-24T18:58:36"}]
+[{"run_id": "2026-09-25T15:07:41-9e87bf", "judgment": "command_guard", "spec_hash": "c6e294f6964d",
+  "git_sha": "bf7b42b", "model": "jev-1.13.0", "rows": 1315, "asked": 0, "cost": 0.0,
+  "status": "complete", "started_at": "2026-09-25T15:07:41", "finished_at": "2026-09-25T15:07:42"},
+ {"run_id": "2026-09-25T13:33:16-5cef1e", "judgment": "command_guard", "spec_hash": "c6e294f6964d",
+  "git_sha": "101c87b", "model": "jev-1.13.0", "rows": 1315, "asked": 1268, "cost": 0.031355,
+  "status": "complete", "started_at": "2026-09-25T13:33:16", "finished_at": "2026-09-25T13:33:38"}, ...]
 ```
 
 `status` is `complete`, or `failed: <error>` for a run that raised.
@@ -90,9 +95,12 @@ The project's runs, newest first, at most 50, from the store's `_hunch_runs` tab
 For each question of one judgment (`node` may be left out for a one-judgment project), the label mix of every run and how much it changed from the previous run.
 
 ```json
-{"dept": [{"run_id": "2026-09-24T18:58:36-0bc797", "rows": 6,
-           "shares": {"billing": 0.3333, "technical": 0.3333, "none_of_these": 0.1667, "sales": 0.1667},
-           "change": null, "alert": false}]}
+{"reaches_outside": [
+   {"run_id": "2026-09-25T13:04:16-ef9bca", "rows": 1315, "shares": {"no": 0.8266, "yes": 0.1734}, "change": null, "alert": false},
+   {"run_id": "2026-09-25T13:05:36-c24a88", "rows": 1315, "shares": {"no": 0.8213, "yes": 0.1787}, "change": 0.0053, "alert": false},
+   {"run_id": "2026-09-25T13:33:16-5cef1e", "rows": 1315, "shares": {"no": 0.9247, "yes": 0.0753}, "change": 0.1034, "alert": true},
+   ...],
+ "destroys": [...], "sends_out": [...]}
 ```
 
 `change`: total variation distance from the previous run's shares (`0` same mix, `1` no overlap; `null` for the first run). `alert`: `change` above `0.10`.

@@ -17,7 +17,7 @@ It serves the same specs and store as the CLI, so a verdict made here is a revie
 cd server
 HUNCH_PROJECTS=/path/to/specs HUNCH_SERVER_TOKEN=secret uv run uvicorn hunch_server.app:app --port 8765
 curl -H "Authorization: Bearer secret" -X POST localhost:8765/v1/judge \
-     -d '{"path": "tickets/ticket_triage.yml", "row": {"subject": "Charged twice", "body": "Refund one please"}}'
+     -d '{"path": "claude_code/command_guard.yml", "row": {"request": "tidy up", "cwd": "/srv/app", "description": "Remove old logs", "command": "rm -rf /var/log/app/*.gz"}}'
 ```
 
 Every path is relative to `HUNCH_PROJECTS` and refused if it resolves outside it. With `HUNCH_SERVER_TOKEN` set, every request needs it (header, `?token=`, or the review page's forms); without it the server is open, for local use only.

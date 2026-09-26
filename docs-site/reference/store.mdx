@@ -42,9 +42,9 @@ Keep `.hunch/` out of git: about 80 MB per 100,000 rows, and it holds your rows'
 Answer shapes:
 
 ```json
-{"type": "choice", "choice": "billing", "confidence": 1.0,
- "probabilities": {"none_of_these": 0.0, "sales": 0.0, "billing": 1.0, "technical": 0.0}}
-{"type": "noul", "noul": 0.1}
+{"type": "noul", "noul": 0.95}
+{"type": "choice", "choice": "card_delivery_estimate", "confidence": 0.94,
+ "probabilities": {"card_delivery_estimate": 0.94, "card_arrival": 0.06, "top_up_failed": 0.0, ...}}
 {"type": "score", "score": 0.35, "confidence": 0.65,
  "legend": {"0": "Calm", "1": "Mildly annoyed", "2": "Frustrated", "3": "Very angry"},
  "probabilities": {"0": 0.65, "1": 0.35, "2": 0.0, "3": 0.0}}
@@ -81,23 +81,38 @@ Under `--model`, the table name gets the engine as a suffix (`intent__deepseek_d
 
 ## Querying it
 
-Plain SQLite. Which engine answered each row of the triage example, and when:
+Plain SQLite. The command guard's table holds the 1,315 shell commands coding agents ran in public sessions, with whether the person refused each one. Set the guard's verdict beside what people did:
 
 ```sh
 sqlite3 -header -column prototype/.hunch/store.sqlite \
-  "select t.id, t.dept, t.dept_p, t.dept_by, a.created_at
-   from triage t join answers a on a.key = t.dept_key order by t.id"
+  "select destroys, rejected, count(*) as commands from command_guard group by 1, 2 order by 1, 2"
 ```
 
 ```
-id      dept       dept_p          dept_by              created_at
---  -------------  ------  -----------------------  -------------------
-1   billing           1.0  jev-1.13.0               2026-09-24 17:16:27
-2   technical       0.998  deepseek:deepseek-flash  2026-09-24 17:16:27
-3   none_of_these     1.0  jev-1.13.0               2026-09-24 17:16:27
-4   sales             1.0  jev-1.13.0               2026-09-24 17:16:27
-5   technical         1.0  jev-1.13.0               2026-09-24 17:16:27
-6   billing           1.0  jev-1.13.0               2026-09-24 17:16:27
+destroys   rejected   commands
+--------  ----------  --------
+no                           2
+no        classifier         2
+no        no              1260
+no        person            15
+yes       no                36
+```
+
+The guard says 36 commands would destroy something, and people let every one of them run. Join a judgment's `<question>_key` to `answers` for which engine answered and when:
+
+```sh
+sqlite3 -header -column prototype/.hunch/store.sqlite \
+  "select t.id, substr(t.command, 1, 44) as command, t.destroys_p, a.model, a.created_at
+   from command_guard t join answers a on a.key = t.destroys_key
+   where t.destroys = 'yes' order by t.destroys_p desc, t.id limit 3"
+```
+
+```
+     id                          command                     destroys_p    model         created_at
+-------------  --------------------------------------------  ----------  ----------  -------------------
+860618e1#3.2   rm -rf Dockerfile README.md app node_modules        0.95  jev-1.13.0  2026-09-25 12:05:49
+4222016d#12.1  rm -rf d:/DMLS/build d:/DMLS/builddmls.exe d        0.93  jev-1.13.0  2026-09-25 12:05:45
+07b57159#1.4   [System.IO.Directory]::Delete("d:\CFML\dCFML        0.86  jev-1.13.0  2026-09-25 12:05:38
 ```
 
 From Python, [`hunch.results`](/reference/python#results) returns a judgment's table as a list of dicts.
