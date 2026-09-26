@@ -1,0 +1,275 @@
+{
+ "version": 1,
+ "command": "test",
+ "passed": false,
+ "sample": null,
+ "judgments": {
+  "answer_support": {
+   "spec_hash": "9e8992f270fd",
+   "model": "ollama:bespoke-minicheck#rag-unsupported",
+   "rows": 900,
+   "questions": {
+    "unsupported": {
+     "type": "noul",
+     "rows": 900,
+     "gold": {
+      "rows": 900,
+      "source": 900,
+      "review": 0,
+      "excluded": 0
+     },
+     "act": {
+      "threshold": {
+       "yes": 1.0,
+       "no": 0.7
+      },
+      "automated": 0.3111,
+      "judged": 280,
+      "wrong": 0.0321
+     },
+     "spot_checks": 0,
+     "accuracy": {
+      "value": 0.6744,
+      "ci": null,
+      "basis": "gold"
+     },
+     "calibration_error": 0.2982,
+     "auroc": 0.84,
+     "dial": [
+      {
+       "threshold": 0.5,
+       "yes": {
+        "automated": 0.4478,
+        "wrong": 0.665
+       },
+       "no": {
+        "automated": 0.5522,
+        "wrong": 0.0503
+       }
+      },
+      {
+       "threshold": 0.6,
+       "yes": {
+        "automated": 0.3389,
+        "wrong": 0.5902
+       },
+       "no": {
+        "automated": 0.45,
+        "wrong": 0.0296
+       }
+      },
+      {
+       "threshold": 0.7,
+       "yes": {
+        "automated": 0.2467,
+        "wrong": 0.5135
+       },
+       "no": {
+        "automated": 0.3111,
+        "wrong": 0.0321
+       }
+      },
+      {
+       "threshold": 0.8,
+       "yes": {
+        "automated": 0.15,
+        "wrong": 0.4074
+       },
+       "no": {
+        "automated": 0.17,
+        "wrong": 0.0261
+       }
+      },
+      {
+       "threshold": 0.9,
+       "yes": {
+        "automated": 0.0722,
+        "wrong": 0.2769
+       },
+       "no": {
+        "automated": 0.0633,
+        "wrong": 0.0351
+       }
+      },
+      {
+       "threshold": 0.95,
+       "yes": {
+        "automated": 0.0322,
+        "wrong": 0.2414
+       },
+       "no": {
+        "automated": 0.01,
+        "wrong": 0.0
+       }
+      },
+      {
+       "threshold": 0.99,
+       "yes": {
+        "automated": 0.0011,
+        "wrong": 0.0
+       },
+       "no": {
+        "automated": 0.0,
+        "wrong": 0.0
+       }
+      }
+     ],
+     "mistakes": {
+      "total": 293,
+      "most_confident": [
+       {
+        "id": "16356",
+        "got": "yes",
+        "p": 0.9754,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "16357",
+        "got": "yes",
+        "p": 0.9742,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17062",
+        "got": "yes",
+        "p": 0.9659,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "14054",
+        "got": "yes",
+        "p": 0.9655,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17112",
+        "got": "yes",
+        "p": 0.9645,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17061",
+        "got": "yes",
+        "p": 0.9614,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "17063",
+        "got": "yes",
+        "p": 0.9559,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "12520",
+        "got": "yes",
+        "p": 0.9474,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "13443",
+        "got": "yes",
+        "p": 0.945,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "12137",
+        "got": "yes",
+        "p": 0.943,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "16417",
+        "got": "yes",
+        "p": 0.9408,
+        "gold": [
+         "no"
+        ]
+       },
+       {
+        "id": "16056",
+        "got": "no",
+        "p": 0.934,
+        "gold": [
+         "yes"
+        ]
+       }
+      ]
+     },
+     "checks": [
+      {
+       "check": "min_accuracy",
+       "passed": false,
+       "value": 0.6744,
+       "limit": 0.8,
+       "severity": "error"
+      },
+      {
+       "check": "max_calibration_error",
+       "passed": true,
+       "value": 0.2982,
+       "limit": 1,
+       "severity": "error"
+      },
+      {
+       "check": "min_auroc",
+       "passed": true,
+       "value": 0.84,
+       "limit": 0,
+       "severity": "error"
+      }
+     ]
+    }
+   },
+   "examples": [
+    {
+     "name": "adds a number the passage doesn't have",
+     "passed": true,
+     "severity": "error",
+     "answers": [
+      {
+       "question": "unsupported",
+       "expected": "yes",
+       "got": "yes",
+       "p": 0.9961,
+       "passed": true
+      }
+     ]
+    },
+    {
+     "name": "says only what the passage says",
+     "passed": true,
+     "severity": "error",
+     "answers": [
+      {
+       "question": "unsupported",
+       "expected": "no",
+       "got": "no",
+       "p": 0.9382,
+       "passed": true
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
