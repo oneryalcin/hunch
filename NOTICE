@@ -21,3 +21,7 @@ This product includes third-party data:
   the Abt-Buy entity-resolution benchmark by the database group of Prof. Erhard Rahm, University of Leipzig
   (https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), made available under the
   Creative Commons license (no version named). See prototype/examples/product_matching/NOTICE.md.
+- prototype/examples/stale_comments/comments.csv: the test split of the just-in-time comment inconsistency dataset
+  of Panthaplackel et al., AAAI 2021 (https://github.com/panthap2/deep-jit-inconsistency-detection), MIT licence;
+  Java methods and comments from open-source projects, each under its own project's licence.
+  See prototype/examples/stale_comments/NOTICE.md.
