@@ -1,6 +1,7 @@
 # hunch: answer stores and results (.hunch/), downloaded example data (.cache/)
 .hunch/
 .cache/
+synergy_cache.sqlite  # an HTTP cache the SYNERGY package writes where it runs (examples/screening/baseline.py)
 # committed on purpose: it only points uv at ./uv.toml (no secrets), even if a global gitignore ignores .envrc
 !.envrc
 
