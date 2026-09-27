@@ -890,12 +890,17 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             wt = spec["weights"]
             if ups:
                 errors += tag(["weights describe how source rows were sampled; set them on the judgment that reads the file"])
+            elif not isinstance(wt, dict):
+                errors += tag([f"weights needs by: <column> and population: {{<value>: <share>, ...}}, got {wt!r}"])
             elif header is not None and wt.get("by") not in header:
                 errors += tag([f"weights.by column {wt.get('by')!r} not in the source"])
-            elif any(not isinstance(v, (int, float)) or not v > 0 for v in wt.get("population", {}).values()):
+            elif not isinstance(wt.get("population"), dict) or not wt["population"]:
+                errors += tag([f"weights.population maps each value of by to its share ({{x: 0.2, y: 0.8}}), "
+                               f"got {wt.get('population')!r}"])
+            elif any(isinstance(v, bool) or not isinstance(v, (int, float)) or not v > 0 for v in wt["population"].values()):
                 errors += tag([f"weights.population shares must be numbers above 0, got {wt.get('population')} (a row "
                                "whose share is 0 stands for no one: leave it out of the source)"])
-            elif abs(sum(wt.get("population", {}).values()) - 1) > 0.01:
+            elif abs(sum(wt["population"].values()) - 1) > 0.01:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
         # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
         columns[name] = None if header is None else header + answer_columns(spec) + ["_path_p"] + (["_w"] if "weights" in spec else [])

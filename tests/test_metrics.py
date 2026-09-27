@@ -43,3 +43,11 @@ def test_a_metric_on_a_union_reads_its_one_question(hunch):  # a union has no `q
     hunch("test")
     m = json.loads(next((hunch.dir / ".hunch" / "target").glob("*.json")).read_text())["judgments"]["u"]["metrics"]["m"]
     assert (m["fired"], m["rows"]) == (2, 2)
+
+
+def test_a_population_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # lint called .values() on it
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("{x: 0.5, y: 0.5}", "[x, y]"))
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "weights.population maps each value" in capsys.readouterr().err
