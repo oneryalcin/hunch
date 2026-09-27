@@ -256,7 +256,7 @@ chain: true
 
 ### `union` and `question`
 
-Combines one question's answers from several judgments into one table, so a tree of judgments is tested as one classifier. Every branch asks `question` with the same type; a row may reach only one branch (overlapping `where`s stop the run). Rows gain `_branch`. A rule or a downstream `where` can read only the columns every branch has, even behind `_branch == ...`: a rule about one branch's own column goes on that branch. A union has no `model`, `source` or `questions`: it takes `question`, `key`, `reviews`, `metrics`, `tests`, `description`, `exposures` and `targets`; `lint` says so for any other key.
+Combines one question's answers from several judgments into one table, so a tree of judgments is tested as one classifier. Every branch asks `question` with the same type; a branch may itself be a union that combines the same `question`. A row may reach only one branch (overlapping `where`s stop the run). Rows gain `_branch`, the branch they came through. `key` defaults to the first branch's and must be a column every branch has. A rule or a downstream `where` can read only the columns every branch has, even behind `_branch == ...`: a rule about one branch's own column goes on that branch. A union has no `model`, `source` or `questions`: it takes `question`, `key`, `reviews`, `metrics`, `tests`, `description`, `exposures` and `targets`; `lint` says so for any other key.
 
 ```yaml
 judgment: intent_tree

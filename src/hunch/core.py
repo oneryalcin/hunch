@@ -118,6 +118,17 @@ def load_spec(path: Path, text: str | None = None) -> dict:
         sys.exit(f"{path}: not valid YAML: {' '.join(str(e).split())}")
     if not isinstance(spec, dict):
         sys.exit(f"{path}: a spec is a YAML mapping (judgment:, source:, questions: …)")
+    # shapes the project graph and question expansion read before lint runs: a clear message, not a traceback
+    for k in ("judgment", "model", "source", "where", "question"):
+        needed = k == "judgment" or (k == "question" and "union" in spec)
+        if (k in spec or needed) and not (isinstance(spec.get(k), str) and spec[k]):
+            sys.exit(f"{path}: {k}: is text, got {spec.get(k)!r}")
+    if "union" in spec and not (isinstance(spec["union"], list) and spec["union"]
+                                and all(isinstance(u, str) for u in spec["union"])):
+        sys.exit(f"{path}: union: lists the judgments it combines ([a, b]), got {spec['union']!r}")
+    qs = spec.get("questions")
+    if "questions" in spec and not (isinstance(qs, dict) and all(isinstance(q, dict) for q in qs.values())):
+        sys.exit(f"{path}: questions: maps each name to {{type: …, instructions: …}}, got {qs!r}")
     if "model" in spec and (spec["model"].endswith("latest") or ":~" in spec["model"]):
         sys.exit(f"{path}: pin an exact model version, not {spec['model']!r} (answers from different versions would share keys)")
     spec["_dir"], spec["_file"] = path.parent, path
@@ -210,7 +221,7 @@ def topo_project(specs: list[dict], path: Path | None = None) -> dict:
         visit(name, [])
     for name in order:  # defaults a downstream node inherits from its first upstream
         spec, ups = nodes[name], upstream(nodes[name])
-        if ups:
+        if ups and "key" in nodes[ups[0]]:  # an upstream without one: lint says it is missing
             spec.setdefault("key", nodes[ups[0]]["key"])
     return {"path": path or specs[0]["_dir"], "nodes": nodes, "order": order}
 
@@ -544,12 +555,19 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
         errors.append("chain: true needs a where-clause over an upstream judgment's answers (it is what gets chained)")
     if spec.get("on_change", "reask") not in ON_CHANGE:
         errors.append(f"on_change must be one of {ON_CHANGE}, got {spec['on_change']!r}")
-    for col, n in (spec.get("clip") or {}).items():
+    clip, rs = spec.get("clip") or {}, spec.get("redact") or []
+    if not isinstance(clip, dict):
+        errors.append(f"clip: maps a state column to N characters ({{command: 1500}}), got {clip!r}")
+        clip = {}
+    if not (isinstance(rs, list) and all(isinstance(r, str) for r in rs)):
+        errors.append(f"redact: lists rule names or regexes ([secrets, 'ghp_…']), got {rs!r}")
+        rs = []
+    for col, n in clip.items():
         if col not in state_columns(spec):
             errors.append(f"clip: {col!r} is not a state column")
         if not isinstance(n, int) or n == 0:
             errors.append(f"clip: {col}: {n!r} must be a nonzero integer (N keeps the head, -N the tail)")
-    for r in spec.get("redact") or []:
+    for r in rs:
         if r not in REDACTIONS:
             try:
                 re.compile(r)
@@ -742,11 +760,12 @@ def answer_values(q: dict) -> list[str]:
     return labels + ([NONE] if q.get("none") and q.get("type") == "choice" else [])
 
 
-def question_values(spec: dict, branches: list[dict] = ()) -> dict[str, list[str]]:
-    """Every question an exposure can use, with the values its column holds. A union's come from its branches."""
+def question_values(spec: dict, branch_values: list[dict] = ()) -> dict[str, list[str]]:
+    """Every question an exposure can use, with the values its column holds. A union's come from its branches'
+    (`branch_values`: each branch's own question_values, so a branch may itself be a union)."""
     if "union" in spec:
         q = spec.get("question")
-        return {q: list(dict.fromkeys(v for b in branches for v in question_values(b).get(q, [])))}
+        return {q: list(dict.fromkeys(v for bv in branch_values for v in bv.get(q, [])))}
     qs = {**(spec.get("questions") or {}), **(spec.get("_written") or {})}  # multi: the parent and one yes/no per option
     return {qid: answer_values(q) for qid, q in qs.items()}
 
@@ -878,12 +897,12 @@ def apply_target(project: dict, name: str, keep_model: bool = False) -> dict:
 def lint(project: dict) -> tuple[list[str], list[str]]:
     """Lint every judgment, tracking which columns flow along each ref() so where-clauses and state are
     checked before anything runs."""
-    errors, warnings, columns = [], [], {}
+    errors, warnings, columns, vals = [], [], {}, {}
     yes_no = {}  # per judgment: the yes/no answers that reach it (its own, and every upstream's)
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
         tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
-        values = question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]])
+        values = vals[name] = question_values(spec, [vals[u] for u in ups if u in vals])
         yes_no[name] = {q for q, vs in values.items() if set(vs) == {"yes", "no"}}.union(*(yes_no.get(u, ()) for u in ups))
         e, w = lint_meta(spec, values)
         errors, warnings = errors + tag(e), warnings + tag(w)
@@ -895,24 +914,25 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             for col in sorted(bare_names(rule) & yes_no[name]) if isinstance(rule, str) else ():
                 warnings += tag([f"{where_}: {col!r} on its own holds for 'no' too; write {col} == 'yes'"])
         if "union" in spec:
-            branches = [project["nodes"][u] for u in ups]
-            for b in branches:
-                q = b.get("questions", {}).get(spec.get("question"))
-                if q is None:
-                    errors += tag([f"branch {b['judgment']!r} has no question {spec.get('question')!r}"])
-                elif q["type"] != branches[0]["questions"].get(spec.get("question"), q)["type"]:
-                    errors += tag([f"branch {b['judgment']!r} asks {spec['question']!r} as {q['type']}, others differently"])
+            q = spec.get("question")
+            qs = {u: asked(project, u, q) for u in ups}  # a branch may itself be a union
+            first = next((x for x in qs.values() if x), None)
+            for u, x in qs.items():
+                if x is None:
+                    errors += tag([f"branch {u!r} has no question {q!r}"])
+                elif x.get("type") != first.get("type"):
+                    errors += tag([f"branch {u!r} asks {q!r} as {x.get('type')}, others differently"])
             known = [columns[u] for u in ups]
             # only what every branch has: a row from a branch without a column has no value for it (KeyError)
             columns[name] = None if None in known else sorted(set.intersection(*map(set, known or [[]])) | {"_branch"})
+            if columns[name] is not None and spec.get("key") not in columns[name]:
+                errors += tag([f"key {spec.get('key')!r} is not a column every branch has"])
             for k in sorted({k for k in spec if not k.startswith("_")} - UNION_KEYS):
                 if k in SPEC_KEYS:
                     errors += tag([f"a union takes no {k!r}: it combines its branches' answers"])
                 else:
                     warnings += tag([f"unknown spec key {k!r} (typo?)"])
-            q = spec.get("question")
-            asked = next((b["questions"][q] for b in branches if q in (b.get("questions") or {})), None)
-            e, w = lint_rules(spec, columns[name], {q: asked} if asked else {})
+            e, w = lint_rules(spec, columns[name], {q: first} if first else {})
             errors, warnings = errors + tag(e), warnings + tag(w)
             continue
         missing = [k for k in ("model", "key", "state", "questions") if k not in spec]
@@ -1795,6 +1815,17 @@ def question_of(spec: dict) -> list[str]:
     return [spec["question"]] if "union" in spec else list(spec["questions"])
 
 
+def asked(project: dict, name: str, qid: str) -> dict | None:
+    """The question `qid` as judgment `name` asks it; a union's, as its first branch that asks it (a branch may
+    itself be a union, which carries only its own `question`)."""
+    spec = project["nodes"].get(name, {})
+    if "union" not in spec:
+        return (spec.get("questions") or {}).get(qid)
+    if spec.get("question") != qid:
+        return None
+    return next((q for u in upstream(spec) if (q := asked(project, u, qid))), None)
+
+
 # ---------- commands ----------
 
 def cmd_lint(project: dict, _args) -> None:
@@ -2658,7 +2689,7 @@ def cmd_test(project: dict, args) -> None:
         ungrade(project, n, res["items"])
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
-            q = its[0]["q"] if its else project["nodes"][spec["union"][0] if "union" in spec else n]["questions"][qid]
+            q = its[0]["q"] if its else asked(project, n, qid)
             rep["questions"][qid] = test_question(spec, qid, q, its, res["answers"], check, all_stats)
             if its and its[0]["q"].get("none"):
                 k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
