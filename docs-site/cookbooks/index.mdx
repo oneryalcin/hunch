@@ -3,7 +3,7 @@ title: "Cookbooks"
 description: "Eleven real problems worked through with hunch, each with its spec, its numbers, and what did not work."
 ---
 
-Each cookbook starts from a real dataset and a question someone would want answered about it. It shows the spec, what was run, what came out, and where the approach fell short. Every number comes from a run in the repository: the example specs are in `prototype/examples/`, and the design notes behind them in `docs/04-design.md`.
+Choose a cookbook for a task like reviewing documents, guarding agent commands, or matching product records. Each shows the question, the spec, the measured result, and when that approach falls short. The example specs are in [`prototype/examples/`](https://github.com/oneryalcin/hunch/tree/main/prototype/examples).
 
 Several cases use AI review panels, source labels or the author's own reviews. Those are different forms of evidence, and none alone establishes how a spec will work on your data. Each case's measurement notes say which it used.
 
@@ -43,11 +43,4 @@ Several cases use AI review panels, source labels or the author's own reviews. T
   </Card>
 </CardGroup>
 
-The same specs on a second engine are compared in [Engines](/reference/engines); automatic rewrites with `hunch suggest` are in [Change a spec](/guides/change-a-spec).
-
-## Not yet
-
-- No one outside the project has used hunch.
-- The review panels were AI reviewers working from each row alone. The own-session reviews were by the developer who wrote the sessions. Neither is an independent human panel.
-- `suggest` has not produced a rewrite that beat hand-written option descriptions.
-- The server has only run locally.
+To compare engines on the same specs, see [Engines](/reference/engines). To try a question rewrite and measure it, see [Change a spec](/guides/change-a-spec).

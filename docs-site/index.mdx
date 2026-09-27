@@ -24,9 +24,9 @@ For a one-off question, call Jev directly. Jev already gives you typed answers, 
 
 You usually do not need hunch for a single request-path call with no reviewed data, no reruns and no plan to compare changes. The direct API is simpler there.
 
-## Decision engineering
+## If you know dbt
 
-If you know dbt, the analogy is useful: dbt keeps SQL transformations in versioned models with tests. A hunch spec is the versioned judgment definition. `hunch run` applies it, `hunch test` measures it, and `hunch diff` compares an edit before you adopt it. You can also call the same spec from an app or DuckDB query.
+dbt keeps SQL transformations in versioned models with tests. A hunch spec is the versioned judgment definition. `hunch run` applies it, `hunch test` measures it, and `hunch diff` compares an edit before you adopt it. You can also call the same spec from an app or DuckDB query.
 
 ## Where decisions live
 
@@ -43,9 +43,9 @@ The same shape, a question, a typed answer, a bar for acting and a person for th
 
 The same workflow can serve each case: define the answer, inspect the evidence, and decide what may happen without a person.
 
-## What it has found so far
+## Worked examples
 
-Each of these is a real dataset worked through in a cookbook, with the spec and every number reproducible from the repository.
+Each cookbook starts with a real dataset, shows the question and its results, and explains how those results were measured.
 
 <CardGroup cols={2}>
   <Card title="A guard for an agent's shell commands" icon="shield-halved" href="/cookbooks/command-guard">
@@ -87,7 +87,3 @@ questions:
 <Card title="Quickstart" icon="play" href="/quickstart">
   Start with Enron emails, run a small lobbying judgment, test it and inspect what a wording change would flip.
 </Card>
-
-<Note>
-hunch is v0.3. It has been run on the real data above, but no one outside the project has used it yet. The examples in the table are where the same shape applies; the [cookbooks](/cookbooks) are where it has been measured, and more are coming.
-</Note>
