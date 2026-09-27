@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 240" role="img" aria-labelledby="title desc">
+  <title id="title">One row through a two-step judgment project</title>
+  <desc id="desc">A bank message reaches group, which chooses card payments with probability 0.8. A where condition sends it to the card payments specialist, which chooses an intent with probability 0.9. Chain makes the path confidence 0.8 times 0.9, or 0.72. Union collects that answer with the other branches into one table.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .name { font-size: 17px; font-weight: 700; }
+    .detail { font-size: 15px; }
+    .box { fill: #F7F8F5; stroke: #B8C9CA; stroke-width: 1.7; }
+    .blue { fill: #E7EFF0; stroke: #405A60; stroke-width: 1.7; }
+    .line { stroke: #607C81; stroke-width: 2; marker-end: url(#tip); }
+  </style>
+  <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="980" height="240" fill="#FFFFFF"/>
+  <rect x="12" y="45" width="139" height="105" rx="11" class="box"/>
+  <text x="28" y="80" class="name">One message</text><text x="28" y="105" class="detail">from the CSV</text>
+  <line x1="151" y1="97" x2="175" y2="97" class="line"/>
+  <rect x="179" y="45" width="142" height="105" rx="11" class="blue"/>
+  <text x="195" y="80" class="name">group</text><text x="195" y="105" class="detail">card payments</text><text x="195" y="128" class="detail">p = 0.80</text>
+  <line x1="321" y1="97" x2="345" y2="97" class="line"/>
+  <rect x="349" y="45" width="142" height="105" rx="11" class="box"/>
+  <text x="365" y="80" class="name">where</text><text x="365" y="105" class="detail">keeps this row</text>
+  <line x1="491" y1="97" x2="515" y2="97" class="line"/>
+  <rect x="519" y="45" width="142" height="105" rx="11" class="blue"/>
+  <text x="535" y="80" class="name">specialist</text><text x="535" y="105" class="detail">one intent</text><text x="535" y="128" class="detail">p = 0.90</text>
+  <line x1="661" y1="97" x2="685" y2="97" class="line"/>
+  <rect x="689" y="45" width="130" height="105" rx="11" class="box"/>
+  <text x="705" y="80" class="name">chain</text><text x="705" y="105" class="detail">0.80 × 0.90</text><text x="705" y="128" class="detail">= 0.72</text>
+  <line x1="819" y1="97" x2="843" y2="97" class="line"/>
+  <rect x="847" y="45" width="120" height="105" rx="11" class="blue"/>
+  <text x="863" y="80" class="name">union</text><text x="863" y="105" class="detail">one table</text>
+  <text x="14" y="192" class="detail">A row sent to another area skips this specialist and reaches union through that area's branch.</text>
+  <text x="14" y="215" class="detail">These probabilities are illustrative; the example project in the guide supplies the actual rows.</text>
+</svg>

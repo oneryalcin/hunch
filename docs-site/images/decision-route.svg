@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+  <title id="title">From a row and a question with an act threshold to a reviewed decision</title>
+  <desc id="desc">A row and versioned question reach an engine. The engine returns an answer and probability. When the question sets act, its threshold routes the answer to application code when confident enough or to review when uncertain. Without act, the route is empty and application code handles the answer. Reviewed rows become an answer key for tests.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .small { font-size: 16px; }
+    .label { font-size: 20px; font-weight: 650; }
+    .card { fill: #F7F8F5; stroke: #B8C9CA; stroke-width: 2; }
+    .accent { fill: #E7EFF0; stroke: #405A60; stroke-width: 2; }
+    .review { fill: #FFF4EE; stroke: #B7654D; stroke-width: 2; }
+    .line { fill: none; stroke: #607C81; stroke-width: 2.5; marker-end: url(#arrow); }
+  </style>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="960" height="360" fill="#FFFFFF"/>
+  <rect x="22" y="107" width="185" height="92" rx="12" class="card"/>
+  <text x="42" y="145" class="label">Row + spec</text><text x="42" y="174" class="small">What the model sees</text>
+  <path d="M207 153 H255" class="line"/>
+  <rect x="258" y="107" width="165" height="92" rx="12" class="card"/>
+  <text x="281" y="145" class="label">Engine</text><text x="281" y="174" class="small">Answers the question</text>
+  <path d="M423 153 H471" class="line"/>
+  <rect x="474" y="107" width="213" height="92" rx="12" class="accent"/>
+  <text x="494" y="145" class="label">Answer + p</text><text x="494" y="174" class="small">If act is set</text>
+  <path d="M687 145 H724 V65 H751" class="line"/>
+  <path d="M687 161 H724 V244 H751" class="line"/>
+  <rect x="754" y="21" width="184" height="88" rx="12" class="accent"/>
+  <text x="774" y="57" class="label">Route: act</text><text x="774" y="84" class="small">Your code decides</text>
+  <rect x="754" y="203" width="184" height="88" rx="12" class="review"/>
+  <text x="774" y="239" class="label">Route: review</text><text x="774" y="266" class="small">A person decides</text>
+  <path d="M846 291 V327 H574" class="line"/>
+  <text x="190" y="333" class="small">Without act, route is empty. Review verdicts become gold for hunch test.</text>
+</svg>

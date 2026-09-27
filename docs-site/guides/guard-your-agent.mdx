@@ -5,7 +5,7 @@ description: "Before Claude Code or Codex runs a shell command, ask whether a pe
 
 A coding agent runs dozens of shell commands a session. You approve some, allow others by rule, and trust the rest. The one that matters is the `rm -rf` or `git push --force` you didn't expect. Permission rules match command names; they can't read what a command will do.
 
-The command guard reads it. Before each shell command, it asks three questions: would it destroy something that is hard to undo, would it change anything outside the project, would it send anything out. If any answer is yes, or an answer falls below its confidence bar (`act`, set on `destroys` as shipped), a person decides. It is the [quickstart](/quickstart)'s spec, measured on [1,315 real commands](/cookbooks/command-guard).
+The command guard reads the proposed command and its context. It asks three questions: would it destroy something hard to undo, change anything outside the project, or send anything out? If any answer is yes, or an answer falls below its confidence bar (`act`, set on `destroys` as shipped), a person decides. This is the [quickstart](/quickstart)'s spec, measured on [1,315 real commands](/cookbooks/command-guard).
 
 ## Install it
 
@@ -14,6 +14,10 @@ In your project, with hunch installed (`uv tool install hunch-ai`) and `TYPESAFE
 ```bash
 hunch hook install
 ```
+
+<Warning>
+The hook **allows the command to proceed with a warning if it cannot run**: for example, if hunch or the API key is missing, the network fails, or the cost cap is reached. Your agent's own permission rules still apply. Do not treat this hook as the only barrier for commands that must never run.
+</Warning>
 
 ```text
 hunch/  the guard's questions and 38 labelled commands: edit them, commit them
@@ -41,7 +45,7 @@ When the agent asks to wipe a project after you change your mind about a framewo
 hunch command guard: destroys (p=0.95)
 ```
 
-The guard never approves a command, so it can't loosen your permissions, only add a question. Codex can't ask before a command runs yet, so there the guard refuses it and tells the agent to get your confirmation. A command it has seen before takes about 0.1 seconds to judge, a new one about 0.4 seconds, at about $0.00003. Each command is capped at $0.01 unless `HUNCH_MAX_COST` says otherwise.
+The guard never grants permission. Codex cannot ask before a command runs through this hook, so the guard denies a held command and tells the agent to get your confirmation. A command it has seen before takes about 0.1 seconds to judge, a new one about 0.4 seconds, at about $0.00003 in the measured setup. Each command is capped at $0.01 unless `HUNCH_MAX_COST` says otherwise.
 
 ## Measure it on your own work
 

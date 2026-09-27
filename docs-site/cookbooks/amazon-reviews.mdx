@@ -1,11 +1,11 @@
 ---
 title: "100,000 product reviews"
-description: "Asking one question of 100,000 rows took 28 minutes and $1.55, and asking it again took 4 seconds and nothing."
+description: "A 100,000-row review table, 96,000 new requests in 28 minutes for $1.55, and a cached run in 4 seconds."
 ---
 
 import { RunBars } from "/snippets/amazon-reviews.jsx";
 
-hunch asked one yes-or-no question of 100,000 Amazon product reviews. It took 28 minutes and cost $1.55.
+hunch answered one yes-or-no question for 100,000 Amazon product reviews. Earlier probes had already stored 4,000 answers; asking for the other 96,000 took 28 minutes and cost $1.55.
 
 Then it ran the same thing again. That took 4 seconds and cost nothing. Why is the second run so different, and what set the pace of the first?
 
@@ -52,7 +52,7 @@ hunch compile reviews.yml
 #   ~$0.00000 (jev-1.13.0)
 ```
 
-The estimate counts characters and the bill counts tokens, so it errs high. That is the safe side for `--max-cost`, the ceiling a run refuses to go past.
+The estimate uses text length; the bill uses the engine's reported tokens. Here the $1.72 estimate was higher than the $1.55 charge for the 96,000 new answers. Estimates can also run low on dense text, so `--max-cost` checks the remaining budget before each request.
 
 ## 3. Run it
 
@@ -91,8 +91,8 @@ is_positive (noul, 100000 rows)
 ## The result
 
 <RunBars groups={[
-  ["Time", [["First run", 1668, "27.8 min"], ["Run again, all cached", 4.1, "4.1 s"]]],
-  ["Cost", [["First run", 1.55, "$1.55"], ["Run again, all cached", 0, "$0"]]],
+  ["Time", [["96,000 new answers", 1668, "27.8 min"], ["Run again, all cached", 4.1, "4.1 s"]]],
+  ["Cost", [["96,000 new answers", 1.55, "$1.55"], ["Run again, all cached", 0, "$0"]]],
 ]} />
 
 The second run hashes every row and finds its answer in the store, so a re-run costs only as much as what changed.
@@ -103,7 +103,7 @@ The guess was that the API's rate limit would set the pace. A small test on 2,00
 
 More in flight was faster, and not one request was turned away for going too fast, at any setting. The pace was never a limit. It was arithmetic: requests in flight, divided by how long each one takes.
 
-So there is one dial for speed, and it is `HUNCH_CONCURRENCY`. At the full run's pace, a million rows would take about five hours and cost about $16.
+`HUNCH_CONCURRENCY` was the useful speed setting in this test. At the same pace and price per answer, one million uncached rows would take about five hours and cost about $16; a different engine, input length or rate limit would change that estimate.
 
 ## Use it on your data
 
@@ -129,7 +129,7 @@ Point `source` at your table, run `hunch compile` to see the price, and run with
     The 2,000-row probe did 63 requests per second at 16 in flight and 84 at 48. The run asked 96,000 of the 100,000 rows; the store already held the other 4,000 answers, as two probes of 2,000 would leave. Rate limits, server errors and network failures are retried with backoff. These figures are from the run on 2026-09-24, recorded in `docs/04-design.md`. Re-run on 2026-09-27, `hunch run` took 6.7 seconds and `hunch test` 6.2 of wall-clock time, each counting Python's start-up.
   </Accordion>
   <Accordion title="Cost is input tokens">
-    Jev bills input tokens at $0.042 per million, and output is free. The 100,000 stored answers read 38.5 million input tokens between them, about 385 per review. Three settings keep input small: send only the columns the question needs (`state`), cut long text with `clip`, and ask all of a row's questions in one spec, since with Jev they share one request.
+    Jev bills input tokens at $0.042 per million, and output is free. The 100,000 stored answers, including the 4,000 from earlier probes, read 38.5 million input tokens between them: about 385 per review. At that rate the tokens across the probes and full-table run amount to about $1.62; the recorded $1.55 charge above is for the 96,000 new requests in the timed run. Three settings keep input small: send only the columns the question needs (`state`), cut long text with `clip`, and ask all of a row's questions in one spec, since with Jev they share one request.
   </Accordion>
   <Accordion title="Re-runs, and why there is no incremental mode">
     Every run hashes every row and looks each one up in the store. With everything cached, that took 4 seconds for 100,000 rows. So there is no incremental mode to configure: change the source, and only new or changed rows are asked. `on_change: new_rows_only` goes further and keeps answers for unchanged rows even after the spec changes; see [Change a spec](/guides/change-a-spec).

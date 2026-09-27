@@ -1,18 +1,25 @@
 # Design notes
 
-For people working on hunch: research, design and decisions. Using hunch is covered in the [user docs](https://fuguai.mintlify.site).
+These notes record why hunch was built and what its experiments found. For instructions you can run now, start with the [user docs](https://fuguai.mintlify.site); for exact YAML keys, use the [spec reference](../docs-site/reference/spec.mdx). Early proposals below remain for context and may describe syntax or work that changed later.
+
+| If you need to… | Start here |
+|---|---|
+| Write or check a spec | [Spec reference](../docs-site/reference/spec.mdx) and a [shipped recipe](../src/hunch/recipes/agent_commands/command_guard.yml) |
+| Understand why a design changed | [Design and experiment record](04-design.md), then [roadmap](06-roadmap.md) |
+| Reproduce an early measurement | [Prototype experiments](../prototype/README.md) |
+| Check a code contract | [Source](../src/hunch/), [server](../server/), and their tests |
 
 | Doc | What |
 |---|---|
 | [01-jev.md](01-jev.md) | What Jev / System One models are, economics, limits |
 | [02-dbt.md](02-dbt.md) | Why dbt won: patterns, extension points, lessons to steal |
 | [03-opportunity-scan.md](03-opportunity-scan.md) | Which domains are "pre-2016 dbt"; ranked candidates; why hunch |
-| [04-design.md](04-design.md) | Clean-slate rationale, architecture, spec sketch, tests, open questions |
-| [05-licensing.md](05-licensing.md) | Split-by-layer license model (Apache 2.0 core + ELv2 server) |
-| [06-roadmap.md](06-roadmap.md) | Roadmap, ordered by risk: trust the numbers, the graph, engines and scale, package, server; where we are |
-| [07-plugins.md](07-plugins.md) | What plugins solve, who would write them, and what hunch builds (engines only) |
+| [04-design.md](04-design.md) | Original design, dated experiments, and the decisions they changed; early sketches are historical |
+| [05-licensing.md](05-licensing.md) | License decision and the license files that implement it |
+| [06-roadmap.md](06-roadmap.md) | Current priorities at the top; dated phase and research notes below |
+| [07-plugins.md](07-plugins.md) | Current plugin boundary, completed steps, and triggers for later work |
 
-## Decisions so far
+## Recorded decisions
 
 | Date | Decision | Why |
 |---|---|---|

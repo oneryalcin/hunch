@@ -1,0 +1,151 @@
+---
+title: "Measure decisions from Pydantic AI"
+description: "Record a Pydantic AI decision model as a hunch spec, test it on past decisions, and compare changes."
+---
+
+If your decision already runs as a Pydantic AI agent, record the questions it actually sends and measure them on representative rows. This guide also covers a Pydantic class you have not wired into an agent yet.
+
+## From a Pydantic AI agent
+
+If the decision already runs in production as a [Pydantic AI](https://pydantic.dev/docs/ai/models/decision/) agent on a decision model, test that agent, not a copy of it. A copy drifts: Pydantic AI builds each question from the field's name and description, the class docstring, the agent's `instructions`, enum member docstrings and `BoolCriteria`, and a hand-written spec would have to match all of it, release after release.
+
+`spec_from_agent` asks Pydantic AI itself. It starts one run of the agent on a model that records the request and stops, so nothing is sent anywhere, and writes the questions into a spec word for word:
+
+```python
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict
+from pydantic_ai import Agent, BoolCriteria
+import hunch
+
+
+class Guard(BaseModel):
+    """Decide whether a person should see a coding agent's shell command before it runs."""
+    model_config = ConfigDict(use_attribute_docstrings=True)
+    destroys: Annotated[bool, BoolCriteria(true="It removes or replaces something that has no copy, or rewrites history.",
+                                           false="It only reads, builds, tests, or changes things that are easy to put back.")]
+    """Would running this command delete, overwrite or reset something in a way that would be hard to undo?"""
+    sends_out: bool
+    """Would running this command send code, files or data to another machine or service?"""
+
+
+agent = Agent("typesafe:jev-1.13.0", output_type=Guard, instructions="You guard a coding agent's shell commands.")
+spec = hunch.spec_from_agent(agent, state="command", source="commands.csv")
+open("guard.yml", "w").write(hunch.spec_yaml(spec))
+```
+
+```yaml guard.yml
+judgment: guard
+model: jev-1.13.0
+key: id
+state: command
+questions:
+  destroys:
+    type: noul
+    instructions:
+      field: destroys
+      question: Would running this command delete, overwrite or reset something in a way that would be hard to undo?
+      goal: Decide whether a person should see a coding agent's shell command before it runs.
+      background: You guard a coding agent's shell commands.
+    criteria:
+      'true': It removes or replaces something that has no copy, or rewrites history.
+      'false': It only reads, builds, tests, or changes things that are easy to put back.
+  sends_out:
+    type: noul
+    instructions:
+      field: sends_out
+      question: Would running this command send code, files or data to another machine or service?
+      goal: Decide whether a person should see a coding agent's shell command before it runs.
+      background: You guard a coding agent's shell commands.
+source: commands.csv
+```
+
+The agent's prompt is the text it judges, so `state` names the one column that holds it, here `command`. A single column name, rather than a list, is sent as a bare string, which is how the agent sends its prompt. For each row, hunch then sends Jev the same state and the same questions as the agent; only the question names, which the model never sees, are written with `__` instead of `.`. On three real commands (a `find` script, a `git push` and the `rm -rf` above), the agent and hunch gave the same six answers, with margins no further apart than asking Jev the same thing twice.
+
+From here it is an ordinary spec: `hunch test`, `diff`, `review` and `docs` work on it. When the agent changes, record it again and `hunch diff guard.yml --against git:HEAD` shows what the new wording does. It needs Pydantic AI 2.50 or later, which your agent already has; hunch doesn't install it.
+
+This holds when the agent's request is a function of one text column. `spec_from_agent` records the agent twice with different prompts and refuses, rather than write a spec that asks something else, when:
+
+- it chooses between several output types or tools, which asks a route question first;
+- it has a `system_prompt`, which turns the state into a conversation (put that text in `instructions`);
+- its instructions change with the prompt. Instructions computed from `deps` are fine: pass the same `deps` as in production.
+
+Call it with the prompt as a single string; an agent run on message history or several prompt parts sends a different state.
+
+### Measure the decisions production made
+
+A spec on a CSV tells you how the agent does on rows you collected. What the agent decided last week in production is in its traces. With instrumentation on, Pydantic AI records every decision request as a `decide` span holding the prompt, the questions and the answers (it records content unless `include_content=False`).
+
+Export the spans as OTLP/JSON lines, which is what the OpenTelemetry Collector's `file` exporter writes, and read them with a [`py()` source](/reference/spec#source). This function yields one row per decision, keeping production's answers beside the prompt:
+
+```python decide_spans.py
+import glob
+import json
+from pathlib import Path
+
+SPANS = Path(__file__).parent / "traces" / "*.jsonl"
+
+
+def rows():
+    for path in glob.glob(str(SPANS)):
+        for line in open(path):
+            for rs in json.loads(line)["resourceSpans"]:
+                for ss in rs["scopeSpans"]:
+                    for span in ss["spans"]:
+                        attrs = {a["key"]: next(iter(a["value"].values())) for a in span.get("attributes", [])}
+                        if attrs.get("gen_ai.operation.name") != "decide" or "pydantic_ai.decision.state" not in attrs:
+                            continue  # not a decision, or recorded without content
+                        answers = json.loads(attrs.get("pydantic_ai.decision.answers", "{}"))
+                        yield {"id": span["spanId"], "prompt": attrs["pydantic_ai.decision.state"],
+                               **{f"live_{q}": ("yes" if a["noul"] >= 0.5 else "no") if a["type"] == "noul"
+                                  else a.get("choice") for q, a in answers.items()}}
+```
+
+Point the recorded spec at it, with the prompt as the state:
+
+```python
+spec = hunch.spec_from_agent(agent, judgment="guard", state="prompt", source="py(decide_spans.py:rows)")
+```
+
+Each production decision is now a row. `hunch run` asks it again on the same engine, which gives production's answers within Jev's run-to-run noise, at about $0.00002 a row. `hunch review` then builds gold from real traffic, `hunch test` says how often the agent is right on it, and `hunch diff` shows which of last week's decisions a new wording would change. The `live_` columns keep what production answered, for a `where` clause or to compare by hand.
+
+## From a Pydantic class
+
+If the decision is a Pydantic class but not an agent, for example an `output_type` you haven't wired up yet, the class itself can be the spec.
+
+<Warning>
+The types map as in Pydantic AI, but the wording does not. Pydantic AI 2.50 and later also sends the field's name, the class docstring, the agent's `instructions` and any `BoolCriteria` with each question; `spec_from_model` sends the field's description alone, so the same class can get different answers here and in an agent. For the agent's own wording, use [`spec_from_agent`](#from-a-pydantic-ai-agent).
+</Warning>
+
+Install hunch with its `pydantic` extra:
+
+```sh
+uv add "hunch-ai[pydantic]"
+```
+
+Then:
+
+```python
+from pydantic import BaseModel, Field
+import hunch
+
+
+class Guard(BaseModel):
+    destroys: bool = Field(
+        description="Would running `command` delete, overwrite or reset something in a way that would be hard to undo?",
+        json_schema_extra={"hunch": {"act": 0.9}})
+    sends_out: bool = Field(
+        description="Would running `command` send code, files or data from this machine to another machine or service?")
+
+
+spec = hunch.spec_from_model(Guard, source="commands.csv", state=["request", "command"])
+verdict = hunch.judge_model(Guard, spec, base="src/hunch/recipes/agent_commands",
+                            request="ship it", command="git push --force origin main")
+# Guard(destroys=True, sends_out=True)
+```
+
+`spec_from_model` produces an ordinary spec dict; `hunch.spec_yaml(spec)` prints it as YAML. Save it and commit it to use `hunch test`, `diff` and `review` on it.
+
+Each field becomes a question: `bool` a yes/no, `Literal` or `Enum` a choice, `IntEnum` a score. The [Python reference](/reference/python#pydantic-classes-as-specs) has the full mapping and where descriptions and `act` go.
+
+`judge_model` returns labels only. For `p` and `route`, save the spec, call `hunch.judge` on the file, and convert with `hunch.to_model(Guard, answers)`.

@@ -59,7 +59,14 @@ hunch init agent-commands       # copies the recipe into ./agent-commands
 hunch init agent-eval evals/    # copies into evals/
 ```
 
-The folder must not exist. Recipes: `agent-commands` (a guard for 38 real coding-agent shell commands, the [quickstart](/quickstart), about $0.003), `agent-eval` (check a coding agent's work from its trace), `rag-answers` (does a RAG answer say anything its passages don't support; 900 annotated answers, about $0.03), `tickets` (40 made-up support tickets: a choice, a yes/no and a score).
+The destination folder must not exist. Available recipes:
+
+| Recipe | What it tests | Example cost |
+| --- | --- | --- |
+| `agent-commands` | A guard for 38 real coding-agent shell commands; used in the [quickstart](/quickstart) | About $0.001 for the first run; about $0.003 including the wording change |
+| `agent-eval` | Whether a coding agent's trace supports its claim of success | Depends on the trace |
+| `rag-answers` | Whether 900 annotated answers say anything their passages do not support | About $0.03 |
+| `tickets` | Routing 40 made-up support tickets with choice, yes/no and score questions | See `hunch compile` |
 
 ### `hunch skill`
 
@@ -187,7 +194,7 @@ materialized 1 table(s) in .hunch/store.sqlite (run 2026-09-25T10:45:03-8b2bab)
 
 ### `test`
 
-Real output, BANKING77 holdout (`hunch test intent.yml --source banking77_holdout.csv`), trimmed:
+Read the first `PASS` or `FAIL` line for the check's result. `estimated accuracy` uses reviewed rows; the interval shows sampling uncertainty. The later `dial` lines show the tradeoff at each `act` threshold. Here is real output from the BANKING77 holdout (`hunch test intent.yml --source banking77_holdout.csv`), trimmed; the table below explains each line:
 
 ```text
 intent (choice, 385 rows)

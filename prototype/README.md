@@ -1,6 +1,10 @@
 # prototype
 
-Throwaway single-file prototype of hunch's core loop (see `docs/04-design.md`). Not the real architecture.
+This folder keeps the early experiments and their results. `hunch.py` is now a shim that calls the package in `../src/hunch/`; it is not a separate implementation. Use the [quickstart](../docs-site/quickstart.mdx) and [spec reference](../docs-site/reference/spec.mdx) for current usage. The commands and measurements below document how these experiments were run; some need an API key or data fetched into the ignored `.cache/` folders. The [design record](../docs/04-design.md) explains what each round changed.
+
+## Reproducing a local example
+
+From this folder, choose an example that has its input CSV checked in, such as `examples/tickets/`. The commands below use `examples/banking77/`; its engine needs a TypeSafe API key, and running uncached rows incurs API cost. Check the example's README and input files before running a larger experiment.
 
 ```sh
 export TYPESAFE_AI_API_KEY=...        # or TYPESAFE_API_KEY

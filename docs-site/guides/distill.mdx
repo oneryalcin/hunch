@@ -5,7 +5,9 @@ description: "Train a small model on the answers your engine already gave, measu
 
 Every answer your engine gives is kept in the store, under its exact input. After a few thousand of them, the store holds something valuable: a labelled dataset for that exact question, in your data, with your reviews on top. `hunch distill` turns it into a small model that runs on your machine in about 10 milliseconds, with no API call.
 
-A small model on its own is worse than the engine that taught it. It doesn't have to be good at everything, though. It only has to know when it is sure. Put the engine behind it, and the student answers the rows it is sure of while the engine answers the rest. hunch measures both, so you choose how much to keep local with numbers.
+A small model may be less accurate than the engine that taught it. Give it the rows on which it clears your `act` threshold, and send the rest to the original engine. Test both routes on held-out rows before deciding how much work to keep local.
+
+![A local student answers first. At or above the confidence threshold its answer is used; below it, Jev answers instead. Both paths are measured on held-out rows.](/images/distill-fallback.svg)
 
 ## Distill
 
@@ -23,7 +25,9 @@ measure it (free, local): hunch test intent.yml --model distilled:distilled/inte
 use it: model: distilled:distilled/intent@55a07d9f, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
 ```
 
-Each row's state goes through a small frozen encoder (MiniLM, on your CPU), and each question gets one linear layer, trained on your gold where a row has it and on the engine's answer everywhere else. One more number, a temperature, is fitted on answers each part of the data got from a model that never saw it, so the student's confidence means what it says: of the answers it gives at 0.9, about nine in ten are right. If those answers are almost never wrong, there is nothing to fit it on, and the confidence is left as it is. The rarest answer is reported because a student learns little from a handful of examples. The folder, 194 KB here, is the model; commit it with the spec.
+The student's frozen MiniLM encoder runs on your CPU. A small layer for each question learns from your gold where you have it and from the engine's stored answers elsewhere. The output is a model folder, 194 KB here, that you can commit with the spec.
+
+Distillation also fits a calibration temperature using predictions on rows held out from each training fold. This helps its reported confidence track observed accuracy; `hunch test` still checks that claim on fresh rows. If the held-out answers contain too few mistakes to fit a temperature, confidence is left as it is. The command reports the rarest answer because a handful of examples may not teach the student that class well.
 
 It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastembed and its runtime (onnxruntime, tokenizers and about 20 other packages). The encoder downloads once, about 90 MB, to `~/.cache/hunch/encoders` (or `FASTEMBED_CACHE_PATH`).
 

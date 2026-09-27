@@ -13,6 +13,8 @@ Two online shops, Abt and Buy, sell about a thousand products each. Which produc
 Joining two lists of the same things is everywhere: catalogues after an acquisition, suppliers in two systems, customers who signed up twice. Rules get you most of the way. The rest is a judgment, and that's the part hunch is for.
 </Info>
 
+This benchmark has known matches, so it lets us count errors. The question was improved after inspecting these same pairs; its final accuracy is a result on this dataset, not an estimate of how it will do on a new catalogue.
+
 ## Try it first
 
 Pick the one that's the same product. Then see what simple rules chose, and what hunch said.
@@ -27,9 +29,9 @@ Put every Abt product next to every Buy product and you get 1,081 × 1,092 pairs
 
 <PairFunnel steps={[[1180452, "every Abt product × every Buy product"], [175109, "pairs that share at least one word"], [5396, "the five best per product"]]} />
 
-**Clue 1: a shared word.** Split each name into words. If two listings have no word in common, they are not the same product. That alone drops 85% of the pairs.
+**Clue 1: a shared word.** Split each name into words and keep a pair if the Abt name shares at least one word with the Buy name or manufacturer. This cheap filter drops 85% of all pairs. It can also drop real matches whose listings use entirely different words.
 
-**Clue 2: a shared model code.** Most names carry a model code, a word that mixes letters and digits. Shops write codes differently, so hyphens, slashes and dots are dropped before comparing:
+**Clue 2: a shared model code.** Many names carry a model code, a word of at least four characters that mixes letters and digits. The query drops hyphens, slashes and dots, then treats equal codes or codes of at least five characters where one contains the other as shared:
 
 | Listing | Its model code |
 | --- | --- |
@@ -37,11 +39,11 @@ Put every Abt product next to every Buy product and you get 1,081 × 1,092 pairs
 | Sony PS-LX350H Belt-Drive Turntable | `PSLX350H` |
 | Sony PSLX300USB USB Record Turntable | `PSLX300USB` |
 
-**Keep the five best.** For each product, its candidates are sorted: a shared code first, then the most words in common, and the top five stay. Here is that for one product, the turntable. Press play.
+**Keep the five best.** For each Abt product, candidates are sorted by shared code, then the fraction of distinct words they share, then Buy id to break ties. The top five stay. Here is that for one product, the turntable. Press play.
 
 <PairSieve data={SIEVE} />
 
-The true match ranks first because it shares the code, even though the sibling turntable shares more of its words (2 of 6, against 2 of 7). Five per product gives 5,396 pairs, and 1,061 of the 1,097 true matches are still among them.
+The true match ranks first because it shares the code, even though the sibling turntable has a higher word-overlap score. Five per product gives 5,396 pairs, and 1,061 of the 1,097 true matches are still among them. The remaining 36 cannot be recovered by the model because they never reach it.
 
 In [`candidates.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/candidates.py) the two clues are one query. `shared_words`, `shares_code` and `word_overlap` are small SQL functions defined at the top of that file, and they do exactly what their names say:
 
@@ -158,7 +160,7 @@ Point the `read_csv` lines in `candidates.py` at your two files, keep the questi
 
 <AccordionGroup>
   <Accordion title="The data">
-    [Abt-Buy](https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), a benchmark from the University of Leipzig (Creative Commons): 1,081 products from Abt, 1,092 from Buy, 1,097 known matches. Comparing all of them is 1.18 million pairs; `candidates.py` keeps five per Abt product, 5,396 pairs, which hold 1,061 of the 1,097 matches. The 36 lost share a few words with their match, but five other listings outrank them. Asking all 5,396 took about 90 seconds and $0.14.
+    [Abt-Buy](https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), a benchmark from the University of Leipzig (Creative Commons): 1,081 products from Abt, 1,092 from Buy, 1,097 known matches. Comparing all of them is 1.18 million pairs; `candidates.py` keeps up to five per Abt product, 5,396 pairs, which hold 1,061 of the 1,097 matches. The other 36 are lost during candidate selection, either at the shared-word filter or the top-five ranking. Asking all 5,396 took about 90 seconds and $0.14.
   </Accordion>
   <Accordion title="The results, in full">
     Against the benchmark's answer key: each product's best candidate by the rules alone, 955 of 1,081 right; the rules, the question and the query, 971 of 980 right (precision 99.1%, recall 88.5%); keeping only matches above the bar, 682 of 682. 4,797 of the 5,396 pairs clear `act: 0.9`. For 51 products the rules' two best candidates tie and the lower id wins. Since 16 products have more than one true match, one match per product can reach at most 1,044 of the 1,097.

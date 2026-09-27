@@ -1,6 +1,17 @@
-# 06 — Roadmap (draft, 2026-09-24)
+# 06 — Roadmap and research log
 
-Ordered by risk: the things we don't know yet come before the things we only have to build. Each item names the question it answers and how we'll know. Costs are API spend at jev-1.13.0 prices.
+The dated sections below record how priorities changed from 24 to 27 September 2026. Read this summary first; "Next up" headings lower down reflect the date they were written and may contain completed work. The [user docs](../docs-site/index.mdx) and [spec reference](../docs-site/reference/spec.mdx) describe current behavior. Reported costs are historical API spend at the stated engine prices.
+
+## At a glance (27 September 2026)
+
+| State | Work | Evidence or trigger |
+|---|---|---|
+| Shipped | The Python package, CLI, agent hook, SQL integration, receipts, engine plugins, and initial server | [Release summary below](#where-we-are); [design findings](04-design.md) |
+| Next | Write judgment results to a warehouse, add named dev/prod targets, and make blind review panels repeatable | [Gaps against dbt](#next-up-the-gaps-against-dbt-2026-09-26); [cookbook needs](#features-the-cookbooks-need-2026-09-27) |
+| When needed | Share a Postgres store across machines, install outside batteries from git, and improve pair distillation | [Gaps against dbt](#next-up-the-gaps-against-dbt-2026-09-26); [cookbook needs](#features-the-cookbooks-need-2026-09-27) |
+| On hold | Extract generated values after a verifier meets the accuracy gate | [Extraction evidence](#later-with-a-trigger-extraction-as-propose-then-verify-discussed-2026-09-25) |
+
+The open items are candidates, not promises or evidence that a command already exists. Check linked issues and code before planning against them.
 
 ## Product principles
 
@@ -20,7 +31,7 @@ Updated 2026-09-26. **Released:** `hunch-ai` on PyPI (import and CLI `hunch`): 0
 
 **Proven** (see `prototype/README.md`, docs/04-design.md rounds 1–14): content-addressed store shared by batch, online and server; lint; calibration / AUROC / dial / order tests; audit-based accuracy estimates (weighted, or from random audits when there is no answer key); backtest and cross-engine diff with a significance test; review queue (CLI and web); judgment graphs; two engines (Jev, LLMs via logprobs) with escalation between them; trace, Python and CSV sources with redaction; shadow mode and replay; `suggest` gated on held-out gold; lineage and spec-change policies; Pydantic classes and Pydantic AI agents as specs (the agent's own questions, word for word); a readable, searchable docs page per project; a server (ELv2). Validated on intent classification (BANKING77, flat and tree), agent-run evals (SWE-agent), real developer ↔ agent conversations (Claude Code) and 100k reviews at scale. Every feature since round 6 had an independent adversarial review; every finding was fixed. Total API spend so far: about $2.80, $1.55 of it the 100k-row scale test.
 
-**Not proven yet:** whether anyone besides us wants this (no external user or real workload yet), a shared multi-worker store (Postgres), and extraction (delayed: below its confidence gate, see below).
+**Not proven as of 2026-09-26:** demand from an external user with a recurring workload, a shared multi-worker store (Postgres), and extraction (below its confidence gate; see below).
 
 ## Phase 0: decide who it's for (no code)
 

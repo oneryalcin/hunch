@@ -1,6 +1,8 @@
 # 04 — Design
 
-Status: sketch. Nothing here is built or validated yet.
+This is a dated design and experiment record, not the current product manual. The sections through **First prototype** preserve the original proposal; the numbered findings record what was built, measured, or corrected later. For current commands and YAML, use the [user docs](../docs-site/index.mdx), [spec reference](../docs-site/reference/spec.mdx), and [shipped recipes](../src/hunch/recipes/). For current priorities, see the [roadmap](06-roadmap.md).
+
+## Original proposal (historical)
 
 ## Decision: clean slate, not on dbt
 
@@ -54,40 +56,42 @@ Open: does the key include the rendered state text, or a hash of source row + te
 | **engine** | Pluggable backend: Jev first; LLM logprob fallback |
 | **store** | Content-addressed result store (DuckDB/Parquet locally) |
 
-## Spec sketch (illustrative, not final)
+## What the ticket sketch became
+
+The first draft used `route` under a question and a list of tests. This shorter example adapts the [ticket recipe](../prototype/examples/tickets/ticket_triage.yml) to the current syntax. The [spec reference](../docs-site/reference/spec.mdx) defines every key.
 
 ```yaml
-# judgments/ticket_triage.yml
 judgment: ticket_triage
-source: ref('support_tickets')           # a source, another judgment, or a dbt model
-state: |
-  Subject: {{ subject }}
-  Body: {{ body }}
+model: jev-1.13.0
+source: tickets.csv
+key: id
+state: [subject, body]
 questions:
   department:
-    choice: [billing, technical, sales]
-    route: { act: 0.80, escalate: 0.35 }
-  frustration:
-    score:
-      0: calm
-      1: frustrated but civil
-      2: very angry
+    type: choice
+    instructions: Which team should handle this support ticket?
+    criteria:
+      billing: A question about charges, invoices, or refunds
+      technical: A product or API problem
+      sales: A question about buying or changing a plan
+    act: 0.80
+    gold: gold_department
   urgent:
-    noul: "The message conveys urgency."
+    type: noul
+    instructions: Does the customer convey that this is urgent?
 tests:
-  - gold: seeds/ticket_triage_gold.csv
-    accuracy: { min: 0.90 }
-    calibration_error: { max: 0.08 }
-  - order_stability: { question: department, permutations: 3, max_flip_rate: 0.02 }
-  - consistency: { pair: [urgent, not_urgent], sum_within: 0.15 }
+  department:
+    min_accuracy: 0.90
 ```
 
-Online, same spec:
+The same spec can answer one row in an app:
 
 ```python
-from hunch import judge
-r = judge("ticket_triage", subject=s, body=b)   # cache → engine; same key space as batch
-if r.department.route == "act": ...
+import hunch
+
+answer = hunch.judge("ticket_triage.yml", id="t-1", subject=subject, body=body)
+if answer["department"]["route"] == "act":
+    send_to_team(answer["department"]["label"])
 ```
 
 ## Tests (derived from engine failure modes, see 01-jev limits)
@@ -147,6 +151,8 @@ No extraction/loading, no general orchestration, no general LLM app framework, n
 Success criterion: the diff feels magical.
 
 **Built 2026-09-24 → `prototype/`** (results table in `prototype/README.md`). Verdict: it does. A wording change surfaced "Custom contract now counts as urgent" before shipping, for $0.0005.
+
+## Experiment record (dated findings)
 
 ## Findings from the prototype (measured on jev-1.13.0)
 

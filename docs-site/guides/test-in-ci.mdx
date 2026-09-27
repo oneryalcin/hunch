@@ -1,9 +1,9 @@
 ---
 title: "Test in CI"
-description: "Set thresholds in the spec, and fail the build when a change makes a judgment worse."
+description: "Set measurable checks in a spec and run them in CI against labelled or reviewed answers."
 ---
 
-A unit test checks that a function returns what you expect. A judgment can't be checked that way, because some of its answers will always be wrong. What you can check is how often it is wrong, and whether its confidence can be trusted.
+A unit test checks one expected result. A model judgment needs that kind of check for important examples, plus measurements across rows: how often it disagrees with known answers, and whether its probabilities match the observed outcomes. These measurements need labelled or reviewed rows.
 
 ## Thresholds live in the spec
 
@@ -16,7 +16,7 @@ tests:
     max_calibration_error: 0.10
 ```
 
-`hunch test` checks each one, prints `PASS` or `FAIL`, and exits 1 if any fails. A check marked `severity: warn` prints `WARN` instead and never fails the build: for something you want to see on every run without blocking on it.
+`hunch test` checks each configured threshold, prints `PASS` or `FAIL`, and exits 1 if a required check fails. A check marked `severity: warn` prints `WARN` without failing the build. CI therefore enforces the limits you write; it does not reject every edit that makes any individual answer worse.
 
 Here is a judgment that reads a coding agent's patch and predicts whether it will pass the project's tests, from the [SWE-agent cookbook](/cookbooks/swe-patches), run against the real test results:
 
@@ -32,14 +32,14 @@ passes_tests (noul, 200 rows)
   PASS AUROC 0.831 (100 yes / 100 no; 0.5 = coin toss; unaffected by base rate) (min 0.7)
 ```
 
-The model ranks patches well: a passing patch usually gets a higher probability than a failing one. Yet the spec fails. When the model says a patch will pass, it is more confident than it has reason to be, and a pipeline that skipped the tests on its confident "yes" would ship broken patches. Ranking alone would not have shown that.
+The model ranks patches well: passing patches tend to get higher probabilities than failing ones. Yet the spec fails its calibration limit. On these rows, the model's probabilities are more confident than the observed outcomes support. A pipeline that skipped tests on confident "yes" answers would risk shipping broken patches. Ranking alone would not reveal that problem.
 
-The other tests are `min_accuracy`, `min_act_accuracy` (accuracy among the answers acted on without a person) and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no tests still gets its numbers printed; nothing can fail.
+The other tests are `min_accuracy`, `min_act_accuracy` (accuracy among answers above the `act` bar) and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no configured threshold can still print measurements, but its measurements alone cannot fail CI.
 
-Two more kinds of check live in the same spec. [Examples](/reference/spec#examples) pin rows whose answers must not change. [Metrics](/reference/spec#metrics) check a rule built from several answers, such as "stop the command if any question says yes", against gold, with limits like `max_missed`.
+Two more kinds of check live in the same spec. [Examples](/reference/spec#examples) check named cases on each run; they do not prove what will happen on unseen rows. [Metrics](/reference/spec#metrics) check a rule built from several answers, such as "stop the command if any question says yes", against gold, with limits like `max_missed`.
 
 <Note>
-Thresholds compare the point estimate, not the lower end of its interval. With 30 reviewed rows the interval is about ±15 points, so set `min_accuracy` a little below what you measured.
+Thresholds compare the point estimate, not the lower end of its interval. With only 30 reviewed rows the uncertainty can be wide; read the interval before choosing a limit.
 </Note>
 
 ## What CI needs

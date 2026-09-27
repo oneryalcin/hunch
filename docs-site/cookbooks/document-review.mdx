@@ -12,6 +12,8 @@ In a lawsuit, the other side can ask for every document that "relates to onshore
 Lawsuits, audits, investigations and journalists with a leaked archive all face this: a pile too big to read and a request about what's in it. The request is only words. What counts is how the lawyer in charge reads them, and hunch is for turning that reading into a question you can run, measure and change.
 </Info>
 
+The experiment runs on 25,353 judged emails sampled from the 455,449-email collection, then weights the results to estimate collection-wide rates. Its added instructions condense the review protocol behind the answer key. That gives this comparison an advantage over a reader who has only the request's wording.
+
 ## Try it first
 
 In 2010 a senior lawyer played this role for a public exercise, the TREC Legal Track, and wrote down what the drilling request covers. Would the lawyer count these?
@@ -106,7 +108,7 @@ drilling: 869/5837 rows flip
   paired sign test p=0.000 → significant
 ```
 
-489 fixed and 380 broken sounds like a small win. Look at which. Of the fixes, 439 are emails the lawyer wanted that the plain question had missed; of the breaks, 367 are emails nobody wanted, now flagged for a person to read and set aside. In a review a miss is the expensive mistake, and weighted to the whole collection those 439 take what's found from 8 in 100 to 63.
+489 fixed and 380 broken sounds like a small win. Look at which. Of the fixes, 439 are emails the lawyer wanted that the plain question had missed; of the breaks, 367 are emails nobody wanted, now flagged for a person to read and set aside. In a review a miss is the expensive mistake. Weighted to the whole collection, the share of wanted emails labelled "yes" rises from 8 in 100 to 63. That is the classifier's recall at its usual yes/no cutoff, before choosing how much a person will read.
 
 ## 4. Decide how much a person reads
 
@@ -131,7 +133,7 @@ PASS recall of yes 84.1%
   (min 80% on the interval's lower bound)
 ```
 
-A person reads about 68,000 emails instead of 455,449, and even at the bottom of the interval, 80% of what should be withheld is among them. That bar is the example's; a real privilege review, where every privileged email handed over can waive the protection, would set it much higher and read more. Drag the line to see what each amount of reading buys:
+A person reads about 68,000 emails instead of 455,449, and even at the bottom of the interval, 80% of what should be withheld is among them. This is a different measure from the 63% above: a person reads every "yes" and the uncertain "no" answers, so the reading queue can recover wanted emails the plain classifier labelled "no". That bar is the example's; a real privilege review, where every privileged email handed over can waive the protection, would set it much higher and read more. Drag the line to see what each amount of reading buys:
 
 <ReadSlider data={DISCOVERY_READ} />
 

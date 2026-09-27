@@ -3,7 +3,7 @@ title: "Decisions in SQL"
 description: "Call a spec from DuckDB or a dbt model: every row gets a decision, from the same store, measured the same way."
 ---
 
-Your coding agents' shell commands land in a table. One query should tell you which of them would have destroyed something, and a data team should be able to build that column in dbt like any other. `hunch.sql` makes a spec a SQL function in DuckDB: it takes the columns the spec reads, and returns each question's answer.
+Your coding agents' shell commands land in a table. You want a query that shows which ones the guard classified as destructive, with its confidence beside each answer. `hunch.sql` makes a spec a SQL function in DuckDB: it takes the columns the spec reads and returns each question's answer. A dbt model can materialize those answers as columns.
 
 ## Register a spec
 

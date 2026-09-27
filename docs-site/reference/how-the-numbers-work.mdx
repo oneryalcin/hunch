@@ -19,6 +19,8 @@ You have reviewed a few dozen rows, but the number is about all of them. How it 
 - Where the model and the key **disagree**, either could be wrong. There are few of these rows, so you review them all.
 - Where they **agree**, both are almost always right. There are many of these rows, so you review a random sample: the spot checks, 30 per question by default (`--audit`). The sample catches rows where the model and the key make the same mistake.
 
+For example, imagine 100 rows: the model and key disagree on 20, and agree on 80. You review all 20 disagreements and find the model right on 15 (75%). You randomly review 20 of the 80 agreements and find it right on 19 (95%). The estimated accuracy across all rows is `(20/100 × 75%) + (80/100 × 95%) = 91%`. Treating the unreviewed agreements as certainly correct would overstate what you know.
+
 Here are the two groups on the [BANKING77](/cookbooks/banking-intents) holdout, one dot per message:
 
 <AccuracyGroups agree={340} disagree={45} sampled={60} />
