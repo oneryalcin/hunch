@@ -484,9 +484,9 @@ hunch test triage.yml --target dev
 
 | Key | What it does |
 | --- | --- |
-| `model` | The engine this target answers with. As under `--model`, its tables and results get the engine's suffix, so the spec's own stay untouched. Answers are keyed by model, so none is shared between engines. |
+| `model` | The engine this target answers with. Every table the run writes then gets the target's name as a suffix (`intent@dev`), downstream judgments and unions included, so the production tables stay untouched. Answers are keyed by model, so none is shared between engines. `escalate.model` is not changed. |
 | `sample` | Judge only this many root rows, as `--sample N`. |
-| `store` | The SQLite store, relative to the spec's folder. It replaces `HUNCH_STORE`, so a dev run never writes to the store that variable names. |
+| `store` | The SQLite store, relative to the spec's folder. It replaces `HUNCH_STORE`, so a dev run never writes to the store that variable names. Keep it in a `.hunch/` folder (`.hunch/dev.sqlite`): results go in `target/` beside it. |
 | `max_cost` | US dollars, as `--max-cost`. If `HUNCH_MAX_COST` is lower, that still holds. |
 
 A flag given on the command line wins over the target: `--target dev --model X` answers with X.

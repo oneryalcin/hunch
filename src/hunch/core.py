@@ -757,7 +757,7 @@ def lint_targets(project: dict) -> list[str]:
         spec, ts = project["nodes"][n], project["nodes"][n].get("targets")
         if ts is None:
             continue
-        if not isinstance(ts, dict) or not ts or not all(isinstance(t, dict) for t in ts.values()):
+        if not isinstance(ts, dict) or not ts or not all(isinstance(k, str) and isinstance(t, dict) for k, t in ts.items()):
             errors.append(f"{n}: targets maps each name to its settings, e.g. {{dev: {{model: …, sample: 50}}}}")
             continue
         for tn, t in ts.items():
@@ -782,7 +782,7 @@ def lint_targets(project: dict) -> list[str]:
                     used.setdefault((tn, k), {}).setdefault(t[k], n)
     name = project.get("target")
     if name and not any(name in (s.get("targets") or {}) for s in project["nodes"].values() if isinstance(s.get("targets"), dict)):
-        have = sorted({t for s in project["nodes"].values() if isinstance(s.get("targets"), dict) for t in s["targets"]})
+        have = sorted({str(t) for s in project["nodes"].values() if isinstance(s.get("targets"), dict) for t in s["targets"]})
         errors.append(f"--target {name}: no judgment here defines it ({'targets: ' + ', '.join(have) if have else 'no targets:'})")
     for (tn, k), vals in used.items():
         if len(vals) > 1:
@@ -792,18 +792,20 @@ def lint_targets(project: dict) -> list[str]:
 
 
 def apply_target(project: dict, name: str, keep_model: bool = False) -> dict:
-    """--target NAME on a linted project: each judgment answers with its targets.NAME.model (tables get the engine's
-    suffix, as under --model, so the spec's own tables stay untouched); a judgment without one runs as written.
-    Returns what applies to the whole run: sample, store (resolved against the spec that names it), max_cost."""
-    run = {}
+    """--target NAME on a linted project: each judgment answers with its targets.NAME.model; a judgment without one
+    runs as written. If any engine changes, every table gets `@NAME` (a union or a downstream judgment built on
+    target answers must not replace its production table either). Returns what applies to the whole run: sample,
+    store (resolved against the spec that names it), max_cost."""
+    run, changed = {}, False
     for spec in project["nodes"].values():
         t = (spec.get("targets") or {}).get(name) or {}
         if "model" in t and not keep_model and "union" not in spec and t["model"] != spec.get("model"):
-            spec["_table_suffix"] = "__" + re.sub(r"\W+", "_", t["model"]).strip("_")
-            spec["model"] = t["model"]
+            spec["model"], changed = t["model"], True
         run |= {k: t[k] for k in ("sample", "max_cost") if k in t}
         if "store" in t:
             run["store"] = (spec["_dir"] / Path(t["store"]).expanduser()).resolve()
+    for spec in project["nodes"].values() if changed else []:
+        spec["_table_suffix"] = f"@{name}"
     return run
 
 
@@ -2533,8 +2535,9 @@ def results_path(project: dict) -> Path:
         name = tested.relative_to(store.parent.parent).with_suffix("")
     except ValueError:  # tested outside the store's folder (HUNCH_STORE elsewhere)
         name = Path(tested.stem)
-    return store.parent / "target" / name.with_name(name.name + spec.get("_table_suffix", "")
-                                                    + (f"@{TARGET}" if TARGET else "")).with_suffix(".json")
+    suffix = spec.get("_table_suffix", "")
+    suffix += f"@{TARGET}" if TARGET and not suffix.endswith(f"@{TARGET}") else ""
+    return store.parent / "target" / name.with_name(name.name + suffix).with_suffix(".json")
 
 
 def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> None:
@@ -2702,6 +2705,8 @@ def load_against(project: dict, args) -> dict:
                 sys.exit(f"--against's {n!r} reads {missing}, which {twin!r}'s rows don't have: these projects don't "
                          f"judge the same data, so there is nothing to compare row by row")
             old["nodes"][n]["source"] = absolute_source(project["nodes"][twin])
+    if TARGET:  # the same target on both sides (if the old specs define it): compare logic, not targets.
+        apply_target(old, TARGET)  # --model, if given, is the new side's engine only, as without a target
     return old
 
 
@@ -2714,8 +2719,6 @@ def cmd_diff(project: dict, args) -> None:
                      "(the same specs on another engine)")
         args.against = str(args.path)
     old = load_against(project, args)
-    if TARGET:  # both sides on the same target: a diff compares logic, not targets
-        apply_target(old, TARGET)  # --model, if given, is the new side's engine only, as without a target
     new_r, old_r = execute(project), execute(old)
     print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
     if args.node:

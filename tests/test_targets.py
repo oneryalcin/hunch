@@ -42,13 +42,13 @@ def hunch(tmp_path, monkeypatch):
     monkeypatch.delenv("HUNCH_STORE", raising=False)
 
     def run(*argv):
-        monkeypatch.setattr(sys, "argv", ["hunch", argv[0], str(tmp_path / "spec.yml"), *argv[1:]])
+        monkeypatch.setattr(sys, "argv", ["hunch", argv[0], str(run.project), *argv[1:]])
         try:
             core.main()
         except SystemExit as e:
             if e.code:
                 raise
-    run.dir, run.fake = tmp_path, fake
+    run.dir, run.fake, run.project = tmp_path, fake, tmp_path / "spec.yml"
     return run
 
 
@@ -60,7 +60,7 @@ def test_dev_run_writes_only_its_own_store_even_with_hunch_store_set(hunch, monk
     prod = hunch.dir / "prod.sqlite"
     monkeypatch.setenv("HUNCH_STORE", str(prod))
     hunch("run", "--target", "dev")
-    assert not prod.exists() and "urgent__fake_small" in tables(hunch.dir / "dev.sqlite")
+    assert not prod.exists() and "urgent@dev" in tables(hunch.dir / "dev.sqlite")
 
 
 def test_answers_cached_for_one_engine_are_not_reused_for_the_target_engine(hunch):
@@ -77,6 +77,17 @@ def test_a_target_engine_in_the_prod_store_leaves_the_specs_own_table_alone(hunc
     hunch("run", "--target", "dev")
     db = sqlite3.connect(hunch.dir / ".hunch" / "store.sqlite")
     assert db.execute("select distinct urgent from urgent").fetchall() == [("yes",)]
+
+
+def test_a_downstream_judgment_without_a_target_keeps_its_production_table(hunch):
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("store: dev.sqlite", "max_cost: 1"))
+    (hunch.dir / "down.yml").write_text("judgment: down\nmodel: fake:big\nsource: ref(urgent)\nstate: [text]\n"
+                                        "questions:\n  angry: {type: noul, instructions: \"Angry?\"}\n")
+    hunch.project = hunch.dir  # the folder: both specs
+    hunch("run")
+    hunch("run", "--target", "dev")
+    db = sqlite3.connect(hunch.dir / ".hunch" / "store.sqlite")
+    assert db.execute("select distinct urgent from down").fetchall() == [("yes",)]
 
 
 def test_model_flag_beats_the_target_model(hunch):

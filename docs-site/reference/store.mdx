@@ -62,7 +62,7 @@ Answer shapes:
 | `<question>_key` | The answer's `key` in `answers`. |
 | `_hunch_run_id` | The run that wrote the row. |
 
-Under `--model`, or a target with its own `model`, the table name gets the engine as a suffix (`intent__deepseek_deepseek_flash`), leaving the spec's own table untouched.
+Under `--model`, the table name gets the engine as a suffix (`intent__deepseek_deepseek_flash`), leaving the spec's own table untouched. Under a `--target` that changes an engine, every table of the run gets the target's name instead (`intent@dev`).
 
 ## Runs and lineage
 

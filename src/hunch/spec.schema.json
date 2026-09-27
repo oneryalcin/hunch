@@ -117,6 +117,7 @@
     },
     "targets": {
       "type": "object",
+      "minProperties": 1,
       "description": "Named ways to run this spec, picked with --target NAME: a cheaper engine, a sample, another store. Without --target the spec runs as written.",
       "additionalProperties": {
         "type": "object",
@@ -124,7 +125,8 @@
         "properties": {
           "model": {
             "type": "string",
-            "description": "The engine this target answers with; its tables get the engine's suffix, as under --model."
+            "minLength": 1,
+            "description": "The engine this target answers with. Every table of the run then gets @<target> as a suffix."
           },
           "sample": {
             "type": "integer",
@@ -133,6 +135,7 @@
           },
           "store": {
             "type": "string",
+            "minLength": 1,
             "description": "The SQLite store to use, relative to the spec's folder. Replaces HUNCH_STORE."
           },
           "max_cost": {
