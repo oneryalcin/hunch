@@ -68,7 +68,8 @@ sorted(rows[0])[:5]  # ['_hunch_run_id', '_path_p', 'at', 'command', 'cwd']
 
 ```python
 hunch.judge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
-            shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None
+            shadow: str | Path | None = None, log: bool = False,
+            target: str | None = None, **fields) -> dict | None
 ```
 
 Judges one row: the whole project runs on it with the same cache keys as a batch run.
@@ -76,11 +77,12 @@ Judges one row: the whole project runs on it with the same cache keys as a batch
 | Argument | Meaning |
 |---|---|
 | `path` | A spec file or a folder of specs. Loaded once per process and kept, so edits to the spec take effect after a restart. |
-| `row` | The row as a dict. Use it when a column is called `node`, `shadow` or `log`. |
+| `row` | The row as a dict. Use it when a column is called `node`, `shadow`, `log` or `target`. |
 | `**fields` | The row as keyword arguments. Merged over `row`. |
 | `node` | Return only this judgment's answers. |
 | `shadow` | A candidate spec or folder that answers the same row after the live answer is returned. See [Change a spec](/guides/change-a-spec). |
 | `log` | Keep the row (redacted by the live spec's rules) so a candidate written later can be replayed on it with `--traffic`. `shadow` implies `log`. |
+| `target` | Answer as [`targets.NAME`](/reference/spec#targets) in the spec: its `model` and its `store`. Default: `$HUNCH_TARGET`. Its `sample` and `max_cost` are for batch runs; online, the cap is `hunch.settings.MAX_COST`. |
 
 Per question it returns:
 
@@ -114,7 +116,8 @@ hunch.judge("src/hunch/recipes/agent_commands/command_guard.yml",
 
 ```python
 await hunch.ajudge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
-                   shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None
+                   shadow: str | Path | None = None, log: bool = False,
+                   target: str | None = None, **fields) -> dict | None
 ```
 
 Async `judge`: same arguments and return. A `shadow` candidate runs as a background task in the current loop; its failures go to stderr, never raised.
