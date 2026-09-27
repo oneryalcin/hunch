@@ -77,3 +77,22 @@ export const WrongMatches = ({ bars }) => {
     </div>
   );
 };
+
+export const PairFunnel = ({ steps }) => {
+  // steps: [[count, what it is]], largest first; bar widths to one scale, with a sliver for the smallest
+  const max = steps[0][0];
+  return (
+    <div className="not-prose" style={{ margin: "16px 0", fontSize: 14 }}>
+      {steps.map(([n, what]) => (
+        <div key={what} style={{ margin: "10px 0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span>{what}</span><b style={{ fontVariantNumeric: "tabular-nums" }}>{n.toLocaleString("en")}</b>
+          </div>
+          <div style={{ height: 12, marginTop: 4, background: "rgba(128,128,128,0.15)", borderRadius: 4 }}>
+            <div style={{ width: `${(100 * n) / max}%`, minWidth: 3, height: 12, background: "#7D969B", borderRadius: 4 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
