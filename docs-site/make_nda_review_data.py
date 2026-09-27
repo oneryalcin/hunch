@@ -19,7 +19,7 @@ from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
 import hunch  # noqa: E402
-from hunch.core import execute  # noqa: E402
+from hunch.execute import execute  # noqa: E402
 
 csv.field_size_limit(sys.maxsize)
 EXAMPLE = Path("prototype/examples/nda_review")

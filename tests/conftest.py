@@ -3,7 +3,8 @@ import sys
 
 import pytest
 
-from hunch import core, engines, settings
+from hunch import engines, settings, store
+from hunch.commands import main
 
 
 class Fake:  # a free, local engine: p(yes) depends on the model, so answers say which engine gave them
@@ -24,13 +25,13 @@ def hunch(tmp_path, monkeypatch):
     fake = Fake()
     monkeypatch.setattr(engines, "_loaded", {"fake": fake})
     monkeypatch.setattr(settings, "MAX_COST", None)
-    monkeypatch.setattr(core, "_conns", {})
+    monkeypatch.setattr(store, "_conns", {})
     monkeypatch.delenv("HUNCH_STORE", raising=False)
 
     def run(*argv):
         monkeypatch.setattr(sys, "argv", ["hunch", argv[0], str(run.project), *argv[1:]])
         try:
-            core.main()
+            main()
         except SystemExit as e:
             if e.code:
                 raise

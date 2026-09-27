@@ -17,7 +17,7 @@ import numpy as np
 
 os.environ["HUNCH_MAX_COST"] = "0"
 import hunch  # noqa: E402
-from hunch.core import decide  # noqa: E402
+from hunch.answers import decide  # noqa: E402
 
 HERE = Path(__file__).parent
 csv.field_size_limit(10**8)

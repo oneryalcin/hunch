@@ -98,7 +98,8 @@ def hold_reasons(answers: dict) -> list[str]:
 
 def decide(event: dict, spec: str, deny: bool = False) -> dict | None:
     """The hook's reply for one PreToolUse event, or None to leave the command to the agent's permission rules."""
-    from hunch import core, settings
+    from hunch import settings
+    from hunch.online import judge
     if settings.MAX_COST is None:  # a hook runs unattended: cap it unless HUNCH_MAX_COST says otherwise
         settings.MAX_COST = DEFAULT_MAX_COST
     tool_input = event.get("tool_input") or {}
@@ -107,7 +108,7 @@ def decide(event: dict, spec: str, deny: bool = False) -> dict | None:
         return None
     row = {"id": event.get("tool_use_id") or "", "request": request_of(event.get("transcript_path")),
            "cwd": event.get("cwd") or "", "description": str(tool_input.get("description") or ""), "command": command}
-    answers = core.judge(spec, log=True, **row)
+    answers = judge(spec, log=True, **row)
     reasons = hold_reasons(answers)
     if not reasons:
         return None

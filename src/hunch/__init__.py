@@ -14,18 +14,15 @@ Library first; the `hunch` CLI is a thin shell over the same functions.
 """
 from pathlib import Path
 
-from hunch.core import (  # noqa: F401  (the public surface)
-    ajudge,
-    decide,
-    execute,
-    judge,
-    lint,
-    load_project,
-    load_spec,
-    spec_yaml,
-    table_name,
-)
+# the public surface
+from hunch.answers import decide  # noqa: F401
+from hunch.execute import execute  # noqa: F401
+from hunch.lint import lint  # noqa: F401
 from hunch.models import spec_from_agent, spec_from_model, to_model  # noqa: F401
+from hunch.online import ajudge, judge  # noqa: F401
+from hunch.spec import load_project, load_spec  # noqa: F401
+from hunch.store import table_name  # noqa: F401
+from hunch.suggest import spec_yaml  # noqa: F401
 
 __version__ = "0.3.1"
 
@@ -33,7 +30,7 @@ __version__ = "0.3.1"
 def load(obj, base: str | Path = ".") -> dict:
     """A project from a spec path, a folder of specs, a spec dict (e.g. from spec_from_model) or a list of spec
     dicts (a graph built in Python: generate the specs, don't copy them). Relative sources resolve against base."""
-    from hunch.core import expand_multi, topo_project
+    from hunch.spec import expand_multi, topo_project
     if isinstance(obj, (dict, list)):
         specs = []
         for s in obj if isinstance(obj, list) else [obj]:
@@ -48,7 +45,7 @@ def run(obj, base: str | Path = ".") -> dict:
     """Run every judgment (asks only what the store lacks) and materialize its table; returns the results."""
     import argparse
 
-    from hunch.core import cmd_run
+    from hunch.commands import cmd_run
     project = load(obj, base)
     cmd_run(project, argparse.Namespace())
     return project
@@ -57,7 +54,7 @@ def run(obj, base: str | Path = ".") -> dict:
 def results(obj, base: str | Path = ".", judgment: str | None = None) -> list[dict]:
     """The materialized table of a judgment (the last complete run), as a list of dicts. Refuses a table another
     version of the spec wrote, or another spec with the same judgment name: its answers aren't this spec's."""
-    from hunch.core import open_store, spec_hash
+    from hunch.store import open_store, spec_hash
     project = load(obj, base)
     spec = project["nodes"][judgment or project["order"][-1]]
     db, name = open_store(spec), table_name(spec)
@@ -80,7 +77,7 @@ def judge_model(cls, spec: dict, base: str | Path = ".", **fields):
     """Judge one row with a spec built from a Pydantic class; returns an instance of that class."""
     import asyncio
 
-    from hunch.core import aexecute
+    from hunch.execute import aexecute
     project = load(spec, base)
     res = asyncio.run(aexecute(project, rows_in=[fields]))[project["order"][0]]
     answers = {it["qid"]: {"label": decide(res["answers"][it["key"]])[0]} for it in res["items"]}

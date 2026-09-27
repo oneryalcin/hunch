@@ -15,7 +15,10 @@ from collections import Counter
 from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
-import hunch.core as H  # noqa: E402
+from hunch.answers import decide  # noqa: E402
+from hunch.execute import execute  # noqa: E402
+from hunch.spec import load_project, state_of  # noqa: E402
+from hunch.spec import rows as source_rows
 
 EXAMPLE = Path("prototype/examples/claude_code")
 PANEL = Path("prototype/review_panel/claude_code")
@@ -31,8 +34,8 @@ REPLY_CHARS = 360
 
 
 def answers(path):
-    res = H.execute(H.load_project(path))["outcome"]
-    return {it["row"]["id"]: H.decide(res["answers"][it["key"]])[:2] for it in res["items"]}, res["spec"]
+    res = execute(load_project(path))["outcome"]
+    return {it["row"]["id"]: decide(res["answers"][it["key"]])[:2] for it in res["items"]}, res["spec"]
 
 
 def tail(text, n=REPLY_CHARS):
@@ -49,7 +52,7 @@ def tail(text, n=REPLY_CHARS):
 
 ans, spec = answers(EXAMPLE / "outcome.yml")
 act = spec["questions"]["outcome"]["act"]
-rows = {r["id"]: H.state_of(spec, r) for r in H.rows(spec)}
+rows = {r["id"]: state_of(spec, r) for r in source_rows(spec)}
 ids = json.load(open(PANEL / "key/map.json"))  # packet number -> turn id
 votes = {tid: Counter(json.load(open(PANEL / f"answers/{rev}.json"))[int(n) - 1]["outcome"]
                       for rev in ["opus", "sonnet_a", "sonnet_b"]) for n, tid in ids.items()}

@@ -13,7 +13,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-from hunch import core, engines
+from hunch import engines
+from hunch.spec import ENDPOINTS
 
 USAGE = """usage: hunch plugins                     the engines hunch can use: built in, and from installed plugins
        hunch install PACKAGE [PACKAGE…]    install engine plugins into hunch's own environment (hunch-engine-<name>)"""
@@ -21,7 +22,7 @@ USAGE = """usage: hunch plugins                     the engines hunch can use: b
 
 def listing() -> list[str]:
     loaded = engines.installed()
-    out = [f"built in: jev-…, distilled:<folder>, {', '.join(p + ':<model>' for p in core.ENDPOINTS)}"]
+    out = [f"built in: jev-…, distilled:<folder>, {', '.join(p + ':<model>' for p in ENDPOINTS)}"]
     if not loaded and not engines.shadowed:
         return out + ["from plugins: none installed (hunch install hunch-engine-<name>)"]
     out.append("from plugins:")

@@ -4,7 +4,8 @@ import sqlite3
 
 import pytest
 
-from hunch import core
+from hunch.spec import load_spec
+from hunch.store import spec_hash
 
 SPEC = """judgment: urgent
 model: fake:big
@@ -98,6 +99,6 @@ def test_an_unknown_target_is_an_error(hunch):
 
 
 def test_adding_targets_does_not_change_the_spec_hash(hunch):
-    with_targets = core.load_spec(hunch.dir / "spec.yml")
-    without = core.load_spec(hunch.dir / "spec.yml", SPEC.split("targets:")[0])
-    assert core.spec_hash(with_targets) == core.spec_hash(without)
+    with_targets = load_spec(hunch.dir / "spec.yml")
+    without = load_spec(hunch.dir / "spec.yml", SPEC.split("targets:")[0])
+    assert spec_hash(with_targets) == spec_hash(without)

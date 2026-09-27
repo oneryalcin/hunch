@@ -16,7 +16,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from hunch import core, settings
+from hunch import settings
+from hunch.answers import conf_of, decide, route
+from hunch.commands import cmd_run
+from hunch.execute import execute
+from hunch.lint import lint
+from hunch.spec import load_project
+from hunch.suggest import spec_yaml
 
 MODEL = "jev-1.13.0"
 ACT = 0.9  # a first bar for acting alone; below it a row is "unsure" (tune it later from `hunch test`'s dial)
@@ -83,29 +89,29 @@ def main(argv: list[str]) -> None:
     path = Path(f"{name}.yml")
     spec = build(a.question, Path(os.path.relpath(a.source.resolve(), Path.cwd())), options,
                  [c.strip() for c in a.columns.split(",")] if a.columns else None, name)
-    text = core.spec_yaml(spec)
+    text = spec_yaml(spec)
     if path.exists() and path.read_text() != text:
         sys.exit(f"{path} exists and differs (another question or columns, or your edits); --name another, "
                  f"or `hunch run {path}`")
     new = not path.exists()
     path.write_text(text)
-    project = core.load_project(path.resolve())
-    errors, warnings = core.lint(project)
+    project = load_project(path.resolve())
+    errors, warnings = lint(project)
     for w in warnings:
         print(f"lint warning: {w}", file=sys.stderr)
     if errors:
         if new:  # nothing left behind for a spec that can't run
             path.unlink()
         sys.exit("\n".join(f"lint error: {e}" for e in errors))
-    core.cmd_run(project, argparse.Namespace())
-    res = core.execute(project, dry=True)[name]  # everything is in the store now: nothing is asked
+    cmd_run(project, argparse.Namespace())
+    res = execute(project, dry=True)[name]  # everything is in the store now: nothing is asked
     rows = []
     for it in res["items"]:
-        label, _, _ = core.decide(res["answers"][it["key"]])
-        conf = core.conf_of(it, res["answers"][it["key"]])
+        label, _, _ = decide(res["answers"][it["key"]])
+        conf = conf_of(it, res["answers"][it["key"]])
         # named as `hunch run`'s table names them: <question>, <question>_p, <question>_route
         rows.append({**{c: it["row"].get(c, "") for c in [spec["key"], *spec["state"]]},
-                     name: label, f"{name}_p": round(conf, 3), f"{name}_route": core.route(it["q"], res["answers"][it["key"]])})
+                     name: label, f"{name}_p": round(conf, 3), f"{name}_route": route(it["q"], res["answers"][it["key"]])})
     counts = Counter(r[name] for r in rows)
     print(f"\n{a.question}")
     for label, n in counts.most_common():

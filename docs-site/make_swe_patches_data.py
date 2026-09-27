@@ -15,7 +15,8 @@ import re
 from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
-from hunch import core  # noqa: E402
+from hunch.execute import execute  # noqa: E402
+from hunch.spec import load_project  # noqa: E402
 
 PUZZLES = {  # run id: (which of the last three messages holds the claim, why it is here)
     "nficano__humps-194#78": (-2, "The agent's own check printed `size`, where the issue asks for `size_x`, "
@@ -30,8 +31,8 @@ PUZZLES = {  # run id: (which of the last three messages holds the claim, why it
 }
 MAX_PATCH_LINES = 12
 
-project = core.load_project(Path("prototype/examples/swe_agent/patch_eval.yml"))
-res = core.execute(project)["patch_eval"]
+project = load_project(Path("prototype/examples/swe_agent/patch_eval.yml"))
+res = execute(project)["patch_eval"]
 runs = {}
 for it in res["items"]:
     runs.setdefault(it["id"], {"row": it["row"]})[it["qid"]] = res["answers"][it["key"]]["noul"]

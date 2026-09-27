@@ -13,7 +13,8 @@ import textwrap
 from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
-from hunch.core import execute, load_project  # noqa: E402
+from hunch.execute import execute  # noqa: E402
+from hunch.spec import load_project  # noqa: E402
 
 EXAMPLE = Path("prototype/examples/stale_comments")
 VIEWS = [  # spec, what the model sees

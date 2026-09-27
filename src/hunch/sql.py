@@ -24,7 +24,10 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from hunch import core, settings
+from hunch import settings
+from hunch.answers import conf_of, decide, route
+from hunch.execute import aexecute
+from hunch.spec import compile_where, load_project, state_columns
 
 FIELDS = (("label", "VARCHAR"), ("p", "DOUBLE"), ("route", "VARCHAR"))
 _lock = threading.Lock()  # DuckDB calls from several threads, and the cap (settings.MAX_COST) is global: one batch at a time
@@ -56,8 +59,8 @@ def columns(project: dict) -> list[str]:
     cols = []
     for n in project["order"]:
         spec = project["nodes"][n]
-        cols += core.compile_where(spec["where"])[1] if "where" in spec else []
-        cols += core.state_columns(spec) if "union" not in spec else []
+        cols += compile_where(spec["where"])[1] if "where" in spec else []
+        cols += state_columns(spec) if "union" not in spec else []
     return [c for c in dict.fromkeys(cols) if c not in made and not any(c.startswith(q + "_") for q in made)]
 
 
@@ -70,7 +73,7 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
         import pyarrow as pa
     except ImportError:
         raise SystemExit('hunch.sql needs the sql extra: uv add "hunch-ai[sql]"') from None
-    project = core.load_project(Path(path).resolve())
+    project = load_project(Path(path).resolve())
     for spec in project["nodes"].values():  # rows are told apart by position, never by the spec's key: in SQL a key
         spec["key"] = "_hunch_row"          # can repeat, and chains and unions match rows by it
     judged = project["order"]
@@ -100,7 +103,7 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
             before = settings.CHARGED
             settings.SPEND_LIMIT = None if budget.left is None else before + budget.left
             try:
-                results = _run(core.aexecute(project, rows_in=rows))
+                results = _run(aexecute(project, rows_in=rows))
             except SystemExit as e:  # the cap, as this function's budget: the engine's message names the CLI flag
                 if budget.left is None or "max-cost" not in str(e):
                     raise
@@ -116,9 +119,9 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
             res = results[n]
             for it in res["items"]:
                 a = res["answers"][it["key"]]
-                label, _, _ = core.decide(a)
-                out[n].setdefault(int(it["id"]), {})[it["qid"]] = {"label": label, "p": core.conf_of(it, a),
-                                                             "route": core.route(it["q"], a, it["path_p"])}
+                label, _, _ = decide(a)
+                out[n].setdefault(int(it["id"]), {})[it["qid"]] = {"label": label, "p": conf_of(it, a),
+                                                             "route": route(it["q"], a, it["path_p"])}
         live = set(live)
         got = [None if i not in live else out[judged[0]].get(i) if one else {n: out[n].get(i) for n in judged}
                for i in range(len(vals))]

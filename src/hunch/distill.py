@@ -149,10 +149,11 @@ def distill(project: dict, node: str, encoder: str = "minilm") -> tuple[Path, li
     require()
     import numpy as np
 
-    from hunch import core
-    res = core.execute(project, dry=True)[node]  # dry: the answers already in the store, nothing asked
+    from hunch.answers import attach_gold, load_reviews
+    from hunch.execute import execute
+    res = execute(project, dry=True)[node]  # dry: the answers already in the store, nothing asked
     spec = res["spec"]
-    core.attach_gold(res["items"], core.load_reviews(spec))
+    attach_gold(res["items"], load_reviews(spec))
     by_q: dict[str, list] = {}
     trained = set()
     for it in res["items"]:

@@ -21,7 +21,7 @@ import numpy as np
 
 os.environ["HUNCH_MAX_COST"] = "0"
 import hunch  # noqa: E402
-from hunch.core import decide  # noqa: E402
+from hunch.answers import decide  # noqa: E402
 
 HERE = Path(__file__).parent
 REVIEWS = {"anxiety": "van_Dis_2019", "diet_risk": "Moran_2020", "wilson": "Appenzeller-Herzog_2019"}

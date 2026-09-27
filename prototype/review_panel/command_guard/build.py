@@ -9,13 +9,14 @@ from pathlib import Path
 R = Path(__file__).parent
 sys.path.insert(0, str(R.parents[2] / "src"))
 import hunch  # noqa: E402
-import hunch.core as core  # noqa: E402  (engine internals: rows, state)
+from hunch.spec import load_spec, state_of  # noqa: E402  (engine internals: rows, state)
+from hunch.spec import rows as source_rows  # noqa: E402
 
 SPEC = R.parent.parent / "examples/claude_code/command_guard.yml"
-spec = core.load_spec(SPEC)
+spec = load_spec(SPEC)
 Q = list(spec["questions"])
 res = {r["id"]: r for r in hunch.results(SPEC)}
-rows = [{**r, **core.state_of(spec, r)} for r in core.rows(spec)]
+rows = [{**r, **state_of(spec, r)} for r in source_rows(spec)]
 by_hash = sorted(rows, key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest())
 audit = by_hash[:100]
 flagged = [r for r in by_hash[100:] if any(float(res[r["id"]][q + "_pyes"]) >= 0.5 for q in Q)]

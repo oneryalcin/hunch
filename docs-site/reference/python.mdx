@@ -221,4 +221,4 @@ Adds the spec or project folder at `path` to the DuckDB connection `con` as a fu
 | `spec_yaml` | `(spec: dict) -> str` | A spec dict as YAML, for saving a generated spec as a file. |
 | `table_name` | `(spec: dict) -> str` | The judgment's table in the store, including the `__<engine>` suffix under `--model`. |
 
-Everything else in `hunch.core` is internal and not a stable API.
+Everything else (`hunch.spec`, `hunch.execute`, `hunch.measure` and the other modules) is internal and not a stable API. Run settings are `hunch.settings`.

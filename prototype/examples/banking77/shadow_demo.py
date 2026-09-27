@@ -14,15 +14,15 @@ from pathlib import Path
 HERE = Path(__file__).parent
 HUNCH = HERE.parent.parent / "hunch.py"
 sys.path.insert(0, str(HUNCH.parent.parent / "src"))
-import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
 from hunch import settings  # noqa: E402
+from hunch.online import judge  # noqa: E402  (engine internals: items, store, reviews)
 
 LIVE, CANDIDATE = HERE / "intent.yml", HERE.parent / "banking77_tree"
 settings.MAX_COST = 0.0
 
 print("1. 'live traffic': 40 customer messages, answered by the live spec; the candidate answers too, unseen")
 for r in list(csv.DictReader(open(HERE / "banking77_holdout.csv", newline="")))[:40]:
-    live = hunch.judge(LIVE, shadow=CANDIDATE, text=r["text"])  # the app only ever sees `live`
+    live = judge(LIVE, shadow=CANDIDATE, text=r["text"])  # the app only ever sees `live`
 print(f"   last answer the app got: {live}")
 
 print("\n2. shadow report: where would the candidate have answered differently? (all cached)")
