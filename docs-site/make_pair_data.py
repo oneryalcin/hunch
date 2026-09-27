@@ -16,6 +16,7 @@ os.environ["HUNCH_MAX_COST"] = "0"
 EXAMPLE = Path("prototype/examples/product_matching")
 sys.path.insert(0, str(EXAMPLE))
 import candidates  # noqa: E402
+
 import hunch.sql  # noqa: E402
 
 PUZZLES = {  # Abt product: why it is here
