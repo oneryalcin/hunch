@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# Title-and-abstract screening for van Dis et al., JAMA Psychiatry 2020: long-term outcomes of cognitive behavioural therapy for anxiety disorders. SYNERGY (van_Dis_2019, CC0; see NOTICE.md); `gold` is the reviewers' own
+# screening decision, `included` whether the paper made it into the review.
+judgment: anxiety
+model: jev-1.13.0
+source: .cache/van_Dis_2019.csv     # built by fetch.py
+key: id
+state: [title, abstract]
+clip: {abstract: 4000}
+questions:
+  anxiety:
+    type: noul
+    instructions: >-
+      `title` and `abstract` describe a paper found by the literature search for a systematic review
+      (`abstract` is empty when none is available; then judge from the title). The review's eligibility
+      criteria, as its authors published them: "Randomized clinical trials were included that examined
+      effects of CBT(ie, any therapy with cognitive restructuring and/or a behavioral therapy, such as
+      exposure, as core component), including third generation CBTs (ie, acceptance and commitment therapy
+      and metacognitive therapy), at least 1 month after treatment completion, in an individual, group, or
+      internet treatment format. Comparison groups included care as usual (ie, anything patients would
+      normally receive as long as it was not a structured type of psychotherapy, such as primary care at
+      medical centers or case management with educational groups), relaxation, psychoeducation, pill
+      placebo, supportive therapy, or waiting list. Studies were included if they tested adult patients (or
+      samples consisting mostly of adults but also some adolescents aged ≥16 years) who received a diagnosis
+      of GAD, PD, SAD, specific phobia, PTSD, or OCD based on results of a structured diagnostic interview.
+      Studies were excluded if they did not use CBT (eg, applied relaxation, eye movement desensitization
+      and reprocessing, or interpersonal therapy) or did not report symptoms separately for each disorder.
+      To reduce clinical heterogeneity, studies were also excluded if they had done any of the following:
+      (1) used self-guided therapy without any guidance, (2) used CBT combined with medication or pill
+      placebo, or (3) tested inpatients. English language articles only" This is title-and-abstract
+      screening: could this paper meet those criteria, so that someone should read the full text? A paper
+      that clearly fails a criterion is "no"; when the title and abstract leave it open, "yes".
+    gold: gold
+    act: {yes: 1.0, no: 0.96}     # chosen on half the papers (measure.py); a person reads every other paper
+
+tests:   # regression bars: AUROC below what was measured (0.902); recall at act, on its 95% lower bound
+  anxiety: {min_auroc: 0.88, min_recall: 0.92}

@@ -482,6 +482,16 @@ From the second survey (beyond coding): the social scientist's and investigator'
 - **Cost:** both wordings, four topics, $2.51 plus a $0.03 trial; 96-116 s per topic.
 - **Adversarial review (Fable, 8 findings, fixed):** the keyword strawman and the page's regex printed without `\b`; bars tuned on the test set; adjudication described wrongly; the leak framed sideways; "455,449 for every topic" after dropping broken rows; condensations drop minor rules (e.g. lobbying's conference and FERC rules, privilege's business-vs-legal predominance); an 80% privilege floor presented as a win; first-pass -1 counted as no.
 
+## Findings, round 23: screening papers for systematic reviews (2026-09-27)
+
+SYNERGY (CC0; the 2025 "plus" source, 119 reviews): three reviews with screening labels and published criteria, van Dis 2019 (anxiety CBT, 9,883), Moran 2020 (diet and risk, 5,244), Appenzeller-Herzog 2019 (Wilson disease, 2,896). `gold` = the title-and-abstract decision; `included` = final. Abstracts can't be republished (legal note accepted by the user); `.cache/` only.
+
+- **OpenAlex lost most abstracts**; PubMed E-utilities fill gaps (coverage 90% / 71% / 63%). Filges 2018 (class size) dropped: PubMed covers 5% of it. Title-only papers are much harder (65-75% of the pile read for 95%, vs 36-39% with an abstract).
+- **Zero-shot ranking vs active learning** (ASReview 3.0.8 elas_u4, 3 seeds, local): reading needed to reach every paper in the review, hunch 32.8% / 41.4% / 37.2% vs AL 28.3-29.4% / 70.7-70.8% / 71.7-72.0%. 95% of the screeners' keeps: hunch 38.9% / 47.5% / 83.1% vs AL 31.5-32.2% / 53.1-54.2% / 44.2-51.0%. AL learns the screeners' lenient habits; hunch the criteria. Seeding AL with hunch's top 10 (8-9 kept) changes nothing.
+- **Wilson disease**: screeners kept poster sessions (criteria exclude abstract-only) and patient cohorts (might compare drugs; only the full text says). hunch says no to both; the included papers it is least sure of are mostly cohorts (0.09-0.12). No recall bar possible on the screeners' keeps.
+- **Recall bars chosen on half** (lesson of round 22): anxiety 0.96 → 95.0% on the other half reading 38.6%; diet 0.97 → 98.9% reading 56.2%; no paper in either review set aside.
+- **Cost:** $0.69 for 18,023 papers plus $0.04 trial; 82 s for 9,883.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
