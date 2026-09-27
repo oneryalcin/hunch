@@ -1,58 +1,46 @@
 ---
 title: "Match two product catalogues"
-description: "Two shops sell the same things under different names. Rules narrow the pairs, one question decides each, and SQL turns the answers into matches: 971 of 980 matches right, and the 682 it is sure of all right."
+description: "One shop calls it a PSLX350H, another a PS-LX350H. Here is how to teach a program that those are the same turntable, and that two cameras one digit apart are not."
 ---
 
-One shop sells a `Sony Turntable - PSLX350H`. Another sells a `Sony PS-LX350H Belt-Drive Turntable`. Same record player.
+Here's a puzzle. One shop sells a `Sony Turntable - PSLX350H`. Another sells a `Sony PS-LX350H Belt-Drive Turntable`. You and I can see at a glance that it's the same record player.
 
-The same two shops sell a `Sony Cyber-Shot Black Digital Camera - DSCT500B` and a `Sony Cyber-shot DSC-T300 Digital Camera - Black`. One digit apart, and two different cameras.
+Now these two: a `Sony Cyber-Shot Black Digital Camera - DSCT500B` and a `Sony Cyber-shot DSC-T300 Digital Camera - Black`. They look even more alike. But one is a T500 and the other a T300. Different cameras.
 
-How would your code tell those two cases apart?
+Suppose you have two catalogues like this, a thousand products each, and you need to know which products are the same. How would you write that program?
 
-## What you'll build
+## The first idea: compare the codes
 
-Joining two lists of the same things is an old problem: products after an acquisition, suppliers in two systems, customers who signed up twice. This cookbook solves it for two real catalogues, about a thousand products each, as three steps of code:
+Almost everyone starts the same way, and it's a good start. Products have model codes. Strip out the hyphens, and `PSLX350H` matches `PS-LX350H`. When the codes don't help, count how many words the two names share.
 
-```mermaid
-flowchart LR
-  a[abt.csv] --> rules
-  b[buy.csv] --> rules
-  rules["rules in SQL<br/>1.18M pairs → 5,396"] --> q["one question per pair<br/>same product? how sure?"]
-  q --> sql["SQL<br/>one match per product"]
-  sql --> sure[sure: matched]
-  sql --> unsure[unsure: a person]
-```
-
-Of the 980 matches it makes, 971 are right. The 682 it is sure of are all right.
-
-## Start with rules
-
-Most matching code starts where you would: compare the model codes. `PSLX350H` and `PS-LX350H` agree once the hyphen is ignored. When no code agrees, count the words the two names share.
-
-Rules are a sieve. Comparing every product in one shop with every product in the other is 1.18 million pairs, almost all of them absurd. `candidates.py` keeps, for each product, the five most likely partners: 5,396 pairs, and 97 of every 100 true matches are among them.
-
-A sieve can't choose, though. Taking each product's best candidate by the rules gets 955 of 1,081 right, and its mistakes look like this:
+This works surprisingly often. It also fails in a way that's worth looking at closely:
 
 ```text
-Garmin 010-10723-02 Carrying Case    →  rules pick:  Garmin USB Cable - 010-10723-01
-                                         the match:   Garmin Leather GPS Case
+Garmin 010-10723-02 Carrying Case      the rules pick   Garmin USB Cable - 010-10723-01
+                                       the real match   Garmin Leather GPS Case
 ```
 
-The codes differ by one digit, so the rules pick a cable for a case. Telling a case from a cable is not a matter of characters. It is a judgment.
+The codes are one digit apart, so the rules say the carrying case is a USB cable. No person would make that mistake. A case is a case, and a cable is a cable. But "is this a case?" isn't a question about characters. It's a question about meaning, and that's the one thing rules can't ask.
 
-## Ask one question about each pair
+So the rules are useful, but not as the judge. They're a sieve. Comparing every product with every product is over a million pairs, and nearly all of them are nonsense: a turntable against photo paper. The rules throw those out cheaply and keep, for each product, a handful of plausible partners. Then something that understands meaning looks at what's left.
 
-hunch asks that judgment as a question, written once in a spec. The spec says where the pairs come from, what the model may read, and what to ask:
+## Asking the question
+
+That something is a question, asked once for every pair: are these the same product?
+
+You could write a loop that sends each pair to a language model. Plenty of people do. It works on the first day, and then the questions start. You change the prompt: did it get better, or did it just change? You run the loop again tomorrow: do you pay for every pair again? The model says "yes" to a pair: how sure is it, and should anyone look?
+
+hunch is built around those questions. The question lives in a file, next to your code:
 
 ```yaml same_product.yml
 judgment: same_product
 model: jev-1.13.0
-source: py(candidates.py:pairs)
+source: py(candidates.py:pairs)       # the pairs the rules kept
 key: id
 state: [abt_name, abt_description, abt_price, buy_name, buy_manufacturer, buy_description, buy_price]
 questions:
   same:
-    type: noul          # a yes-or-no question
+    type: noul                         # a yes-or-no question
     instructions: >-
       Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with
       `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
@@ -61,11 +49,11 @@ questions:
       end of the same model's code (AB123 in one shop, AB123XY in the other): when the rest of the code and the
       product agree, it is the same product. But when both listings name a colour and the colours differ, they are
       different products.
-    gold: gold_same     # the known answer, for testing
+    gold: gold_same                    # the known answer, for testing
     act: 0.9
 ```
 
-Every answer comes back with how sure it is. For the turntable's candidates:
+Every answer comes back with a number: how sure. Here is the turntable against three of the candidates the rules kept for it:
 
 | Candidate | Same product? | How sure |
 | --- | --- | --- |
@@ -73,17 +61,23 @@ Every answer comes back with how sure it is. For the turntable's candidates:
 | Sony PSLX300USB USB Record Turntable | no | 0.98 |
 | Sony Print Paper - SVMF40P | no | 0.99 |
 
-The second row is the one a rule would struggle with: the same maker, a similar code, the same kind of product, and a different model. For the Garmin case, the leather case gets "yes" at 0.92 and the USB cable doesn't. All 5,396 pairs take about 90 seconds and cost $0.14.
+Look at the middle row. Same maker, nearly the same code, the same kind of thing, and it's still a different turntable. That's exactly where the rules get lost, and the question doesn't.
 
-## Act only when it is sure
+Every answer is also kept, filed under exactly what was asked. Run it again tomorrow and nothing is asked twice.
 
-That number next to each answer is what makes a decision safe to automate. `act: 0.9` in the spec is the bar: an answer at 0.9 or above is acted on, anything below goes to a person. Think of it as a colleague who signs off on what they are sure of and leaves the rest in your inbox.
+## Being sure is the point
 
-Here, 4,797 of the 5,396 pairs clear the bar, about nine in ten. The other 599 wait for a person.
+That "how sure" number changes what you can do with the answers.
 
-## Turn answers into matches, in SQL
+Without it, you have two bad choices: trust every answer, or check every answer. With it, you can say something more sensible: act on the answers that are sure, and show me the rest. That's what `act: 0.9` in the spec means. Think of a careful colleague who signs off on what they're certain of, and leaves the doubtful ones on your desk.
 
-A yes on each pair is not yet a list of matches: a product can have two candidates that both look right. The last step belongs where the data is. `hunch.sql` makes the spec a function DuckDB can call, so the decision becomes a column, and a query keeps the likeliest pair for each product on both sides:
+Here, about nine in ten pairs are signed off. The rest wait for a person.
+
+## Back to SQL
+
+A "yes" for each pair isn't quite a list of matches yet. A product can have two candidates that both look right, and you want one. That last step is ordinary data work, so it belongs where the data is.
+
+hunch turns the spec into a function DuckDB can call, so the question's answer is just another column. Then a query keeps, for each product, its likeliest partner:
 
 ```sql
 select * from (select * from decided where label = 'yes'
@@ -91,63 +85,60 @@ select * from (select * from decided where label = 'yes'
 qualify row_number() over (partition by buy_id order by p_yes desc, rank::int, abt_id) = 1;
 ```
 
-That is the whole job as code: a rule, a question, a query. Each piece lives in a file, runs again for free from the cache, and can be tested on its own.
+Step back and look at what we have. A rule in SQL, a question in a file, a query in SQL. The judgment in the middle, the part that used to be a person squinting at two product names, is now a piece of your pipeline like any other.
 
-## Does it work
+And it pays off where it matters. On the benchmark these catalogues come from, the rules alone make 126 wrong matches. With the question in the middle, 9.
 
-Scored against the benchmark's own list of true matches:
+## The fix that looked right
 
-| | Matches made | Right |
-| --- | --- | --- |
-| Rules alone | 1,081 | 955 |
-| Rules, then the question | 980 | 971 |
-| Only the ones it is sure of | 682 | 682 |
+This is the part I'd most like you to take away.
 
-The question's gain is in the mistakes: 9 wrong matches instead of 126.
+The first version of the question said nothing about shops adding their own letters to a code. So when one shop listed a wall mount as `PM1327BK` and the other as `PM1327`, the model said: different products. Fair enough, given what it was told.
 
-## A clearer instruction made it worse
+The fix seemed obvious. Add a sentence: shops add letters "for a colour, a finish or a region", and then it's the same product. You'd approve that in a code review. I would have.
 
-The spec above is its third version, and the second one is the most useful thing in this cookbook.
-
-The first version said nothing about shops adding their own letters to a code, so the model called `PM1327BK` and `PM1327` different products. The obvious fix was one more sentence: shops add letters "for a colour, a finish or a region", and then it is the same product. It read clearly. It was clearly right.
-
-Before shipping it, `hunch diff` asked the new wording of every pair and compared the answers with the old one's:
+Before shipping it, `hunch diff` asked the new question of every pair and compared the answers with the old ones:
 
 ```text
 same: 68/5396 rows flip (40 within noise band)
   gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
 ```
 
-It fixed 23 pairs and broke 40. The broken ones were cameras: a silver and a gold Cyber-shot DSC-W150 are two products, and "a colour" in the new sentence told the model they were one. A reader would have approved that edit. `diff` is what caught it, the way a test suite catches a change that looks harmless.
+It fixed 23 pairs and broke 40. The broken ones were cameras. A silver Cyber-shot and a gold Cyber-shot are two different products, and "a colour" in the new sentence had just told the model they were one.
 
-The third version keeps the letters and draws the line at colours both listings name. `diff` again: 35 fixed, 4 broken. That wording shipped.
+Nobody reading that sentence would have seen it coming. The only way to see it was to try the edit on everything, before it shipped. That's what `diff` is for, and it's the same instinct as running your tests before you merge.
 
-This is the habit the cookbook is really about. The words in a spec are code: an edit can break things far from where you made it, so you check the edit on every row before it ships.
+The sentence that shipped keeps the letters and draws the line at colours: if both listings name a colour and they differ, they're different products. `diff` again: 35 fixed, 4 broken.
 
-## Use it on your data
+That's the real lesson here, bigger than product matching. The words in a question are code. A small edit can break things far from where you made it. So you treat them like code: kept in a file, tested, and checked on every row before they change.
+
+## Try it
 
 ```sh
 uv run --extra sql python prototype/examples/product_matching/match.py    # about $0.14 the first time, then free
 ```
 
-For your own lists, point the three `read_csv` lines in `candidates.py` at your files and change the columns. Keep the question. Then [review](/guides/review) a few dozen of your own pairs, and `hunch test` tells you how often it is right on your products rather than these.
+To match your own lists, point the `read_csv` lines in `candidates.py` at your files and keep the question. Then [review](/guides/review) a few dozen of your own pairs, and `hunch test` will tell you how often it's right on your products, not ours.
 
 ## How it was measured
 
 <AccordionGroup>
   <Accordion title="The data">
-    [Abt-Buy](https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), a benchmark from the University of Leipzig (Creative Commons): 1,081 products from Abt, 1,092 from Buy, 1,097 known matches. The rules in `candidates.py` keep 1,061 of the 1,097 among their 5,396 pairs; the 36 lost share a few words with their match, but five other listings outrank them. For 51 products the rules' two best candidates tie, and the lower id wins. Since 16 products have more than one true match, one match per product can reach at most 1,044 (95.2%).
+    [Abt-Buy](https://dbs.uni-leipzig.de/research/projects/benchmark-datasets-for-entity-resolution), a benchmark from the University of Leipzig (Creative Commons): 1,081 products from Abt, 1,092 from Buy, 1,097 known matches. Comparing all of them is 1.18 million pairs; `candidates.py` keeps five per Abt product, 5,396 pairs, which hold 1,061 of the 1,097 matches. The 36 lost share a few words with their match, but five other listings outrank them. Asking all 5,396 took about 90 seconds and $0.14.
   </Accordion>
-  <Accordion title="The answer key was checked, and it was mostly right">
-    The first wording disagreed with the benchmark's answer key on 180 pairs, and its most confident disagreements looked like the key's mistakes (a 500GB drive matched to a 1TB one). A blind panel of three AI reviewers (one Claude Opus, two Claude Sonnet, one reading in reverse order) judged those 180 and a random 100, seeing what the model saw and neither the model's answer nor the key's. On the 180, the key was right 69 times and the model 22; 81 could not be decided from the listings and on 8 the reviewers split. On the random 100 the panel agreed with both on 96. The reviewers' prompt, in `prototype/review_panel/product_matching/PROMPT.md`, told them a trailing colour or region suffix can be formatting, a hint the first wording lacked. Two later rounds covered the new wordings' fresh disagreements (11 pairs, then 4).
+  <Accordion title="The results, in full">
+    Against the benchmark's answer key: each product's best candidate by the rules alone, 955 of 1,081 right; the rules, the question and the query, 971 of 980 right (precision 99.1%, recall 88.5%); keeping only matches above the bar, 682 of 682. 4,797 of the 5,396 pairs clear `act: 0.9`. For 51 products the rules' two best candidates tie and the lower id wins. Since 16 products have more than one true match, one match per product can reach at most 1,044 of the 1,097.
+  </Accordion>
+  <Accordion title="Checking the answer key">
+    The first version of the question disagreed with the benchmark's answer key on 180 pairs, and its most confident disagreements looked like the key's mistakes (a 500GB drive matched to a 1TB one). A blind panel of three AI reviewers (one Claude Opus, two Claude Sonnet, one reading in reverse order) judged those 180 and a random 100, seeing what the model saw and neither the model's answer nor the key's. On the 180, the key was right 69 times and the model 22; 81 could not be decided from the listings, and on 8 the reviewers split. On the random 100, the panel agreed with both on 96. Two later rounds covered the new wordings' fresh disagreements (11 pairs, then 4). The reviewers' prompt is in `prototype/review_panel/product_matching/PROMPT.md`; it told them a trailing colour or region suffix can be formatting, a hint the first version of the question lacked.
   </Accordion>
   <Accordion title="Accuracy, with its interval">
-    With the key corrected by the panel, `hunch test` estimates the question is right on 99.2% of pairs (95% CI 95.4–99.2%), from 100 random reviews and every disagreement. Of the 4,797 pairs above the bar, 2 are wrong against that gold, both a confident "no" for the same product under a shop's own code (a Maytag microwave, a Sanus wall mount); against the uncorrected key 15 are, and the panel judged 12 of those the key's mistake. The matches table is scored against the uncorrected key, as entity-resolution results usually are.
+    With the key corrected by the panel, `hunch test` estimates the question is right on 99.2% of pairs (95% CI 95.4–99.2%), from 100 random reviews and every disagreement. Of the 4,797 pairs above the bar, 2 are wrong against that gold, both a confident "no" for the same product under a shop's own code (a Maytag microwave and a Sanus wall mount). Against the uncorrected key 15 are, and the panel judged 12 of those the key's mistake.
   </Accordion>
-  <Accordion title="The wording was chosen on the pairs it is scored on">
-    The code-suffix pattern was found in the panel's verdicts, and each version was judged by `diff` against the same gold, so the final numbers are somewhat optimistic for listings like these that it hasn't seen. The first and second versions are kept as `first/same_product.yml` and `tried/same_product.yml`, so both diffs can be run again for free.
+  <Accordion title="The question was tuned on the pairs it is scored on">
+    The code-suffix pattern was found in the panel's verdicts, and each version was judged by `diff` against the same gold, so the final numbers are somewhat optimistic for listings like these that it hasn't seen. The first two versions are kept as `first/same_product.yml` and `tried/same_product.yml`, so both diffs can be run again for free.
   </Accordion>
   <Accordion title="What did not work">
-    A small local model trained with [`hunch distill`](/guides/distill), which would make matching free, separated matches from non-matches barely better than a coin (AUROC 0.576, where the question scores 1.000): it reads both listings as one text and loses whether `EX85` and `EX81` are the same code. And the panel is not people: on the hard pairs one reviewer said "same" on 60 pairs the other two called undecidable. For your own catalogues, a person reviewing the pairs below the bar is the better answer key.
+    A small local model trained with [`hunch distill`](/guides/distill), which would make matching free, separated matches from non-matches barely better than a coin (AUROC 0.576, where the question scores 1.000). It reads both listings as one piece of text and loses whether `EX85` and `EX81` are the same code. And the panel is not people: on the hard pairs, one reviewer said "same" on 60 pairs the other two called undecidable. For your own catalogues, a person reviewing the pairs below the bar is the better answer key.
   </Accordion>
 </AccordionGroup>
