@@ -320,6 +320,42 @@
           "type": "string",
           "description": "The source column that holds the right answer, if there is one."
         },
+        "baseline": {
+          "description": "noul: a rule that answers without a model, scored by hunch test on the same gold. A where-expression over columns (yes when it holds), or {match: <regex>, columns: [...]} (yes when the regex is found in any of them).",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "match",
+                "columns"
+              ],
+              "properties": {
+                "match": {
+                  "type": "string",
+                  "description": "A Python regex, case-sensitive; (?i) ignores case."
+                },
+                "columns": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
         "escalate": {
           "type": "object",
           "additionalProperties": false,

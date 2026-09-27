@@ -52,7 +52,7 @@ from hunch import engines
 
 API = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
-HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "_multi"}  # routing/test config: never sent, never part of the key
+HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "baseline", "_multi"}  # routing/test config: never sent, never part of the key
 QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
@@ -278,6 +278,28 @@ def compile_where(expr: str):
         return bool(val(node, row))
 
     return (lambda row: ev(tree.body, row)), {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+
+
+def compile_baseline(b) -> tuple:
+    """(rule, columns used) for a yes/no question's `baseline`: a rule that answers without a model, scored by `test`
+    beside it. A where-expression over columns (yes when it holds), or {match: <regex>, columns: [...]} (yes when
+    the regex is found in any of them; an empty cell matches nothing)."""
+    if isinstance(b, str):
+        pred, used = compile_where(b)
+
+        def rule(row: dict) -> bool:
+            try:
+                return bool(pred(row))
+            except Unknown:  # an upstream answer it reads is missing: the rule can't say yes
+                return False
+        return rule, used
+    cols = b.get("columns") if isinstance(b, dict) else None
+    cols = [cols] if isinstance(cols, str) else cols
+    if not (isinstance(b, dict) and set(b) == {"match", "columns"} and isinstance(b["match"], str)
+            and isinstance(cols, list) and cols and all(isinstance(c, str) and c for c in cols)):
+        raise ValueError(f"{b!r} is neither a where-expression nor {{match: <regex>, columns: [<column>, ...]}}")
+    rx = re.compile(b["match"])
+    return (lambda row: any(rx.search("" if row.get(c) is None else str(row[c])) for c in cols)), set(cols)
 
 
 def answer_columns(spec: dict) -> list[str]:
@@ -527,6 +549,19 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 errors.append(f"{qid}: escalate re-asks answers below act, so it needs act")
             elif esc["model"] == spec.get("model"):
                 errors.append(f"{qid}: escalate.model is the spec's own model")
+        if "baseline" in q:
+            if q["type"] != "noul":
+                errors.append(f"{qid}: baseline is a rule that says yes or no, so it applies to noul questions")
+            else:
+                try:
+                    _, used = compile_baseline(q["baseline"])
+                    golds = {g["gold"] for g in spec["questions"].values() if g.get("gold")}
+                    for col in sorted(used & golds):
+                        errors.append(f"{qid}: baseline reads the gold column {col!r}; it would be scored against itself")
+                    for col in sorted(used - set(header) if header is not None else ()):
+                        errors.append(f"{qid}: baseline uses {col!r}, which does not reach this judgment")
+                except (ValueError, SyntaxError, re.error) as e:
+                    errors.append(f"{qid}: baseline: {e}")
         if header is not None and q.get("gold") and q["gold"] not in header:
             # normal for production rows (no gold yet); a warning still catches a typo in the column name
             warnings.append(f"{qid}: gold column {q['gold']!r} does not reach this judgment; these rows have no gold")
@@ -545,6 +580,9 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             errors.append(f"{qid}: multi questions are expanded when the spec is loaded (internal error)")
         if q["type"] == "score" and not 2 <= len(q.get("criteria") or []) <= 10:
             errors.append(f"{qid}: score needs 2 to 10 levels")
+    for qid, q in (spec.get("_written") or {}).items():
+        if q.get("type") == "multi" and "baseline" in q:
+            errors.append(f"{qid}: baseline applies to noul questions, not multi")
     examples = spec.get("examples") or []
     if not isinstance(examples, list):
         errors.append("examples: a list of {name, row, expect}")
@@ -2030,6 +2068,9 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     if q["type"] == "noul" and any("yes" in it["gold"] for it in gold_its):
         out["recall"] = test_recall(q, conf, its, gold_its, answers, w, check)
 
+    if q["type"] == "noul" and "baseline" in q:
+        out["baseline"] = test_baseline(q, gold_its, answers, w, out.get("auroc"))
+
     wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -conf_of(it, answers[it["key"]]))
     print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
     out["mistakes"] = {"total": len(wrong), "most_confident": [
@@ -2115,6 +2156,39 @@ def test_recall(q: dict, conf: dict, its: list[dict], gold_its: list[dict], answ
                   f"{f' (effective {n_eff:.0f} after weights)' if abs(n_eff - len(yes)) > 0.5 else ''} can't show it; "
                   "review more yes rows, or read everything")
     return out
+
+
+def test_baseline(q: dict, gold_its: list[dict], answers: dict, w, model_auc: float | None) -> dict:
+    """The question's `baseline` rule scored on the same gold rows as the model, weighted the same way, so a question
+    that loses to a keyword search says so. The model's side is its own label (yes at p(yes) ≥ 0.5); AUROC is the
+    model's p(yes) against the rule's yes/no (ties count half)."""
+    rule, _ = compile_baseline(q["baseline"])
+
+    def score(says_yes: list[bool]) -> dict:
+        def share(pairs: list) -> float | None:
+            tw = sum(w(it) for it, _ in pairs)
+            return _r(sum(w(it) for it, ok in pairs if ok) / tw) if tw else None
+        both = list(zip(gold_its, says_yes))
+        return {"accuracy": share([(it, ("yes" if y else "no") in it["gold"]) for it, y in both]),
+                "recall": share([(it, y) for it, y in both if "yes" in it["gold"]]),
+                "precision": share([(it, "yes" in it["gold"]) for it, y in both if y])}
+
+    said = [rule(it["row"]) for it in gold_its]
+    pos = [float(y) for it, y in zip(gold_its, said) if "yes" in it["gold"]]
+    neg = [float(y) for it, y in zip(gold_its, said) if "no" in it["gold"]]
+    b = score(said) | {"auroc": _r(auroc(pos, neg)) if pos and neg else None}
+    m = score([decide(answers[it["key"]])[0] == "yes" for it in gold_its]) | {"auroc": _r(model_auc)}
+    ahead = m["accuracy"] > b["accuracy"]
+    bl = q["baseline"]
+    shown = bl if isinstance(bl, str) else f"/{bl['match']}/ in " + ", ".join([bl["columns"]] if isinstance(bl["columns"], str) else bl["columns"])
+    fmt = lambda k, v: "–" if v is None else f"{v:.3f}" if k == "auroc" else f"{v:.1%}"
+    print(f"  baseline: {shown}\n       says yes on {sum(said)} of {len(said)} gold rows")
+    for k in ("accuracy", "auroc", "recall", "precision"):
+        print(f"       {k + (' of yes' if k == 'recall' else ''):<14} rule {fmt(k, b[k]):>7}   model {fmt(k, m[k]):>7}")
+    if not ahead:
+        print(f"       the rule is as accurate as the model or more ({fmt('accuracy', b['accuracy'])} vs "
+              f"{fmt('accuracy', m['accuracy'])}): the question has to beat it to earn its cost")
+    return {"rule": q["baseline"], "rows": len(said), "said_yes": sum(said), **b, "model": m, "model_ahead": ahead}
 
 
 def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") -> dict:
