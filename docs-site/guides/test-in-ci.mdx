@@ -18,23 +18,24 @@ tests:
 
 `hunch test` checks each configured threshold, prints `PASS` or `FAIL`, and exits 1 if a required check fails. A check marked `severity: warn` prints `WARN` without failing the build. CI therefore enforces the limits you write; it does not reject every edit that makes any individual answer worse.
 
-Here is a judgment that reads a coding agent's patch and predicts whether it will pass the project's tests, from the [SWE-agent cookbook](/cookbooks/swe-patches), run against the real test results:
+Here is a judgment that reads a coding agent's patch and predicts whether it will pass the project's tests, from the [SWE-agent cookbook](/cookbooks/swe-patches), run against the real test results. These are the key lines of the summary:
 
 ```bash
 hunch test prototype/examples/swe_agent/patch_eval.yml --max-cost 0
 ```
 
 ```text
-passes_tests (noul, 200 rows)
-  gold: 200 rows (200 from source, 0 from review)
-  PASS accuracy 77.8% [weighted to the population] (min 0%)
-  FAIL calibration error 0.147 [weighted to the population] (max 0.1)
-  PASS AUROC 0.831 (100 yes / 100 no; 0.5 = coin toss; unaffected by base rate) (min 0.7)
+Test complete · prototype/examples/swe_agent/patch_eval.yml
+  Configured check failed
+    passes_tests: weighted accuracy 77.8% on 200 gold rows
+      AUROC 0.831 · calibration error 0.147
+      FAIL max_calibration_error · observed 0.147, limit 0.1
+      PASS min_auroc · observed 0.831, limit 0.7
 ```
 
 The model ranks patches well: passing patches tend to get higher probabilities than failing ones. Yet the spec fails its calibration limit. On these rows, the model's probabilities are more confident than the observed outcomes support. A pipeline that skipped tests on confident "yes" answers would risk shipping broken patches. Ranking alone would not reveal that problem.
 
-The other tests are `min_accuracy`, `min_act_accuracy` (accuracy among answers above the `act` bar) and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no configured threshold can still print measurements, but its measurements alone cannot fail CI.
+The other tests are `min_accuracy`, `min_act_accuracy` (accuracy among answers above the `act` bar) and `order_stability` for choices; the [spec reference](/reference/spec#tests) describes each. A question with no configured threshold still reports measurements, marked *measured* rather than *passing*. Its measurements alone cannot fail CI. If a configured check lacks gold, the report marks it *not assessed*.
 
 Two more kinds of check live in the same spec. [Examples](/reference/spec#examples) check named cases on each run; they do not prove what will happen on unseen rows. [Metrics](/reference/spec#metrics) check a rule built from several answers, such as "stop the command if any question says yes", against gold, with limits like `max_missed`.
 

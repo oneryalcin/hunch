@@ -10,6 +10,10 @@ RECIPES = Path(__file__).parent / "recipes"
 def init(argv: list[str]) -> None:
     """hunch init RECIPE [DIR]: copy a recipe (specs, README, tests) into DIR to adapt. hunch init --list."""
     names = sorted(p.name.replace("_", "-") for p in RECIPES.iterdir() if (p / "README.md").exists())
+    if argv and argv[0] in ("--help", "-h"):
+        print("usage: hunch init [--list] RECIPE [DIR]\n\nCopy a starter recipe into a new folder. "
+              "Use --list to see recipes.")
+        return
     if not argv or argv[0] in ("--list", "-l"):
         for n in names:
             first = (RECIPES / n.replace("-", "_") / "README.md").read_text().splitlines()
@@ -32,6 +36,9 @@ SKILL_DIRS = (".claude/skills", ".agents/skills")  # Claude Code; Codex and Curs
 
 def skill(argv: list[str]) -> None:
     """hunch skill [DIR]: install the agent skill into DIR (default: here); re-run after upgrading hunch."""
+    if argv and argv[0] in ("--help", "-h"):
+        print("usage: hunch skill [DIR]\n\nInstall the hunch skill under .claude/skills and .agents/skills.")
+        return
     if argv and argv[0].startswith("-"):
         print("usage: hunch skill [DIR]   (installs .claude/skills/hunch and .agents/skills/hunch under DIR)", file=sys.stderr)
         sys.exit(2)

@@ -20,11 +20,26 @@ STATUS = {  # status → (label, what it means), in the order the inventory list
     "warn": ("warning", "a check with severity warn failed at the last test"),
     "stale": ("stale", "the spec changed after its last test, so its numbers describe an older version"),
     "noresults": ("no results", "the last hunch test of this path did not include it"),
+    "unassessed": ("not assessed", "configured checks could not run because the needed gold or review data is missing"),
     "nogold": ("no gold", "tested, but nothing to measure against yet: no answer key, reviews or examples"),
-    "ok": ("ok", "tested, passing, and the spec has not changed since"),
+    "measured": ("measured", "tested and measured, with no configured acceptance checks"),
+    "ok": ("passing", "tested, passing configured checks, and the spec has not changed since"),
 }
 SHARE_CHECKS = {"min_accuracy", "min_act_accuracy", "order_stability", "min_rate", "max_rate", "max_missed",
                 "max_false_alarms", "expected answer"}  # checks whose value is a share of rows, shown as a percent
+QUESTION_CHECKS = {
+    "min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "min_recall", "order_stability",
+}
+METRIC_CHECKS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "higher"}
+ASSESSMENT_STATUS = {
+    "failed": "fail",
+    "warning": "warn",
+    "passed": "ok",
+    "measured": "measured",
+    "no_gold": "nogold",
+    "unassessed": "unassessed",
+}
+VISUAL_STATUS = {"measured": "ok", "unassessed": "nogold"}
 
 
 # ---------- data ----------
@@ -71,6 +86,57 @@ def checks_of(r: dict) -> list[dict]:
                   "severity": x.get("severity", "error")} for x in r.get("examples") or []]
 
 
+def status_classes(st: str) -> str:
+    """The semantic status plus the nearest existing colour class in docs_page.html."""
+    visual = VISUAL_STATUS.get(st, st)
+    return f"st-{st}" if visual == st else f"st-{st} st-{visual}"
+
+
+def configured_checks(m: dict) -> bool:
+    tests = m.get("tests") or {}
+    for name, conf in tests.items():
+        if not isinstance(conf, dict):
+            continue
+        allowed = METRIC_CHECKS if name in (m.get("metrics") or {}) else QUESTION_CHECKS
+        if set(conf) & allowed:
+            return True
+    return bool(m.get("examples"))
+
+
+def missing_recorded_checks(m: dict, r: dict) -> list[str]:
+    """Legacy results have no assessment field; require evidence for every configured gate."""
+    missing = []
+    for name, conf in (m.get("tests") or {}).items():
+        if not isinstance(conf, dict):
+            continue
+        group = "metrics" if name in (m.get("metrics") or {}) else "multi" if name in (r.get("multi") or {}) else "questions"
+        allowed = METRIC_CHECKS if group == "metrics" else QUESTION_CHECKS
+        recorded = (r.get(group) or {}).get(name) or {}
+        for gate in set(conf) & allowed:
+            checks = [c for c in recorded.get("checks", []) if c.get("check") == gate]
+            expected = conf[gate]
+            if gate not in {"higher", "order_stability"}:
+                checks = [c for c in checks if c.get("limit") == expected]
+            if not checks:
+                missing.append(f"{name}.{gate}")
+    if m.get("examples") and len(r.get("examples") or []) < len(m["examples"]):
+        missing.append("examples")
+    return missing
+
+
+def unavailable_checks(r: dict) -> list[str]:
+    out = []
+    for g in ("questions", "multi", "metrics"):
+        for name, x in (r.get(g) or {}).items():
+            out += [f"{name}.{check}" for check in x.get("unavailable_checks") or []]
+    return out
+
+
+def measured_result(r: dict) -> bool:
+    return (any(q.get("accuracy") for q in (r.get("questions") or {}).values()) or r.get("examples") or checks_of(r)
+            or any(x.get("gold") for x in (r.get("metrics") or {}).values()))
+
+
 def status(m: dict, r: dict | None) -> str:
     if r is None:
         return "noresults"
@@ -82,9 +148,14 @@ def status(m: dict, r: dict | None) -> str:
         return "fail"
     if failed:
         return "warn"
-    measured = (any(q.get("accuracy") for q in r["questions"].values()) or r.get("examples") or checks
-                or any(x.get("gold") for x in (r.get("metrics") or {}).values()))
-    return "ok" if measured else "nogold"
+    if mapped := ASSESSMENT_STATUS.get(r.get("assessment")):
+        return mapped
+    if unavailable_checks(r):
+        return "unassessed"
+    measured = measured_result(r)
+    if configured_checks(m):
+        return "ok" if measured and not missing_recorded_checks(m, r) else "unassessed"
+    return "measured" if measured else "nogold"
 
 
 # ---------- words ----------
@@ -231,7 +302,7 @@ def lineage_svg(lin: dict, st: dict[str, str], mini: bool = False) -> str:
         x, y = pos[nd["id"]]
         label = nd["label"] if len(nd["label"]) <= 22 else nd["label"][:21] + "…"
         judg = nd["kind"] == "judgment"
-        cls = f'node {nd["kind"]}' + (f' st-{st[nd["id"]]}' if judg else "")
+        cls = f'node {nd["kind"]}' + (f' {status_classes(st[nd["id"]])}' if judg else "")
         sub = {"source": "source", "exposure": nd.get("sub", "app")}.get(nd["kind"]) or STATUS[st[nd["id"]]][0]
         bar = f'<rect class="bar-l" width="4" height="{BH}" rx="2"/>' if judg else ""
         out.append(f'<g class="{cls}" data-id="{e(nd["id"])}" transform="translate({x},{y})" tabindex="{0 if judg else -1}">'
@@ -273,7 +344,7 @@ def text_of(v) -> str:
 
 
 def pill(st: str) -> str:
-    return f'<span class="pill st-{st}" title="{e(STATUS[st][1])}">{e(STATUS[st][0])}</span>'
+    return f'<span class="pill {status_classes(st)}" title="{e(STATUS[st][1])}">{e(STATUS[st][0])}</span>'
 
 
 def decides(m: dict) -> str:
@@ -434,7 +505,7 @@ def sidebar(man: dict, st: dict) -> str:
         if names:
             groups.append(f'<section><h4>{e(STATUS[k][0])}</h4>' + "".join(
                 f'<a href="{href(n)}" data-name="{e(n)}" data-search="{e(search_text(n, js[n]))}">'
-                f'<span class="dot st-{k}"></span>{e(n)}</a>' for n in names) + "</section>")
+                f'<span class="dot {status_classes(k)}"></span>{e(n)}</a>' for n in names) + "</section>")
     return (f'<nav class="tree" aria-label="Judgments">{"".join(groups)}</nav><p class="empty-side" id="none-side" hidden>No match.</p>'
             '<nav class="side-links" aria-label="Views"><a href="#home">Overview</a><a href="#lineage">Lineage</a></nav>')
 
@@ -442,8 +513,8 @@ def sidebar(man: dict, st: dict) -> str:
 def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: str, at: str | None) -> str:
     js = man["judgments"]
     counts = {k: sum(v == k for v in st.values()) for k in STATUS}
-    bar = "".join(f'<span class="st-{k}" style="flex:{c}" title="{c} {e(STATUS[k][0])}"></span>' for k, c in counts.items() if c)
-    legend = "".join(f'<button type="button" data-st="{k}" aria-pressed="false"><span class="dot st-{k}"></span><b>{c}</b>'
+    bar = "".join(f'<span class="{status_classes(k)}" style="flex:{c}" title="{c} {e(STATUS[k][0])}"></span>' for k, c in counts.items() if c)
+    legend = "".join(f'<button type="button" data-st="{k}" aria-pressed="false"><span class="dot {status_classes(k)}"></span><b>{c}</b>'
                      f'<span class="lab">{e(STATUS[k][0])}</span></button>' for k, c in counts.items() if c)
     rows = []
     for n in ordered(js, st):
@@ -451,7 +522,7 @@ def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: s
         failing = [check_words(c) for c in checks_of(r or {}) if not c["passed"]] if st[n] in ("fail", "warn") else []
         reason = failing[0] + (f" (+{len(failing) - 1} more)" if len(failing) > 1 else "") if failing else ""
         rows.append(
-            f'<tr class="st-{st[n]}" data-st="{st[n]}" data-search="{e(search_text(n, m))}">'
+            f'<tr class="{status_classes(st[n])}" data-st="{st[n]}" data-search="{e(search_text(n, m))}">'
             f'<td><a class="name" href="{href(n)}">{e(n)}</a><div style="margin-top:6px">{pill(st[n])}</div></td>'
             f'<td class="decides">{e(decides(m))}' + (f'<div class="reason">{e(reason)}</div>' if reason else "")
             + f'<div class="why"></div></td><td>{acc_cell(r, sample)}</td>'
@@ -483,14 +554,22 @@ def status_summary(m: dict, r: dict | None, st: str, at: str | None, run: list[d
         ran = f" It last ran {e(local(run[0].get('finished_at')))}." if run else ""
         body = ("<p><b>No test results for this judgment.</b> The last <code>hunch test</code> of this path did not include it: "
                 f"never tested, tested alone with <code>--node</code> or through another path, or stopped by <code>--max-cost</code>.{ran}</p>")
+    elif st == "unassessed":
+        missing = unavailable_checks(r or {})
+        which = f" ({', '.join(f'<code>{e(x)}</code>' for x in missing)})" if missing else ""
+        body = ("<p><b>Configured checks could not run.</b> hunch has a test result, but one or more checks need "
+                f"gold answers or reviewed rows first{which}. Add gold or reviews, then run <code>hunch test</code> again.</p>")
     elif st == "nogold":
-        body = ("<p><b>Tested, but nothing to measure against.</b> Add an answer key column (<code>gold:</code>) or review rows "
-                "with <code>hunch review</code>.</p>")
+        body = ("<p><b>No gold or reviews yet.</b> hunch ran the judgment, but there is nothing to measure against. "
+                "Add an answer key column (<code>gold:</code>) or review rows with <code>hunch review</code> when you want measured quality.</p>")
+    elif st == "measured":
+        body = ("<p><b>Measured, with no configured acceptance checks.</b> The evidence below shows what hunch could measure. "
+                "Add <code>tests:</code> thresholds when this judgment needs a pass/fail bar in CI.</p>")
     else:
-        body = "<p><b>Passing</b> every configured check. That says the checks hold, not that every answer is right.</p>"
+        body = "<p><b>Passing configured checks.</b> That says the checks hold, not that every answer is right.</p>"
     if sample and r:
         body += f"<p>Measured on a sample of {sample} rows (<code>--sample {sample}</code>), not on every row.</p>"
-    return f'<div class="status st-{st}" role="status">{body}</div>'
+    return f'<div class="status {status_classes(st)}" role="status">{body}</div>'
 
 
 def evidence_html(ev: list[dict], stale: bool) -> str:
@@ -613,7 +692,7 @@ def page(project: dict, man: dict, results: dict | None, run: dict, st: dict[str
     return out
 
 
-def write_docs(project: dict) -> None:
+def write_docs(project: dict) -> Path:
     rp = core.results_path(project)
     results = json.loads(rp.read_text()) if rp.exists() else None
     man = manifest(project)
@@ -625,3 +704,4 @@ def write_docs(project: dict) -> None:
     counts = [f"{list(st.values()).count(k)} {v[0]}" for k, v in STATUS.items() if k in st.values()]
     print(f"{len(st)} judgment{'s' * (len(st) != 1)}: " + ", ".join(counts))
     print(f"  {hpath}\n  {mpath}")
+    return hpath

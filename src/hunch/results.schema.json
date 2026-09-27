@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/results.schema.json",
   "title": "hunch test results",
-  "description": "What `hunch test` measured: .hunch/target/<tested path>.json, and the receipt `test --receipt` writes beside a spec (the same, without at, git_sha and cost). Version 1: fields may be added, and enumerated values (types, bases, check names, severities) may gain members, within a version; nothing is renamed, removed or given another meaning without the version going up. Reference: https://fuguai.mintlify.site/reference/files",
+  "description": "What `hunch test` measured: .hunch/target/<tested path>.json, and the receipt `test --receipt` writes beside a spec. Version 2 separates measurements from configured acceptance checks; version 1 receipts remain readable. Reference: https://fuguai.mintlify.site/reference/files",
   "type": "object",
   "required": [
     "version",
@@ -12,7 +12,7 @@
   ],
   "properties": {
     "version": {
-      "const": 1
+      "enum": [1, 2]
     },
     "command": {
       "const": "test"
@@ -27,7 +27,12 @@
       ]
     },
     "passed": {
-      "type": "boolean"
+      "type": "boolean",
+      "description": "No blocking configured check failed; may be true when no acceptance checks were configured. Read assessment for the interpretation."
+    },
+    "assessment": {
+      "enum": ["failed", "warning", "unassessed", "passed", "measured", "no_gold"],
+      "description": "Version 2: what the completed test established."
     },
     "sample": {
       "type": [
@@ -70,6 +75,9 @@
           },
           "rows": {
             "type": "integer"
+          },
+          "assessment": {
+            "enum": ["failed", "warning", "unassessed", "passed", "measured", "no_gold"]
           },
           "questions": {
             "type": "object",
@@ -156,6 +164,15 @@
                       }
                     }
                   }
+                },
+                "weighted": {
+                  "type": "boolean",
+                  "description": "Whether the accuracy uses population sampling weights"
+                },
+                "unavailable_checks": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "description": "Configured acceptance checks that could not be evaluated"
                 },
                 "calibration_error": {
                   "type": [
@@ -603,6 +620,10 @@
                     "null"
                   ]
                 },
+                "unavailable_checks": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
                 "checks": {
                   "type": "array",
                   "items": {
@@ -653,6 +674,10 @@
               "properties": {
                 "rule": {
                   "type": "string"
+                },
+                "unavailable_checks": {
+                  "type": "array",
+                  "items": {"type": "string"}
                 },
                 "rows": {
                   "type": "integer"
