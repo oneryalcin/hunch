@@ -61,7 +61,8 @@ META_KEYS = ("description", "exposures")  # for people and `hunch docs`: never s
 EXPOSURE_KEYS = {"name", "kind", "owner", "uses", "url", "description"}
 EXPOSURE_KINDS = ("app", "hook", "dashboard", "job")
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
-TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "order_stability", "severity"}
+TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "min_recall", "order_stability",
+             "severity"}
 METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "severity"}  # tests on a metric, by its name
 SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN and does not fail `test`
 SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
@@ -601,6 +602,11 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             continue
         for k in set(conf) - TEST_KEYS:
             warnings.append(f"tests.{qid}: unknown test {k!r} (typo?)")
+        if "min_recall" in conf and spec["questions"][qid]["type"] != "noul":
+            errors.append(f"tests.{qid}.min_recall: recall of yes rows applies to noul questions")
+        elif "min_recall" in conf and act_needed(spec["questions"][qid], "no") is None:
+            errors.append(f"tests.{qid}.min_recall: needs `act` (below it a person reads the row; above it a \"no\" is "
+                          "set aside unread)")
         if "order_stability" in conf and spec["questions"][qid]["type"] != "choice":
             warnings.append(f"tests.{qid}: order_stability only applies to choice questions")
     return errors, warnings
@@ -2021,6 +2027,9 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
               f"accuracy among auto-acted {a_acc:.1%} on {ws / sum(sc[2] for sc in scored):.0%} of rows at act={q['act']} (min {conf['min_act_accuracy']:.0%})",
               "min_act_accuracy", a_acc, conf["min_act_accuracy"])
 
+    if q["type"] == "noul" and any("yes" in it["gold"] for it in gold_its):
+        out["recall"] = test_recall(q, conf, its, gold_its, answers, w, check)
+
     wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -conf_of(it, answers[it["key"]]))
     print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
     out["mistakes"] = {"total": len(wrong), "most_confident": [
@@ -2059,6 +2068,52 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
         for b, v in flips[:SHOW]:
             print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers.get(item(b['spec'], b['row'], qid)['key']) or answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
     out["checks"] = check.log[first_check:]
+    return out
+
+
+def test_recall(q: dict, conf: dict, its: list[dict], gold_its: list[dict], answers: dict, w, check: "Checks") -> dict:
+    """Recall of yes: a person reads every row except the "no" answers confident enough to act on, which are set
+    aside unread; recall is the share of gold-yes rows a person still sees (weighted, with a Wilson interval on
+    the effective sample size, as accuracy). `min_recall` checks the interval's lower bound at the spec's own `act`,
+    because a review that must not miss a rare yes (papers for a systematic review, privileged documents) needs the
+    worst plausible recall, not the point estimate. Also reported: the lowest bar for "no" that still meets it, and
+    the share of rows a person then reads."""
+    no_p = {it["id"]: (p * it.get("path_p", 1.0) if label == "no" else -1.0)  # confidence of a "no", else -1
+            for it in its for label, p, _ in [decide(answers[it["key"]])]}
+    yes = [it for it in gold_its if "yes" in it["gold"]]
+    ws = [w(it) for it in yes]
+    n_eff = sum(ws) ** 2 / sum(x * x for x in ws)
+    rw = [it["row"].get("_w", 1.0) for it in its]  # every row, gold or not: what a person reads
+
+    def at(bar: float) -> tuple[float, float, float, float]:  # recall, its interval, share of rows read
+        r = sum(wi for wi, it in zip(ws, yes) if no_p[it["id"]] < bar) / sum(ws)
+        lo, hi = wilson(r * n_eff, n_eff)
+        return r, lo, hi, sum(x for x, it in zip(rw, its) if no_p[it["id"]] < bar) / sum(rw)
+
+    out: dict = {"yes_rows": len(yes)}
+    want = conf.get("min_recall")
+    need = act_needed(q, "no")
+    if need is not None:
+        r, lo, hi, read = at(need)
+        out["at_act"] = {"threshold": need, "value": _r(r), "ci": [_r(lo), _r(hi)], "read": _r(read)}
+        msg = (f"recall of yes {r:.1%} (95% CI {lo:.1%}–{hi:.1%}) of {len(yes)} gold-yes rows at act {need}: a person "
+               f"reads {read:.0%} of rows, the confident \"no\" answers are set aside")
+        if want is not None:
+            check(lo >= want, msg + f" (min {want:.0%} on the interval's lower bound)", "min_recall", lo, want)
+        else:
+            print(f"  {msg}")
+    if want is not None:  # the lowest bar (most rows set aside) whose worst plausible recall still meets it
+        ok = next((o for b in sorted({round(v, 3) for v in no_p.values() if v >= 0.5} | {1.001})
+                   if (o := (b, *at(b)))[2] >= want), None)
+        if ok and ok[0] <= 1:
+            b, r, lo, hi, read = ok
+            out["lowest_act"] = {"threshold": b, "value": _r(r), "ci": [_r(lo), _r(hi)], "read": _r(read)}
+            print(f"       lowest act for no that keeps recall ≥ {want:.0%} (lower bound): {b} → recall {r:.1%} "
+                  f"({lo:.1%}–{hi:.1%}), a person reads {read:.0%} of rows")
+        else:
+            print(f"       no bar keeps recall ≥ {want:.0%} on the lower bound: {len(yes)} gold-yes rows"
+                  f"{f' (effective {n_eff:.0f} after weights)' if abs(n_eff - len(yes)) > 0.5 else ''} can't show it; "
+                  "review more yes rows, or read everything")
     return out
 
 

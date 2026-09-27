@@ -375,6 +375,10 @@
           "$ref": "#/definitions/share",
           "description": "noul: p(yes) separates gold yes from no at least this well."
         },
+        "min_recall": {
+          "$ref": "#/definitions/share",
+          "description": "noul with act: at the act bar, a person still sees at least this share of gold-yes rows (the 95% interval's lower bound); confident \"no\" answers are set aside unread."
+        },
         "order_stability": {
           "type": "object",
           "additionalProperties": false,
