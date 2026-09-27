@@ -14,27 +14,44 @@ HERE = Path(__file__).parent
 TOP = 5
 
 SQL = f"""
-create macro words(s) as list_distinct(list_filter(
-    string_split_regex(lower(regexp_replace(s, '[^A-Za-z0-9]+', ' ', 'g')), ' '), w -> length(w) > 1));
--- model codes: words with letters and digits, 4+ characters, hyphens, dots and slashes removed
-create macro codes(s) as list_distinct(list_filter(
-    string_split_regex(upper(regexp_replace(s, '[-/.]', '', 'g')), '[^A-Z0-9]+'),
+-- the words of a text: lower case, letters and digits only ("PS-LX350H Belt-Drive" -> ps, lx350h, belt, drive)
+create macro words(text) as list_distinct(list_filter(
+    string_split_regex(lower(regexp_replace(text, '[^A-Za-z0-9]+', ' ', 'g')), ' '), w -> length(w) > 1));
+
+-- the model codes in a text: words with letters and digits, 4+ characters, after dropping - / .
+-- ("Sony PS-LX350H Belt-Drive Turntable" -> PSLX350H)
+create macro codes(text) as list_distinct(list_filter(
+    string_split_regex(upper(regexp_replace(text, '[-/.]', '', 'g')), '[^A-Z0-9]+'),
     w -> length(w) >= 4 and regexp_matches(w, '[0-9]') and regexp_matches(w, '[A-Z]')));
--- two codes agree when equal, or when one holds the other (PSLX350H in PSLX350HBLK)
-create macro same_code(x, y) as len(list_filter(x, u -> len(list_filter(y, v ->
+
+-- do two texts share a model code? equal, or one inside the other (PSLX350H in PSLX350HBLK)
+create macro shares_code(a, b) as len(list_filter(codes(a), u -> len(list_filter(codes(b), v ->
     u = v or (length(u) >= 5 and length(v) >= 5 and (contains(u, v) or contains(v, u))))) > 0)) > 0;
 
+-- how many words two texts share, and that as a share of all their words
+create macro shared_words(a, b) as len(list_intersect(words(a), words(b)));
+create macro word_overlap(a, b) as shared_words(a, b)::double / len(list_distinct(list_concat(words(a), words(b))));
+
 create table abt as select * from read_csv('{HERE}/abt.csv', all_varchar = true);
-create table buy as select * from read_csv('{HERE}/buy.csv', all_varchar = true);
+create table buy as
+    select * replace (coalesce(description, '') as description, coalesce(manufacturer, '') as manufacturer)
+    from read_csv('{HERE}/buy.csv', all_varchar = true);
 create table matches as select * from read_csv('{HERE}/matches.csv', all_varchar = true);
 
+-- every pair of products that shares at least one word, with the two clues
 create table scored as
-select a.id as abt_id, b.id as buy_id,
-       same_code(codes(a.name), codes(b.name || ' ' || coalesce(b.description, ''))) as code,
-       len(list_intersect(words(a.name), words(b.name || ' ' || coalesce(b.manufacturer, ''))))::double
-         / len(list_distinct(list_concat(words(a.name), words(b.name || ' ' || coalesce(b.manufacturer, ''))))) as overlap
-from abt a, buy b
-where len(list_intersect(words(a.name), words(b.name || ' ' || coalesce(b.manufacturer, '')))) > 0;
+with b as (
+    select id,
+           name || ' ' || manufacturer as words_text,
+           name || ' ' || description  as codes_text
+    from buy
+)
+select abt.id as abt_id,
+       b.id   as buy_id,
+       shares_code(abt.name, b.codes_text)  as code,
+       word_overlap(abt.name, b.words_text) as overlap
+from abt, b
+where shared_words(abt.name, b.words_text) > 0;
 """
 
 PAIRS = f"""

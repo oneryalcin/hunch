@@ -3,10 +3,10 @@ title: "Match two product catalogues"
 description: "Two shops list the same products under different names. Teach a program which ones match, and to say when it isn't sure."
 ---
 
-import { PairPuzzle, WrongMatches } from "/snippets/matching.jsx";
+import { PairFunnel, PairPuzzle, WrongMatches } from "/snippets/matching.jsx";
 import { PAIR_PUZZLES } from "/snippets/pair-puzzles.jsx";
 
-Two shops, about a thousand products each. Which products are the same?
+Two online shops, Abt and Buy, sell about a thousand products each. Which products are the same?
 
 <Info>
 Joining two lists of the same things is everywhere: catalogues after an acquisition, suppliers in two systems, customers who signed up twice. Rules get you most of the way. The rest is a judgment, and that's the part hunch is for.
@@ -22,18 +22,56 @@ Rules compare characters, so a case and a cable one digit apart look alike. The 
 
 ## 1. Narrow the pairs with rules
 
-Comparing every product with every product is 1.18 million pairs. [`candidates.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/candidates.py) keeps each product's five likeliest partners in DuckDB, using model codes and shared words:
+Put every Abt product next to every Buy product and you get 1,081 × 1,092 pairs. Almost all of them are nonsense: a turntable next to photo paper. There's no point asking anyone about those, so two cheap clues, both plain SQL, throw them out first.
+
+<PairFunnel steps={[[1180452, "every Abt product × every Buy product"], [175109, "pairs that share at least one word"], [5396, "the five best per product"]]} />
+
+**Clue 1: a shared word.** Split each name into words. If two listings have no word in common, they are not the same product. That alone drops 85% of the pairs.
+
+**Clue 2: a shared model code.** Most names carry a model code, a word that mixes letters and digits. Shops write codes differently, so hyphens, slashes and dots are dropped before comparing:
+
+| Listing | Its model code |
+| --- | --- |
+| Sony Turntable - PSLX350H | `PSLX350H` |
+| Sony PS-LX350H Belt-Drive Turntable | `PSLX350H` |
+| Sony PSLX300USB USB Record Turntable | `PSLX300USB` |
+
+**Keep the five best.** For each product, its candidates are sorted: a shared code first, then the most words in common. The turntable has 182 candidates that share a word with it, mostly just "Sony". The top five:
+
+| Candidate | Shares the code? | Words in common |
+| --- | --- | --- |
+| Sony PS-LX350H Belt-Drive Turntable | yes | 2 of 7 |
+| Sony PSLX300USB USB Record Turntable | no | 2 of 6 |
+| Sony Print Paper - SVMF40P | no | 1 of 6 |
+| Sony Remote Control - RMV310 | no | 1 of 6 |
+| Sony DVPCX995V DVD Player | no | 1 of 6 |
+
+The true match comes first because it shares the code, even though the sibling turntable shares a bigger fraction of its words. Five per product gives 5,396 pairs, and 1,061 of the 1,097 true matches are still among them.
+
+In [`candidates.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/candidates.py) the two clues are one query. `shared_words`, `shares_code` and `word_overlap` are small SQL functions defined at the top of that file, and they do exactly what their names say:
 
 ```sql
--- the idea; the full query is in candidates.py
-select abt_id, buy_id,
-       same_code(codes(a.name), codes(b.name || ' ' || b.description)) as code,   -- PSLX350H = PS-LX350H
-       shared_words(a.name, b.name) as overlap
-from abt a, buy b
-qualify row_number() over (partition by abt_id order by code desc, overlap desc) <= 5
+-- every pair of products that shares at least one word
+with b as (
+    select id,
+           name || ' ' || manufacturer as words_text,
+           name || ' ' || description  as codes_text
+    from buy
+)
+select abt.id as abt_id,
+       b.id   as buy_id,
+       shares_code(abt.name, b.codes_text)  as code,
+       word_overlap(abt.name, b.words_text) as overlap
+from abt, b
+where shared_words(abt.name, b.words_text) > 0
 ```
 
-That leaves 5,396 pairs, and nearly every true match is among them.
+Then each product keeps its five best:
+
+```sql
+row_number() over (partition by abt_id
+                   order by code desc, overlap desc) <= 5
+```
 
 ## 2. Write the question
 
@@ -44,26 +82,34 @@ judgment: same_product
 model: jev-1.13.0
 source: py(candidates.py:pairs)
 key: id
-state: [abt_name, abt_description, abt_price, buy_name, buy_manufacturer, buy_description, buy_price]
+state: [abt_name, abt_description, abt_price,
+        buy_name, buy_manufacturer, buy_description, buy_price]
 questions:
   same:
-    type: noul                         # yes or no, with how sure
+    type: noul          # yes or no, with how sure
     instructions: >-
-      Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with
-      `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
-      model? A different model number, size or capacity is a different product, and so is an accessory made for it.
-      The two shops word names differently, and a price may be missing. A shop may also add its own letters to the
-      end of the same model's code (AB123 in one shop, AB123XY in the other): when the rest of the code and the
-      product agree, it is the same product. But when both listings name a colour and the colours differ, they are
-      different products.
-    gold: gold_same                    # the known answer, for testing
-    act: 0.9                           # act on answers this sure; the rest go to a person
+      Two shops list a product: `abt_name` (with
+      `abt_description` and `abt_price`) and `buy_name` (with
+      `buy_manufacturer`, `buy_description` and `buy_price`).
+      Are they the same product: the same maker and the same
+      model? A different model number, size or capacity is a
+      different product, and so is an accessory made for it. The
+      two shops word names differently, and a price may be
+      missing. A shop may also add its own letters to the end of
+      the same model's code (AB123 in one shop, AB123XY in the
+      other): when the rest of the code and the product agree,
+      it is the same product. But when both listings name a
+      colour and the colours differ, they are different
+      products.
+    gold: gold_same     # the known answer
+    act: 0.9            # below this, a person decides
 ```
 
 ## 3. Run it
 
 ```sh
-hunch run prototype/examples/product_matching/same_product.yml --max-cost 0.25
+hunch run prototype/examples/product_matching/same_product.yml \
+  --max-cost 0.25
 ```
 
 All 5,396 pairs take about 90 seconds and $0.14. Every answer is kept, so running it again is free.
@@ -74,9 +120,14 @@ A product can have two candidates that both look right. Back in SQL, where the a
 
 ```sql
 -- simplified from match.py, which also breaks ties
-select * from (select * from decided where label = 'yes'
-               qualify row_number() over (partition by abt_id order by p_yes desc) = 1)
-qualify row_number() over (partition by buy_id order by p_yes desc) = 1
+select * from (
+    select * from decided
+    where label = 'yes'
+    qualify row_number() over (partition by abt_id
+                               order by p_yes desc) = 1
+)
+qualify row_number() over (partition by buy_id
+                           order by p_yes desc) = 1
 ```
 
 [`match.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/match.py) runs all four steps.
@@ -96,7 +147,8 @@ Version one said nothing about shops adding letters to a code, so `PM1327BK` and
 Before shipping it, `hunch diff` asked the new wording of every pair:
 
 ```text
-gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
+gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%
+  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
 ```
 
 It fixed 23 pairs and broke 40. A silver and a gold camera of the same model are two products, and "a colour" had just told the model they were one. The shipped wording draws the line at colours: 35 fixed, 4 broken.
