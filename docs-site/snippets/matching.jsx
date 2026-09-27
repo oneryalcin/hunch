@@ -96,3 +96,85 @@ export const PairFunnel = ({ steps }) => {
     </div>
   );
 };
+
+export const PairSieve = ({ data }) => {
+  // data: {product, buy: [[name, shares a word, shares the code, word overlap, rank if kept, p(same) if kept, match]]}
+  const STEPS = [
+    `All ${data.buy.length.toLocaleString("en")} Buy products, each one a possible match for the turntable.`,
+    `${(data.buy.length - data.buy.filter((d) => d[1]).length).toLocaleString("en")} share no word with it. They go.`,
+    `The ${data.buy.filter((d) => d[1]).length} left are sorted: a shared model code first, then the most words in common.`,
+    "The best five are kept. Everything else goes.",
+    "Now the question looks at each of the five. Only one is the same product.",
+  ];
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [hover, setHover] = useState(null);
+  useEffect(() => {
+    if (!playing) return;
+    if (step >= STEPS.length - 1) { setPlaying(false); return; }
+    const t = setTimeout(() => setStep(step + 1), step === 0 ? 1200 : 2400);
+    return () => clearTimeout(t);
+  }, [playing, step]);
+  const play = () => {
+    const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setStep(STEPS.length - 1); return; }
+    setStep(0); setPlaying(true);
+  };
+  const cols = 42, gap = 9, W = 14 + cols * gap + 40, H = 26 + Math.ceil(data.buy.length / cols) * gap + 6;
+  const ranked = data.buy.map((d, i) => [d, i]).filter(([d]) => d[1])
+    .sort((a, b) => b[0][2] - a[0][2] || b[0][3] - a[0][3] || a[1] - b[1]).map(([, i]) => i);
+  const place = {};
+  ranked.forEach((i, k) => { place[i] = k; });
+  const teal = "#7D969B", gold = "#C9A227", grey = "rgba(128,128,128,0.25)";
+  const pos = (d, i) => {
+    if (step >= 3 && d[4]) return [W - 22, 30 + (d[4] - 1) * ((H - 50) / 4)];   // the five, in a column
+    if (step >= 2 && d[1]) { const k = place[i]; return [14 + (k % 14) * 12, 30 + Math.floor(k / 14) * 12]; }
+    return [14 + (i % cols) * gap, 26 + Math.floor(i / cols) * gap];            // everyone, in a grid
+  };
+  const alpha = (d) => (step >= 3 ? (d[4] ? 1 : 0.06) : step >= 1 ? (d[1] ? 1 : 0.08) : 1);
+  const five = data.buy.filter((d) => d[4]).sort((a, b) => a[4] - b[4]);
+  return (
+    <div className="not-prose hunch-widget" style={{ border: `1px solid ${grey}`, borderRadius: 12, padding: 16, margin: "16px 0" }}>
+      <style>{`.hunch-sieve circle{transition:transform .9s cubic-bezier(.4,0,.2,1),opacity .6s} .hunch-fade{transition:opacity .6s,max-height .6s}
+        @media (prefers-reduced-motion: reduce){.hunch-sieve circle,.hunch-fade{transition:none}}`}</style>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 14 }}>
+        <span><b>{data.product}</b> · step {step + 1} of {STEPS.length}</span>
+        <button onClick={play} disabled={playing}
+          style={{ border: `1px solid ${grey}`, borderRadius: 8, padding: "5px 12px", background: "transparent", color: "inherit", font: "inherit", cursor: playing ? "default" : "pointer" }}>
+          {playing ? "Playing…" : step === 0 ? "▶ Play" : "↺ Replay"}
+        </button>
+      </div>
+      <svg className="hunch-sieve" viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", maxWidth: 560, display: "block", margin: "8px 0" }}
+        role="img" aria-label={STEPS[step]}>
+        {data.buy.map((d, i) => {
+          const [x, y] = pos(d, i);
+          return (
+            <circle key={i} r={step >= 3 && d[4] ? 6 : 3.4} cx={0} cy={0}
+              style={{ transform: `translate(${x}px, ${y}px)`, opacity: alpha(d) }}
+              fill={d[2] && step >= 2 ? gold : teal}
+              onMouseEnter={() => setHover(d[0])} onMouseLeave={() => setHover(null)}>
+              <title>{d[0]}</title>
+            </circle>
+          );
+        })}
+      </svg>
+      <p style={{ fontSize: 15, margin: "4px 0 0", minHeight: 24 }}>{STEPS[step]}</p>
+      <div className="hunch-fade" style={{ opacity: step >= 3 ? 1 : 0, maxHeight: step >= 3 ? 400 : 0, overflow: "hidden" }}>
+        {five.map((d) => (
+          <div key={d[0]} style={{ margin: "8px 0", fontSize: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+              <span><span style={{ color: d[2] ? gold : teal }}>●</span> {d[0]}{step >= 4 && d[6] ? " ✓" : ""}</span>
+              {step >= 4 && <span style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", opacity: 0.85 }}>{d[5] >= 0.5 ? "same" : "no"} {d[5].toFixed(2)}</span>}
+            </div>
+            <div className="hunch-fade" style={{ height: 5, marginTop: 4, background: grey, borderRadius: 3, opacity: step >= 4 ? 1 : 0 }}>
+              <div style={{ width: `${Math.round(Math.max(d[5], 0) * 100)}%`, height: 5, borderRadius: 3, background: d[5] >= 0.5 ? teal : "rgba(128,128,128,0.6)" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 13, margin: "6px 0 0", opacity: 0.7, minHeight: 20 }}>
+        {hover ? hover : <><span style={{ color: gold }}>●</span> shares the model code · point at a dot for its name</>}
+      </p>
+    </div>
+  );
+};
