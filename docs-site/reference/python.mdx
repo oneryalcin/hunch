@@ -96,8 +96,8 @@ hunch.judge("src/hunch/recipes/agent_commands/command_guard.yml",
             command="rm -rf Dockerfile README.md app node_modules package-lock.json package.json public "
                     "react-router.config.ts tsconfig.json vite.config.ts .gitignore .dockerignore .react-router .claude && echo \"done\"")
 # {'destroys': {'label': 'yes', 'p': 0.95, 'margin': 0.9, 'route': 'act', 'cached': True},
-#  'reaches_outside': {'label': 'no', 'p': 0.88, 'margin': 0.76, 'route': '', 'cached': True},
-#  'sends_out': {'label': 'no', 'p': 0.97, 'margin': 0.94, 'route': '', 'cached': True}}
+#  'reaches_outside': {'label': 'no', 'p': 0.9, 'margin': 0.8, 'route': '', 'cached': True},
+#  'sends_out': {'label': 'no', 'p': 0.98, 'margin': 0.96, 'route': '', 'cached': True}}
 ```
 
 `judge` uses `asyncio.run`; inside a running loop use `ajudge`. With `shadow`, the candidate runs in a non-daemon thread after `judge` returns, so a script waits for it at exit.

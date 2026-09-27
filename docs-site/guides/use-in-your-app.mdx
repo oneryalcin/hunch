@@ -24,8 +24,8 @@ answers = hunch.judge(
 
 ```python
 {'destroys': {'label': 'yes', 'p': 0.95, 'margin': 0.9, 'route': 'act', 'cached': False},
- 'reaches_outside': {'label': 'no', 'p': 0.88, 'margin': 0.76, 'route': '', 'cached': False},
- 'sends_out': {'label': 'no', 'p': 0.97, 'margin': 0.94, 'route': '', 'cached': False}}
+ 'reaches_outside': {'label': 'no', 'p': 0.89, 'margin': 0.78, 'route': '', 'cached': False},
+ 'sends_out': {'label': 'no', 'p': 0.98, 'margin': 0.96, 'route': '', 'cached': False}}
 ```
 
 The row's columns are keyword arguments, and must include every column in the spec's `state`. A row the store has never seen makes one engine call, and its answer is then stored for every later caller, batch or app: ask again and the same answers come back with `'cached': True`, in a few milliseconds.
