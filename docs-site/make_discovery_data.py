@@ -3,9 +3,9 @@
     uv run --extra sql python docs-site/make_discovery_data.py     # from the repo root, after fetch.py; asks nothing
 
 Every number is weighted to the 455,449-message collection, as in measure.py (whose readers it reuses). It writes:
-- DISCOVERY_FOUND: for drilling, the share of relevant messages each reader finds when it says yes at p >= 0.5;
+- DISCOVERY_FOUND: for drilling, the share of relevant messages each wording finds when it says yes at p >= 0.5;
 - DISCOVERY_READ: per topic, how much of what the lawyers wanted a reviewer has found after reading the top X% of
-  the collection by p(yes), for both wordings, every half percent, and where keyword search lands.
+  the collection by p(yes), for both wordings, every half percent, and where measure.py's broad keyword query lands.
 """
 import csv
 import json
@@ -19,7 +19,7 @@ EXAMPLE = Path("prototype/examples/discovery")
 sys.path.insert(0, str(EXAMPLE))
 import measure  # noqa: E402  (sets HUNCH_MAX_COST=0 before importing hunch)
 
-csv.field_size_limit(sys.maxsize)
+csv.field_size_limit(10**8)
 TOPICS = {"drilling": "Oil and gas drilling", "privileged": "Privileged", "lobbying": "Lobbying"}  # spills: too few
 
 
@@ -48,7 +48,7 @@ for name, title in TOPICS.items():
                        "protocol": found(y, w, s["protocol"], grid), "request": found(y, w, s["request"], grid),
                        "keywords": [round(float((w * kw).sum() / w.sum()) * 100, 1), rec(y, w, kw)]}
     if name == "drilling":
-        found_data = [["Keyword search", rec(y, w, kw)], ["The request's words", rec(y, w, (s["request"] >= 0.5).astype(float))],
+        found_data = [["The request's words", rec(y, w, (s["request"] >= 0.5).astype(float))],
                       ["The lawyer's reading", rec(y, w, (s["protocol"] >= 0.5).astype(float))]]
     print(name, "keywords", read_data[name]["keywords"], "80% at",
           next(g for g, v in zip(grid, read_data[name]["protocol"]) if v >= 80))

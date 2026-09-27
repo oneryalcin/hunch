@@ -79,7 +79,7 @@ export const ReadSlider = ({ data }) => {
         ))}
       </div>
       <label style={{ display: "block", fontSize: 14 }}>
-        A person reads the top <b>{read}%</b> of the collection, about {people.toLocaleString("en")} of {d.total.toLocaleString("en")} messages
+        A person reads the top <b>{read}%</b> of the collection, about {people.toLocaleString("en")} messages
         <input type="range" min={0} max={maxStep} value={step} onChange={(e) => setStep(+e.target.value)}
           aria-label="Share of the collection a person reads" style={{ width: "100%", accentColor: teal, marginTop: 6 }} />
       </label>

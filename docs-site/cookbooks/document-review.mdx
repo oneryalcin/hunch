@@ -34,7 +34,7 @@ D=prototype/examples/discovery
 uv run python $D/fetch.py
 ```
 
-This downloads the Enron emails and the lawyers' judgments. The lawyers read 25,353 emails, not 455,449: a sample, drawn so that each email stands for others, from one to about 150. It works like an opinion poll, where each person asked speaks for thousands. A spec's `weights:` tells hunch how many each one speaks for, so every number on this page is about the whole collection.
+This downloads the Enron emails and the judgments. Professional reviewers read 25,353 emails, not 455,449, and the senior lawyers settled the disputed calls: a sample, drawn so that each email stands for others, from one to about 150. It works like an opinion poll, where each person asked speaks for thousands. A spec's `weights:` tells hunch how many each one speaks for, so every number on this page is about the whole collection.
 
 ## 2. Ask the request, word for word
 
@@ -65,7 +65,7 @@ hunch run $D/request_only/drilling.yml \
   --max-cost 0.5
 ```
 
-It reads 5,837 emails in about a minute and a half for $0.27, and finds 8 in every 100 of the emails the lawyer wanted. It read the request exactly as written, and that was the problem.
+It reads 5,837 emails in under two minutes for $0.27, and finds 8 in every 100 of the emails the lawyer wanted. It read the request exactly as written, and that was the problem.
 
 ## 3. Write down what the lawyer meant
 
@@ -131,13 +131,15 @@ PASS recall of yes 84.1%
   (min 80% on the interval's lower bound)
 ```
 
-A person reads about 68,000 emails instead of 455,449, and even at the bottom of the interval, 80% of what should be withheld is among them. Drag the line to see what each amount of reading buys:
+A person reads about 68,000 emails instead of 455,449, and even at the bottom of the interval, 80% of what should be withheld is among them. That bar is the example's; a real privilege review, where every privileged email handed over can waive the protection, would set it much higher and read more. Drag the line to see what each amount of reading buys:
 
 <ReadSlider data={DISCOVERY_READ} />
 
+The red dot is a keyword search, a broad OR query of the kind a reviewer tries first (the exact queries are under "How it was measured"). On privilege and lobbying, reading the same number of emails in hunch's order finds more: 84 in 100 privileged emails against the keywords' 67. On drilling the keywords win, 91 against 84, because drilling is a topic of words: *pipeline*, *reserves*, *exploration*. Even there the winning query needs *pipeline*, which only the lawyer's reading puts in scope. Privilege is a question of who wrote to whom and why, and no list of words captures that.
+
 ## The lesson
 
-The teams in the 2010 exercise, e-discovery firms and universities with hours of the same lawyer's time, hit the same wall on drilling. None found more than 25% of what the lawyer wanted, and the organisers wrote that none captured the lawyer's broad reading of the request.
+The teams in the 2010 exercise, e-discovery firms and universities with up to ten hours of the same lawyer's time, hit the same wall on drilling. None found more than 25% of what the lawyer wanted, and the organisers wrote that none captured the lawyer's broad reading of the request.
 
 A request is not a question until someone writes down what it means. In hunch that writing is the spec: it is read, diffed and tested like code, so when the lawyer's reading changes you see which documents move before anyone relies on them.
 
@@ -149,33 +151,36 @@ Point `source:` at your documents, put the request and your review protocol in `
 
 <AccordionGroup>
   <Accordion title="The data">
-    The [TREC 2010 Legal Track](https://trec.nist.gov/data/legal10.html) Interactive task: four requests for production from a mock complaint (drilling, responses to spills, lobbying, and a privilege review), over the [EDRM Enron Email Data Set v2](https://trec-legal.umiacs.umd.edu/corpora/trec/legal10/) (ZL Technologies, CC BY 3.0 US), 455,449 messages. Professional reviewers judged a stratified sample of each topic, and the topic's senior lawyer (the "Topic Authority") settled the calls teams appealed; this page uses those final judgments, 25,353 in all, leaving out 154 the reviewers marked as unreadable. Each judgment carries the probability its email was sampled; summing one over it gives 455,449 for every topic, and `weights:` in each spec reweights by it. `fetch.py` keeps the first 20,000 characters of an email and 10,000 of its attachments; the specs send 6,000 and 2,000. The emails name real people; they are public records, and this page quotes no email and names no one.
+    The [TREC 2010 Legal Track](https://trec.nist.gov/data/legal10.html) Interactive task: four requests for production from a mock complaint (drilling, responses to spills, lobbying, and a privilege review), over the [EDRM Enron Email Data Set v2](https://trec-legal.umiacs.umd.edu/corpora/trec/legal10/) (ZL Technologies, CC BY 3.0 US), 455,449 messages. Professional review firms judged a stratified sample of each topic; the topic's senior lawyer (the "Topic Authority") then adjudicated about 10% of those calls, the ones teams appealed plus a sample of the rest. This page uses the final judgments, 25,353 in all, leaving out 154 marked unreadable. Each judgment carries the probability its email was sampled; summing one over it gives the collection's 455,449 for every topic (within 0.3% once the unreadable ones are left out), and `weights:` in each spec reweights by it. `fetch.py` keeps the first 20,000 characters of an email and 10,000 of its attachments; the specs send 6,000 and 2,000. The emails name real people; they are public records, and this page quotes no email and names no one.
   </Accordion>
   <Accordion title="The results, in full">
     From `measure.py`, weighted to the collection, 95% intervals from 1,000 bootstrap resamples within strata; hunch says yes at p(yes) ≥ 0.5.
 
     | Topic | Reader | Found (recall) | Right when it says yes (precision) | F1 |
     | --- | --- | --- | --- | --- |
-    | Drilling | keywords | 19% (15–24) | 9% (7–11) | 12% |
+    | Drilling | keywords | 91% (87–94) | 22% (20–25) | 36% |
     | | request's words | 8% (6–10) | 34% (24–45) | 13% |
     | | lawyer's reading | 63% (57–69) | 46% (41–52) | 53% (48–58) |
-    | Privileged | keywords | 39% (35–43) | 24% (21–27) | 30% |
+    | Privileged | keywords | 67% (62–72) | 21% (19–23) | 32% |
     | | request's words | 25% (22–28) | 53% (47–59) | 34% |
     | | lawyer's reading | 44% (40–49) | 53% (48–58) | 48% (44–52) |
-    | Lobbying | keywords | 42% (38–46) | 45% (39–52) | 44% |
+    | Lobbying | keywords | 77% (72–82) | 16% (14–17) | 26% |
     | | request's words | 77% (73–81) | 54% (49–59) | 64% |
     | | lawyer's reading | 68% (64–73) | 61% (55–66) | 64% (60–68) |
 
-    Keywords: `drill|oil and gas|well|rig`, `privilege|attorney|counsel|legal department`, `lobby|legislat|senator|congress`. On lobbying the request's words were already enough; the lawyer's reading moved precision up and recall down. To find 80% by ranking alone, a person reads the top 12.7% (9.3–17.4) for drilling, 12.2% (10.4–14.7) for privilege, 4.5% (3.8–5.1) for lobbying. The `min_recall` checks use a Wilson interval on the effective sample size (941 privileged emails weigh as 453).
+    Keywords, as regular expressions on the lowercased email and attachments: drilling `drill|\boil\b|\bgas\b|extraction|pipeline|reserves|exploration`; privilege `privilege|attorney|counsel|lawyer|legal|litigation|lawsuit|confidential`; lobbying `lobby|legislat|senator|congress|regulat|governor|\bbill\b|testimony|government affairs`. They read 17%, 14% and 13% of the collection; hunch's ranking, reading as much, finds 84%, 84% and 94%. (A first, narrower query, `drill|oil and gas|\bwell\b|\brig\b`, found 19% on drilling: a keyword search is only as good as its words.) On lobbying the request's words were already enough; the lawyer's reading moved precision up and recall down. To find 80% by ranking alone, a person reads the top 12.7% (9.3–17.4) for drilling, 12.2% (10.4–14.7) for privilege, 4.5% (3.8–5.1) for lobbying. The `min_recall` checks use a Wilson interval on the effective sample size (941 privileged emails weigh as 453).
+  </Accordion>
+  <Accordion title="The recall bars were chosen on the same answers">
+    Each spec's `act` for "no" (0.82 drilling, 0.75 privilege, 0.65 lobbying) is the lowest that `hunch test` reported as keeping recall at 80% on the lower bound, found on the same judged emails it is then checked against, so the PASS is optimistic. A fair check: choose the bar on half the emails (split by a hash of the id) and test it on the other half. Chosen on one half: 0.86, 0.77, 0.65; on the other half recall is 89.9% (83.3–94.1), 87.9% (83.2–91.4) and 83.3% (78.5–87.2). Drilling and privilege hold; lobbying's lower bound falls just under 80%. On your own documents, choose the bar on one set of reviewed emails and check it on another.
   </Accordion>
   <Accordion title="Why spills is left out">
     Only 184 of the judged emails were about responses to spills, and three of them, sampled from the part of the collection no team flagged, stand for most of the 575 spill emails the sample implies are in the collection. Weighted, the 184 count as 8. hunch's recall there is somewhere between 9% and 44%, and `hunch test` says no recall bar can be promised; the spec is in the example without one.
   </Accordion>
   <Accordion title="The human reviewers">
-    The first-pass reviewers' calls are published too, and against the final judgments they score far higher (F1 83% on drilling, 87% on privilege). That comparison is circular: the final judgments are the reviewers' calls, changed only where a team appealed, and no one appealed in the large part of the collection no team flagged. It is an upper bound on the reviewers, not a measurement. For a fair comparison of people and software on this data, see Grossman and Cormack, "Technology-Assisted Review in E-Discovery Can Be More Effective and More Efficient Than Exhaustive Manual Review", Richmond Journal of Law and Technology, 2011.
+    The first-pass reviewers' calls are published too, and against the final judgments they score far higher (F1 83% on drilling, 87% on privilege). That comparison is largely circular: the final judgments are the reviewers' calls, and only about 10% of them went to the senior lawyer (appeals, plus 884 others the organisers chose, of which about a quarter were overturned). Everywhere else the reviewer's call is the answer key. It is an upper bound on the reviewers, not a measurement. For a fair comparison of people and software on the 2009 edition of this exercise, see Grossman and Cormack, "Technology-Assisted Review in E-Discovery Can Be More Effective and More Efficient Than Exhaustive Manual Review", Richmond Journal of Law and Technology, 2011.
   </Accordion>
   <Accordion title="Against the 2010 teams, and why it isn't a race">
-    The track's overview reports each team's final result: the best F1 was 26% on drilling (no team above 25% recall), 67% on lobbying and 41% on privilege, against hunch's 53%, 64% and 48% above. It is not a fair race. The paragraph each spec adds is our condensation of the guidelines written for the reviewers who produced the judgments, summarising what each lawyer told the teams; the teams questioned the lawyer directly instead, for up to ten hours, and never saw this summary. A 2026 model is being compared with 2010 systems, and the Enron emails are all over the web (the judgments much less so). What the comparison does show is the cost: about $0.33 and a minute and a half per topic.
+    The track's overview reports each team's final result: the best F1 was 26% on drilling (no team above 25% recall), 67% on lobbying and 41% on privilege, against hunch's 53%, 64% and 48% above. It is not a fair race. The paragraph each spec adds is our condensation of the instructions the reviewers who produced the judgments worked from, compiled largely from what each lawyer told the teams (the published version is dated after the teams had submitted). That is the answer key's own instrument, a real advantage the teams didn't have in that form; they questioned the lawyer directly, some for up to ten hours, some not at all. The lobbying paragraph also keeps two names specific to this case from those instructions (the Independent Energy Producers Association and the CPUC). A 2026 model is being compared with 2010 systems, and the Enron emails are all over the web (the judgments much less so). What the comparison does show is the cost: about $0.33 and under two minutes per topic.
   </Accordion>
   <Accordion title="Cost">
     Both wordings of all four topics, every judged email: $2.54 in total, including a 400-email trial run. The answers are kept, so every number here, `measure.py` and the widgets are rebuilt for $0.

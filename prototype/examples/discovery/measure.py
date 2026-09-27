@@ -22,8 +22,12 @@ from hunch.core import decide  # noqa: E402
 HERE = Path(__file__).parent
 csv.field_size_limit(10**8)
 TOPICS = {"drilling": "301", "spills": "302", "lobbying": "303", "privileged": "304"}
-KEYWORDS = {"drilling": r"drill|oil and gas|\bwell\b|\brig\b", "spills": r"spill|blowout|leak|rupture",
-            "lobbying": r"lobby|legislat|senator|congress", "privileged": r"privilege|attorney|counsel|legal department"}
+KEYWORDS = {  # a broad OR query per topic, the kind a reviewer would try first (drilling's needs "pipeline", which only
+    # the lawyer's reading says is in scope)
+    "drilling": r"drill|\boil\b|\bgas\b|extraction|pipeline|reserves|exploration",
+    "spills": r"spill|blowout|leak|rupture|clean-?up|remediat",
+    "lobbying": r"lobby|legislat|senator|congress|regulat|governor|\bbill\b|testimony|government affairs",
+    "privileged": r"privilege|attorney|counsel|lawyer|legal|litigation|lawsuit|confidential"}
 B = 1000
 
 
@@ -51,7 +55,7 @@ def read_for(y, w, s, recall):
 
 
 def main() -> None:
-    first = {(t, m): r == "1" for t, _, m, r, _ in (line.split() for line in open(HERE / ".cache/qrels_pre.txt"))}
+    first = {(t, m): r for t, _, m, r, _ in (line.split() for line in open(HERE / ".cache/qrels_pre.txt"))}
     rng = np.random.default_rng(0)
     for name, topic in TOPICS.items():
         rows = list(csv.DictReader(open(HERE / f".cache/{name}.csv")))
@@ -62,19 +66,22 @@ def main() -> None:
         s = {k: np.array([d[r["id"]] for r in rows]) for k, d in (("request", request), ("protocol", protocol))}
         picks = {"keywords": np.array([bool(re.search(KEYWORDS[name], (r["email"] + r["attachments"]).lower()))
                                        for r in rows], float),
-                 "first-pass reviewers": np.array([first[(topic, r["id"])] for r in rows], float),
+                 "first-pass reviewers": np.array([first[(topic, r["id"])] == "1" for r in rows], float),
                  "hunch, request only": (s["request"] >= 0.5).astype(float),
                  "hunch, lawyer's reading": (s["protocol"] >= 0.5).astype(float)}
+        judged = np.array([first[(topic, r["id"])] in ("0", "1") for r in rows])  # first pass: -1 is unreadable
         strata = [np.flatnonzero(prob == v) for v in np.unique(prob)]
         boots = {k: [] for k in picks} | {"read": []}
         for _ in range(B):  # resample within each stratum; the weights stay the stratum's
             i = np.concatenate([rng.choice(ix, len(ix)) for ix in strata])
             for k, pk in picks.items():
-                boots[k].append(scores(y[i], w[i], pk[i]))
+                m = judged[i] if k == "first-pass reviewers" else np.ones(len(i), bool)
+                boots[k].append(scores(y[i][m], w[i][m], pk[i][m]))
             boots["read"].append(read_for(y[i], w[i], s["protocol"][i], 0.8))
         print(f"\n{name} (topic {topic}): {(w * y).sum():,.0f} relevant of {w.sum():,.0f} messages")
         for k, pk in picks.items():
-            est, lo, hi = scores(y, w, pk), *np.percentile(boots[k], [2.5, 97.5], axis=0)
+            m = judged if k == "first-pass reviewers" else np.ones(len(y), bool)
+            est, lo, hi = scores(y[m], w[m], pk[m]), *np.percentile(boots[k], [2.5, 97.5], axis=0)
             print(f"  {k:24} " + "  ".join(f"{m} {e:.0%} ({a:.0%}–{b:.0%})" for m, e, a, b in
                                              zip(("recall", "precision", "F1"), est, lo, hi)))
         lo, hi = np.percentile(boots["read"], [2.5, 97.5])
