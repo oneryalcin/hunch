@@ -257,7 +257,7 @@ A verdict applies while the row's state is unchanged. Keep the file in git; it i
 
 ### `weights`
 
-Corrects for a sample whose mix differs from production. Each row gets `_w` = population share ÷ sample share of its `by` value; `test` weights accuracy, calibration and estimates by it. Every `by` value needs a share; shares sum to 1. Set it on the spec that reads the file; downstream specs carry `_w`.
+Corrects for a sample whose mix differs from production. Each row gets `_w` = population share ÷ sample share of its `by` value; `test` weights accuracy, calibration and estimates by it. Every `by` value needs a share above 0; shares sum to 1. Set it on the spec that reads the file; downstream specs carry `_w`.
 
 ```yaml
 weights:

@@ -1,5 +1,7 @@
-"""`hunch run` on awkward data: rows it can't compare, and filters that keep nothing."""
+"""`hunch run` on awkward data: rows it can't compare, filters that keep nothing, an empty file."""
 import sqlite3
+
+import pytest
 
 SPEC = """judgment: recent
 model: fake:big
@@ -39,3 +41,11 @@ def test_in_reads_a_cell_as_a_number_when_the_list_holds_numbers(hunch):  # else
     (hunch.dir / "spec.yml").write_text(SPEC.replace("year > 2008", "year in [2008, 2009]"))
     hunch("run")
     assert output(hunch, "recent") == [("1",), ("3",)]
+
+
+def test_an_empty_csv_is_a_lint_error_not_a_traceback(hunch, capsys):
+    (hunch.dir / "rows.csv").write_text("")
+    (hunch.dir / "spec.yml").write_text(SPEC)
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "rows.csv is empty" in capsys.readouterr().err

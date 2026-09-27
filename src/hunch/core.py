@@ -388,7 +388,9 @@ def source_header(spec: dict) -> list[str]:
     kind, _ = source_kind(spec)
     if kind == "csv":
         with open(source_path(spec), newline="") as f:
-            return next(csv.reader(f))
+            if not (header := next(csv.reader(f), None)):
+                raise EOFError(f"source {spec['source']} is empty: it needs a header row")
+            return header
     if kind == "traces":
         from hunch import traces
         return traces.VIEWS[spec.get("view", "turns")][1]
@@ -876,6 +878,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             except FileNotFoundError as e:
                 errors += tag([f"source not found: {e.filename or e}"])
                 header = None
+            except EOFError as e:
+                errors += tag([str(e)])
+                header = None
         e, w = lint_node(spec, header)
         errors, warnings = errors + tag(e), warnings + tag(w)
         if "weights" in spec:
@@ -884,6 +889,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 errors += tag(["weights describe how source rows were sampled; set them on the judgment that reads the file"])
             elif header is not None and wt.get("by") not in header:
                 errors += tag([f"weights.by column {wt.get('by')!r} not in the source"])
+            elif any(not isinstance(v, (int, float)) or not v > 0 for v in wt.get("population", {}).values()):
+                errors += tag([f"weights.population shares must be numbers above 0, got {wt.get('population')} (a row "
+                               "whose share is 0 stands for no one: leave it out of the source)"])
             elif abs(sum(wt.get("population", {}).values()) - 1) > 0.01:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
         # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
@@ -2398,7 +2406,7 @@ def wrate(fw: list[tuple[bool, float]]) -> tuple[float, float, float, float]:
     """Weighted share of True, its 95% Wilson interval on the effective sample size (Kish), and that size.
     Unit weights give k/n and wilson(k, n) exactly."""
     sw = sum(w for _, w in fw)
-    if not sw:  # every row weighs 0 (a population share of 0): they stand for no one
+    if not sw:  # no rows, or none weighs anything (lint keeps population shares above 0)
         return 0.0, 0.0, 1.0, 0.0
     p, n_eff = sum(w for f, w in fw if f) / sw, sw * sw / sum(w * w for _, w in fw)
     lo, hi = wilson(p * n_eff, n_eff)
