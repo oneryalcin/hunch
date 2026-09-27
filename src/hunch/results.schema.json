@@ -757,6 +757,124 @@
                     }
                   }
                 },
+                "by": {
+                  "type": "string",
+                  "description": "The metric's by column"
+                },
+                "no_group": {
+                  "type": "integer",
+                  "description": "Rows with no value in by, left out of the groups"
+                },
+                "groups": {
+                  "type": "object",
+                  "description": "Per value of by: the rule on answers (weighted when the source has weights), and on gold",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": [
+                      "rows",
+                      "fired",
+                      "rate",
+                      "ci"
+                    ],
+                    "properties": {
+                      "rows": {
+                        "type": "integer"
+                      },
+                      "fired": {
+                        "type": "integer"
+                      },
+                      "rate": {
+                        "type": "number"
+                      },
+                      "ci": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2,
+                        "description": "95% interval [low, high]"
+                      },
+                      "effective_rows": {
+                        "type": "number",
+                        "description": "With sampling weights: Kish's effective sample size"
+                      },
+                      "gold_rate": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "integer"
+                          },
+                          "of": {
+                            "type": "integer"
+                          },
+                          "rate": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "ci": {
+                            "type": [
+                              "array",
+                              "null"
+                            ],
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "description": "95% interval [low, high]"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "higher": {
+                  "type": "object",
+                  "properties": {
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    },
+                    "difference": {
+                      "type": "number",
+                      "description": "First group's rate minus the second's"
+                    },
+                    "ci": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "description": "95% interval of the difference [low, high] (Newcombe)"
+                    },
+                    "gold": {
+                      "type": "object",
+                      "description": "The same difference on gold, when both groups have gold",
+                      "properties": {
+                        "difference": {
+                          "type": "number"
+                        },
+                        "ci": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "description": "95% interval of the difference [low, high] (Newcombe)"
+                        }
+                      }
+                    }
+                  }
+                },
                 "checks": {
                   "type": "array",
                   "items": {
