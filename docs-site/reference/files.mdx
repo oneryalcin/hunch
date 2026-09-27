@@ -18,7 +18,7 @@ Field by field: the results file and the manifest are described in the [CLI refe
 
 ## What may change
 
-Each file names its format: `"version": 1` in results and manifests. Within a version, fields may be added, and enumerated values (question types, accuracy bases, check names, verdicts, review kinds) may gain members, so a reader should ignore what it doesn't know. A field is never renamed, removed or given another meaning without the version going up, and a new version is listed below with what changed. `spec_hash` is part of the contract too: how it is computed changes only with a new version, since receipts and `on_change: freeze` compare it. The schemas are checked in CI against the files hunch writes: every battery's `results.json`, and a manifest from `hunch docs`.
+Each file names its format. Current test results are `"version": 2`; the manifest remains version 1. Within a version, fields may be added and enumerated values may gain members, so a reader should ignore what it doesn't know. A field is never renamed, removed or given another meaning without the version going up. `spec_hash` is part of the contract too: how it is computed changes only with a new version, since receipts and `on_change: freeze` compare it. The schemas are checked in CI against the files hunch writes: every battery's `results.json`, and a manifest from `hunch docs`.
 
 To check a file yourself:
 
@@ -54,5 +54,6 @@ A battery ships the numbers it was measured with: `hunch test --receipt` writes 
 | Version | Since | What |
 | --- | --- | --- |
 | results 1 | hunch 0.1 | First version (0.2 added `act.judged`). Receipts, from hunch 0.3.1, are the same format without `at`, `git_sha` and `cost`. A union judgment's `model` is `null`. |
+| results 2 | current | Measurements remain in `accuracy`, `auroc`, `calibration_error` and related fields. `checks` contains only acceptance checks explicitly configured in the spec. `assessment` distinguishes passing configured checks from measurement without a bar or checks that could not run. Version 1 receipts remain readable. |
 | manifest 1 | hunch 0.2 | First version. |
 | verdicts | hunch 0.1 | The columns above. |

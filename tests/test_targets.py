@@ -34,6 +34,16 @@ def test_dev_run_writes_only_its_own_store_even_with_hunch_store_set(hunch, monk
     assert not prod.exists() and "urgent@dev" in tables(hunch.dir / "dev.sqlite")
 
 
+def test_show_reads_the_target_table_and_store(hunch, capsys):
+    hunch("run", "--target", "dev")
+    capsys.readouterr()
+    hunch("show", "--target", "dev")
+    out = capsys.readouterr().out
+    assert "Table: urgent@dev" in out
+    assert "Store: " in out and "dev.sqlite" in out
+    assert "Model: fake:small" in out
+
+
 def test_answers_cached_for_one_engine_are_not_reused_for_the_target_engine(hunch):
     hunch("run")
     (hunch.dir / "spec.yml").write_text(SPEC.replace("store: dev.sqlite", "sample: 3"))  # same store as prod

@@ -11,7 +11,7 @@ hunch docs prototype/examples/claude_code/
 ```
 
 ```text
-3 judgments: 1 warning, 2 ok
+3 judgments: 1 warning, 2 passing
   prototype/.hunch/target/examples/claude_code.html
   prototype/.hunch/target/examples/claude_code.manifest.json
 ```
@@ -32,8 +32,10 @@ The page opens on the project: its README's first paragraph, a bar of statuses, 
 | warning | A check marked `severity: warn` failed. |
 | stale | The spec changed after its last test, so its numbers describe an older version. |
 | no results | The last `hunch test` of this path did not include it: never tested, tested alone with `--node` or through another path, or a test stopped by `--max-cost` (which writes no results). |
+| not assessed | A configured check could not run because the needed gold or reviews are missing. |
 | no gold | Tested, but there is nothing to measure against yet: no answer key, reviews, examples or checks. |
-| ok | Tested, passing, and unchanged since. |
+| measured | Numbers were measured, with no configured acceptance checks. |
+| passing | Configured checks passed, and the spec is unchanged since the test. |
 
 A test records a hash of each spec it measured. When the spec on disk no longer matches, the page says so rather than showing old numbers as current. A test run with `--sample N` is labelled as a sample wherever its numbers appear, and one run with `--model` writes its own results, so it never stands in for the spec's engine.
 
@@ -71,4 +73,4 @@ The search box filters the sidebar and the list by name, description, question w
 
 ## In CI
 
-Run `hunch test PATH`, then `hunch docs PATH` with the same path, and keep the HTML file as a build artifact or publish it. When the test finishes, the page describes the commit it was built from; a judgment the test did not reach shows as *no results*. `manifest.json` holds the same project as data, for tools of your own: see [the manifest](/reference/cli#the-manifest).
+Run `hunch test PATH`, then `hunch docs PATH` with the same path, and keep the HTML file as a build artifact or publish it. To open the report locally, use `hunch docs PATH --open`. When the test finishes, the page describes the commit it was built from; a judgment the test did not reach shows as *no results*. `manifest.json` holds the same project as data, for tools of your own: see [the manifest](/reference/cli#the-manifest).

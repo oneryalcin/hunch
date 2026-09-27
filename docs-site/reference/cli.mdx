@@ -8,7 +8,7 @@ hunch <command> <path> [flags]
 hunch init [--list] RECIPE [DIR]
 ```
 
-`path` is a spec file or a folder of specs. Every command lints the whole project first: warnings go to stderr; an error exits 2.
+`path` is a spec file or a folder of specs. Use `hunch --help` to choose a command and `hunch run --help` (or another command) for its own flags. Commands that evaluate specs lint the project first: warnings go to stderr; an error exits 2. `show` reads a stored table even if the source file is no longer present.
 
 ## Commands
 
@@ -17,6 +17,7 @@ hunch init [--list] RECIPE [DIR]
 | `lint` | Checks the specs and prints `lint: ok (N judgments)` | No |
 | `compile` | Shows one real request and what `run` would ask and cost | No |
 | `run` | Answers every row, caches the answers, writes one table per judgment | Yes, missing answers only |
+| `show` | Lists the last materialized run and opens one row by key | No |
 | `test` | Scores the answers against gold and checks the `tests:` thresholds | Yes, missing answers only |
 | `review` | Walks you through the rows that need a human verdict | Yes, missing answers only |
 | `diff` | Compares this spec with an older or other version on today's rows | Yes, missing answers only |
@@ -103,6 +104,7 @@ Needs the `distill` extra. Asks nothing: it reads the store's answers for `--nod
 
 ```bash
 hunch docs support/
+hunch docs support/ --open   # generate, then open the local HTML
 ```
 
 Writes two files beside the results file (see below), named after the spec or folder: `<name>.html`, one self-contained page with no server or network needed, and `<name>.manifest.json`. It reads the specs, the results of the last `test` of the same path and the store's run log, and never asks the engine. See [Share what your judgments decide](/guides/share).
@@ -111,7 +113,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 
 | Field | Meaning |
 | --- | --- |
-| `version` | Format version (1). Field names are stable within a version. |
+| `version` | Manifest format version (1). Field names are stable within a version. |
 | `git_sha`, `project` | The commit, and the spec or folder name. No timestamp, so an unchanged project writes an identical file. |
 | `target` | The `--target` it ran with, else `null`. Under a target, each judgment's `model` is the engine that target uses. |
 | `judgments.<name>` | The spec as written, every key it sets (a `multi` question stays one question), plus `file` (the spec's path), `spec_hash` (the hash `test` records; the page marks a judgment stale when they differ) and `upstream` (the judgments it reads). |
@@ -121,18 +123,21 @@ Writes two files beside the results file (see below), named after the spec or fo
 | Flag | Used by | Default | What it does |
 | --- | --- | --- | --- |
 | `--version` | alone | | Prints the installed version and exits. |
-| `--node NAME` | `run`, `test`, `diff`, `review`, `compile`, `suggest` | all (`run`, `test`), required when a project has several judgments (`review`, `suggest`) | One judgment in a project. `run --node X` runs X and the judgments it reads from. |
+| `--node NAME` | `run`, `show`, `test`, `diff`, `review`, `compile`, `suggest`, `distill` | all (`run`, `test`), required when `show` or `review` has several judgments | One judgment in a project. `run --node X` runs X and the judgments it reads from. |
 | `--against REF` | `diff`, `review` | none | `diff`: the old version, a spec/folder path or `git:REF` (for example `git:HEAD~1`); with `--model` and no `--against`, the same specs on their own engine. `review`: put rows where that version answers differently first |
-| `--source CSV` | all | the spec's `source` | Run the root judgments on this CSV instead (a holdout set, for example) |
-| `--traffic` | all | off | Run the root judgments on rows logged by `judge(..., shadow=...)`. Not with `--source` |
+| `--source CSV` | evaluation commands | the spec's `source` | Run the root judgments on this CSV instead (a holdout set, for example) |
+| `--traffic` | evaluation commands | off | Run the root judgments on rows logged by `judge(..., shadow=...)`. Not with `--source` |
 | `--model ID` | all | the spec's `model` | Use this engine for every judgment. Its tables get a suffix (`intent__deepseek_deepseek_flash`), so the spec's own tables are untouched |
-| `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | The most one set of asks may be charged: a judgment's missing answers, and separately its escalations and `test`'s order check. Above the estimate, nothing is asked; while asking, a request is sent only if its worst case still fits, so the charge stays under it |
+| `--max-cost USD` | commands that can ask the engine | `$HUNCH_MAX_COST`, else no cap | The most one set of asks may be charged: a judgment's missing answers, and separately its escalations and `test`'s order check. Above the estimate, nothing is asked; while asking, a request is sent only if its worst case still fits, so the charge stays under it |
 | `--receipt` | `test` | off | Also write the numbers beside what was tested: `<spec>.results.json`, or `results.json` in a folder (with the engine's suffix under `--model`). Only what the answers decide, no time or cost, so a re-run on cached answers changes nothing: commit it with a battery |
 | `--sample N` | `compile`, `run`, `test`, `diff` | all rows | Judge only N rows of each root source, the same N every time |
+| `--verbose` | `run`, `test`, `diff` | off | Show detailed diagnostics; `test` includes calibration bins and the full threshold dial |
 | `--target NAME` | all | the spec as written | Run as the specs' [`targets`](/reference/spec#targets) entry of that name says: its engine, sample, store and cost cap. A flag given here wins over the target. `diff` and `review --against` run the old side on it too, if the old specs define it; otherwise the old side runs as written |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
 | `--list` | `review` | off | Print the queue instead of prompting |
-| `--limit N` | `review` | no limit | At most N rows this session |
+| `--limit N` | `review`, `show` | no limit for review; 20 for show | Limit the review session or row list |
+| `--id KEY` | `show` | row list | Print every stored field for one row whose source key equals KEY |
+| `--open` | `docs` | off | Open the generated HTML report in a browser |
 | `--audit N` | `review` | 30 | Random rows to spot check per question, counting ones already reviewed |
 | `--reviewer NAME` | `review` | your login name | Name saved with each verdict |
 | `--question QID` | `suggest` | required if the spec has several questions | The question to rewrite |
@@ -145,7 +150,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 
 | Code | Meaning |
 | --- | --- |
-| 0 | Done. For `test`: every check passed |
+| 0 | Done. For `test`: no blocking configured check failed; the result may be measured or not assessed rather than passing |
 | 1 | `test`: at least one `FAIL` line. Any command: stopped with a message (above `--max-cost`, `on_change: freeze` refused, unknown judgment) |
 | 2 | Lint error in a spec, or bad arguments |
 
@@ -181,62 +186,48 @@ Writes two files beside the results file (see below), named after the spec or fo
 
 ### `run`
 
+`run` judges missing answers, caches them, and writes one table per judgment. Its summary starts with rows and answers, then names the table and store:
+
 ```text
-intent: 385 rows in; answers: 385 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
-  intent: 74 rows below act=0.9 → review queue
-materialized 1 table(s) in .hunch/store.sqlite (run 2026-09-25T10:45:03-8b2bab)
+Run complete · lobbying.yml
+  lobbying_review: 8 rows in → 8 written
+    answers: 0 cached, 8 asked · $0.00015
+  lobbying: yes 6, no 2
+  Tables: lobbying_review · Store: .hunch/store.sqlite
+  Run ID: 2026-09-27T19:50:41-f349b6
+  Inspect: hunch show lobbying.yml
+  Measure: hunch test lobbying.yml --max-cost 0
 ```
 
-- First line: answers cached and asked, requests, input tokens, actual cost.
-- `rows below act`: confidence under `act`; `review` shows them as "model unsure".
-- The run id is stored on every table row ([Store](/reference/store)).
-- stderr shows progress while asking: `asking 529 answers in 529 requests (~$0.0168)` and the request rate.
+`--sample N` caches answers but does not replace a table. The summary says so and does not suggest `show` as if the sampled rows had been written. A repeated full run can use cached answers. For request timing and tokens, add `--verbose`.
+
+### `show`
+
+```bash
+hunch show lobbying.yml                # last materialized run, a short row list
+hunch show lobbying.yml --id e06       # every stored field for one row
+hunch show project/ --node lobbying_review --limit 50
+```
+
+`show` reads the last materialized table without asking the engine or reading the source file. It names the run ID and warns when the current spec differs from the spec that wrote the table. `test` and sampled `run` do not replace that table. The row list shows the source key, answer, confidence and route; `--id` shows the stored input fields as well. The HTML report below is intended for sharing and excludes input row text.
 
 ### `test`
 
-Read the first `PASS` or `FAIL` line for the check's result. `estimated accuracy` uses reviewed rows; the interval shows sampling uncertainty. The later `dial` lines show the tradeoff at each `act` threshold. Here is real output from the BANKING77 holdout (`hunch test intent.yml --source banking77_holdout.csv`), trimmed; the table below explains each line:
+`test` measures answers against gold and evaluates acceptance checks you wrote under `tests:`. With no configured bar, it says **measured** rather than **passed**:
 
 ```text
-intent (choice, 385 rows)
-  gold: 385 rows (243 from source, 142 from review, 25 with two acceptable labels)
-  PASS estimated accuracy 95.8% (95% CI 88.7%–97.9%) from reviews of 60/340 agreeing rows, 45/45 disagreeing rows (min 85%)
-       not the headline: on current gold 97.9% (trusts unreviewed rows), on the raw answer key 88.3%
-  PASS calibration error 0.043 (raw source gold: 0.053) (max 0.05)
-         stated p          n   avg stated   observed
-       0.4–0.5           4        0.450      0.750
-       ...
-       0.9–1.0         311        0.990      1.000
-       dial   automated   wrong among automated
-       0.50       99.0%                    1.8%
-       ...
-       0.90       80.8%                    0.0%  ← act
-  PASS accuracy among auto-acted 100.0% on 81% of rows at act=0.9 (min 97%)
-       most confident mistakes (8 total; high confidence + wrong = dangerous, or a gold error → hunch review):
-         # 560 gold=card_acceptance                  got contactless_not_working 0.89           Are contactless payments enabled on my new card?
-       most confused (gold → got):
-           1  card_acceptance → contactless_not_working
-  PASS order stability: 11/300 answers flip (3.7%, 8 within noise band), mean |Δp| of original answer 0.032 (max flip rate 5%)
-
-answers: 685 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
+Test complete · lobbying.yml
+  Measured; no acceptance checks configured
+    lobbying: 6/8 agree with gold (75.0%)
+      AUROC 1.000 · calibration error 0.198
+      2 disagreements with gold; first: e06, e05
+  Answers: 8 cached, 0 asked · $0.00000
+  Results: .hunch/target/lobbying.json
+  More: hunch test lobbying.yml --max-cost 0 --verbose
+  Browser report: hunch docs lobbying.yml --open
 ```
 
-| Line | Meaning |
-|---|---|
-| `gold:` | Rows with a right answer, by origin: source column, reviews, two acceptable labels. Ambiguous and needs-context rows are excluded. |
-| `context:` | After "needs more context" verdicts: the share of random spot checks that needed more than the state shows. |
-| `estimated accuracy` | The headline, from reviewed rows, with a 95% interval. With an answer key: all disagreements plus a random sample of agreements, weighted to all rows. Without: random spot checks only. `(min …)` is the threshold. See [How the numbers work](/reference/how-the-numbers-work). |
-| `accuracy` | Shown instead when there is no estimate yet: plain accuracy on current gold. `upper bound only, no estimate` means spot checks are missing. |
-| `not the headline` | Accuracy on current gold (trusts unreviewed rows) and on the raw answer key. |
-| `calibration error` | Row-weighted gap between `stated p` and `observed`, with the per-band table. Observed above stated: too modest; below: overconfident. |
-| `AUROC` | Yes/no: how well p(yes) separates yes from no. 0.5 is chance, 1.0 perfect. |
-| `dial` | Per threshold: share of rows automated and share of those wrong. `← act` marks `act`; yes/no questions get one column pair per side. Computed on rows with gold. |
-| `accuracy among auto-acted` | Accuracy on rows at or above `act`. |
-| `most confident mistakes` | Wrong answers, most confident first: a model error or a gold error. |
-| `most confused` | Most common (gold → got) pairs. |
-| `order stability` | With the `order_stability` test: flips when options are shuffled; noise-band flips (margin under 0.10) are expected. |
-| `declined (none_of_these)`, `escalated to …` | Questions with `none` or `escalate`. |
-| `weighted to the population` | The source has `weights`; every number is weighted. |
-| last line | Answers cached and asked, and cost. |
+A configured check appears as `PASS`, `WARN`, or `FAIL` with its measured value and limit. If it needs gold that is absent, it appears as `NOT ASSESSED`; the result cannot be called passing. `test` exits 1 for a failed check with normal severity. `--verbose` adds calibration bins, the full threshold dial, baseline comparison, and diagnostic examples. Accuracy estimated from reviewed rows keeps its 95% interval and basis in both modes. See [How the numbers work](/reference/how-the-numbers-work).
 
 #### The results file
 
@@ -244,9 +235,10 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 
 | Field | Meaning |
 | --- | --- |
-| `version` | Format version (1). Field names are stable within a version. |
+| `version` | Results format version (2 for new tests; version 1 receipts remain readable). |
 | `command`, `at`, `git_sha` | `test`, when it ran (UTC), the commit it ran on. |
-| `passed` | Every check passed, or failed only with `severity: warn` (the exit code was 0). |
+| `passed` | No blocking configured check failed (the exit code was 0). This can be true when nothing was assessed. Read `assessment` for the meaning. |
+| `assessment` | `failed`, `warning`, `unassessed`, `passed`, `measured`, or `no_gold`; separates a completed measurement from acceptance. |
 | `sample` | N if `test` ran with `--sample N` or a target's `sample`, else `null`. |
 | `target` | The `--target` it ran with, else `null`. |
 | `cost` | Spent by this run, in USD. |
@@ -257,7 +249,8 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 | `questions.<q>.act` | With `act` in the spec: `threshold`, `automated` (share of all rows acted on), `judged` (acted-on rows with gold), `wrong` (share of those that are wrong; `null` if none has gold). |
 | `questions.<q>.dial` | Per threshold: `automated` and `wrong` (shares); yes/no questions have them under `yes` and `no`. |
 | `questions.<q>.mistakes` | `total`, and `most_confident`: `id`, `got`, `p`, `gold`. |
-| `questions.<q>.checks` | Each check: `check` (the test key, like `min_accuracy`), `passed`, `value`, `limit`, `severity`. |
+| `questions.<q>.checks` | Only configured acceptance checks. Each has `check` (the test key), `passed`, `value`, `limit`, `severity`. Measurements remain in their named fields even without a check. |
+| `questions.<q>.unavailable_checks` | Configured checks that could not run, usually because suitable gold or reviews are absent. |
 | `questions.<q>.spot_checks`, `needs_context` | Random spot checks, and how many of them needed more context. |
 | `questions.<q>.recall` | Yes/no questions with gold-yes rows: `yes_rows`; with `act` for no, `at_act`; with `min_recall`, `lowest_act` (each `threshold`, `value`, `ci`, `read`). See [tests](/reference/spec#tests). |
 | `questions.<q>.baseline` | With `baseline`: `rule`, `rows`, `said_yes`, the rule's `accuracy`, `auroc`, `recall`, `precision`, the same under `model`, and `model_ahead` (the model's accuracy is above the rule's). See [baseline](/reference/spec#baseline). |
@@ -267,36 +260,20 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 
 ### `diff`
 
-Real output, BANKING77 (`hunch diff intent.yml --against intent_bare.yml`), trimmed:
+`diff` compares two versions on the same rows. It leads with changed answers; `--verbose` adds probability movement, the full gold comparison, and more row examples.
 
 ```text
-answers: 1540 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
-
-══ intent  vs  intent_bare
-
-intent: 77/770 rows flip (15 within noise band)
-  probabilities moved: mean |Δ| 0.102, mean Δ p(old answer) -0.021
-  gold accuracy on the 770 shared rows with gold 79.0% → 85.5%  (✓ 58 fixed, ✗ 8 broken, 11 wrong both times, 0 without gold)
-  paired sign test p=0.000 → significant
-  ✓ #  76                activate_my_card 0.92 → card_linking 0.84                           Could you help me reactivate my card? I…
-  ✗ # 255           fiat_currency_support 0.66 → exchange_via_app 0.91                       How do I change currencies to euros?
-    # 268                   exchange_rate 0.68 → exchange_via_app 0.94                       I want to make a currency exchange to E…
-  … 65 more
+Diff · intent.yml against intent_bare.yml
+  intent: 77/770 shared rows changed answer; 15 near the decision boundary
+    76: activate_my_card → card_linking
+    255: fiat_currency_support → exchange_via_app
+    268: exchange_rate → exchange_via_app
+    72 more changed rows
+    Gold on changed rows: 58 fixed, 8 broken; paired p=0.000 (significant).
+  Answers: 1540 cached, 0 asked · $0.00000
 ```
 
-| Line | Meaning |
-|---|---|
-| `rows flip` | Rows whose answer changed; `within noise band` counts flips where either side's margin is under 0.10. |
-| `N rows newly reach it, M no longer do` | An upstream `where` changed which rows this judgment sees. |
-| `probabilities moved` | `mean \|Δ\|`: size of the move. `mean Δ p(old answer)`: direction (for yes/no, the change in p(yes)). |
-| `gold accuracy … →` | Old and new accuracy on shared rows with gold: fixed, broken, wrong both times, without gold. |
-| `paired sign test` | Whether fixed vs broken beats chance. |
-| flip rows | ✓ fixed, ✗ broken, blank: no gold or wrong both times. `~noise` flips are listed last. |
-| `unchanged (same keys, 0 calls)`, `new question`, `renamed from 'x'`, `moved by upstream changes` | Other outcomes; renames are matched by answer keys. |
-| `affects …: N rows` | Per [exposure](/reference/spec#exposures), the rows whose change it can see: an answer changed, appeared or disappeared on a question it reads, and, if its `uses` names the [answers it relies on](/reference/spec#answers-an-exposure-relies-on), one of those was the old or the new answer. |
-| `not affected: …` | Exposures that read a question in the diff but see no change. |
-
-Both sides use today's reviews.
+The count includes rows whose top answer changed, while newly entered or removed rows are named separately. “Near the decision boundary” means one side's answer margin was under 0.10; read those changes cautiously. The gold line uses today's reviews on both sides. If the spec names [exposures](/reference/spec#exposures), the summary also counts which consumers can see the changed answers. A changed prompt does not automatically mean better answers: compare fixed and broken rows, then review those without gold.
 
 ### `review`
 

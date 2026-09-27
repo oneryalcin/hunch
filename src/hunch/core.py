@@ -71,12 +71,19 @@ SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN
 SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
 TARGET: str | None = None  # --target NAME: recorded with test results; None runs every spec as written
 STORE: Path | None = None  # the store a target names; beats $HUNCH_STORE
+VERBOSE = False  # CLI diagnostic detail; measurements and checks never depend on this
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = int(os.environ.get("HUNCH_CONCURRENCY", 16))  # requests in flight per fill
 RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx, transport): the scale test reads it
 NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside this margin are flagged
 DIAL = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
 SHOW = 12  # rows listed per section; summaries always cover everything
+
+
+def detail(*args, **kwargs) -> None:
+    """The full diagnostic report, requested with --verbose."""
+    if VERBOSE:
+        print(*args, **kwargs)
 # --max-cost (USD per fill): refuse to start if the estimate is above it, and never send a request that could take
 # the charged cost above it (see worst_cost)
 MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None
@@ -996,9 +1003,8 @@ def open_store(spec: dict) -> sqlite3.Connection:
     path = store_path(spec["_dir"])
     if (path, threading.get_ident()) in _conns:  # one connection per thread: WAL lets them share the file
         return _conns[(path, threading.get_ident())]
-    if not path.exists():  # silently starting empty is how a spec outside the workspace re-pays for cached answers
-        print(f"new answer store: {path} (no store in this folder or above; HUNCH_STORE=... to share one)",
-              file=sys.stderr)
+    if not path.exists() and VERBOSE:  # the command summary shows the chosen store; verbose explains why it is new
+        print(f"new answer store: {path} (HUNCH_STORE=... to share one)", file=sys.stderr)
     path.parent.mkdir(exist_ok=True)
     db = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
     for _ in range(100):  # switching to WAL needs a moment alone with the file; it persists once set
@@ -1328,8 +1334,9 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             results = await asyncio.gather(*[one(g) for g in group], return_exceptions=True)
             dt = time.perf_counter() - t0
             retried = {k: v - r0.get(k, 0) for k, v in RETRIES.items() if v - r0.get(k, 0)}
-            print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {n})"
-                  + (f"; retried {retried}" if retried else ""), file=sys.stderr)
+            if VERBOSE or retried:
+                print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {n})"
+                      + (f"; retried {retried}" if retried else ""), file=sys.stderr)
         failed = [r for r in results if isinstance(r, BaseException)]
         broke = next((r for r in failed if isinstance(r, engines.ContractError)), None)
         if broke:  # a plugin's bug: retrying won't fix it
@@ -1957,6 +1964,8 @@ def with_upstream(project: dict, name: str) -> dict:
 
 
 def cmd_run(project: dict, args) -> None:
+    from hunch import presentation
+
     if getattr(args, "node", None):
         project = with_upstream(project, pick(project, args.node))
     changed = frozen_changes(project)
@@ -1979,10 +1988,8 @@ def cmd_run(project: dict, args) -> None:
         failed(project["order"], e)
         raise
     if SAMPLE is not None:  # a sample must never replace a table that downstream readers take for the whole
-        for n in project["order"]:
-            print(f"{n}: --sample {SAMPLE}: {len(results[n]['rows'])} rows judged")
-        print_stats(merge_stats(*(r["stats"] for r in results.values())))
-        print("answers are cached; tables not replaced (run without a sample to write them)")
+        presentation.run(project, args, results, presentation.relative(store_path(project["nodes"][project["order"][0]]["_dir"])), None,
+                         sample=SAMPLE)
         return
     for i_node, n in enumerate(project["order"]):
         res, spec = results[n], project["nodes"][n]
@@ -2004,19 +2011,19 @@ def cmd_run(project: dict, args) -> None:
                         "cost": round(res["stats"]["cost"], 6), "status": "complete", "started_at": started,
                         "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
         if "union" in spec:
-            print(f"{n}: union of {len(spec['union'])} judgments → table \"{n}{spec.get('_table_suffix', '')}\" ({len(res['rows'])} rows)")
+            detail(f"{n}: union of {len(spec['union'])} judgments → table \"{n}{spec.get('_table_suffix', '')}\" ({len(res['rows'])} rows)")
             continue
         where = f", where kept {len(res['rows'])}" if "where" in spec else ""
-        print_stats(res["stats"], f"{n}: {res['input']} rows in{where}; answers")
+        if VERBOSE:
+            print_stats(res["stats"], f"{n}: {res['input']} rows in{where}; answers")
         for qid, q in spec["questions"].items():
             if "act" in q:
                 k = sum(1 for r in res["rows"] if r.get(f"{qid}_route") == "review")
-                print(f"  {qid}: {k} rows below act={q['act']} → review queue")
-    if len(project["nodes"]) > 1:
+                detail(f"  {qid}: {k} rows below act={q['act']} → review queue")
+    if len(project["nodes"]) > 1 and VERBOSE:
         print_stats(merge_stats(*(r["stats"] for r in results.values())), "total")
     where = store_path(project["nodes"][project["order"][0]]["_dir"])
-    where = where.relative_to(Path.cwd()) if where.is_relative_to(Path.cwd()) else where
-    print(f"materialized {len(project['nodes'])} table(s) in {where} (run {run_id})")
+    presentation.run(project, args, results, presentation.relative(where), run_id, sample=None)
 
 
 def table_name(spec: dict) -> str:
@@ -2114,7 +2121,35 @@ class Checks:
         warn = not ok and self.severity == "warn"
         self.failed |= not ok and not warn
         self.log.append({"check": check, "passed": ok, "value": _r(value), "limit": limit, "severity": self.severity})
-        print(f"  {'PASS' if ok else 'WARN' if warn else 'FAIL'} {text}")
+        detail(f"  {'PASS' if ok else 'WARN' if warn else 'FAIL'} {text}")
+
+
+def assessment(report: dict) -> str:
+    """What a completed test established, separately from its process exit status."""
+    parts = [*report.get("questions", {}).values(), *report.get("multi", {}).values(),
+             *report.get("metrics", {}).values()]
+    checks = [c for part in parts for c in part.get("checks", [])]
+    checks += [{"passed": e["passed"], "severity": e.get("severity", "error")}
+               for e in report.get("examples", [])]
+    failed = [c for c in checks if not c["passed"]]
+    if any(c.get("severity", "error") == "error" for c in failed):
+        return "failed"
+    if failed:
+        return "warning"
+    if any(part.get("unavailable_checks") for part in parts):
+        return "unassessed"
+    if checks:
+        return "passed"
+    measured = any(q.get("accuracy") for q in report.get("questions", {}).values())
+    measured |= any(q.get("exact_set_accuracy") is not None for q in report.get("multi", {}).values())
+    measured |= any(m.get("rate") is not None for m in report.get("metrics", {}).values())
+    return "measured" if measured else "no_gold"
+
+
+def overall_assessment(report: dict) -> str:
+    states = {r["assessment"] for r in report.values()}
+    return next((s for s in ("failed", "warning", "unassessed", "passed", "measured", "no_gold") if s in states),
+                "no_gold")
 
 
 def _r(x: float | None) -> float | None:
@@ -2133,17 +2168,17 @@ def print_dial(q: dict, rows_: list[tuple]) -> list[dict]:
 
     dial = []
     if q["type"] == "noul":
-        print("       dial   act on yes: automated  wrong   │  act on no: automated  wrong")
+        detail("       dial   act on yes: automated  wrong   │  act on no: automated  wrong")
         for t in DIAL:
             (ya, yw), (na, nw) = side("yes", t), side("no", t)
             mark = "".join(f"  ← act {s}" for s in ("yes", "no") if act_needed(q, s) == t)
-            print(f"       {t:>4.2f}   {ya:>20.1%}  {yw:>5.1%}   │  {na:>19.1%}  {nw:>5.1%}{mark}")
+            detail(f"       {t:>4.2f}   {ya:>20.1%}  {yw:>5.1%}   │  {na:>19.1%}  {nw:>5.1%}{mark}")
             dial.append({"threshold": t, "yes": {"automated": _r(ya), "wrong": _r(yw)}, "no": {"automated": _r(na), "wrong": _r(nw)}})
     else:
-        print("       dial   automated   wrong among automated")
+        detail("       dial   automated   wrong among automated")
         for t in DIAL:
             auto, wrong = side(None, t)
-            print(f"       {t:>4.2f}   {auto:>9.1%}   {wrong:>21.1%}{'  ← act' if act_needed(q, '') == t else ''}")
+            detail(f"       {t:>4.2f}   {auto:>9.1%}   {wrong:>21.1%}{'  ← act' if act_needed(q, '') == t else ''}")
             dial.append({"threshold": t, "automated": _r(auto), "wrong": _r(wrong)})
     return dial
 
@@ -2155,7 +2190,7 @@ def it_spec_chain(its: list[dict]) -> bool:
 def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
     """Prints the question's report and returns it as data (results.json)."""
     conf = (spec.get("tests") or {}).get(qid, {})
-    print(f"\n{qid} ({q['type']}, {len(its)} rows)")
+    detail(f"\n{qid} ({q['type']}, {len(its)} rows)")
     src = Counter(it["gold_src"] for it in its)
     gold_its = [it for it in its if it["gold"]]
     out: dict = {"type": q["type"], "rows": len(its), "gold": {"rows": len(gold_its), "source": src["source"],
@@ -2168,16 +2203,19 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
         out["act"] = {"threshold": q["act"], "automated": _r(len(acted) / len(its)), "judged": len(judged),
                       "wrong": _r(sum(not hit(it, answers[it["key"]]) for it in judged) / len(judged)) if judged else None}
     if not gold_its:
-        return out | {"checks": []}
+        configured = {k for k in conf if k in TEST_KEYS and k != "severity"}
+        if "order_stability" in configured and "max_flip_rate" not in conf["order_stability"]:
+            configured.remove("order_stability")
+        return out | {"checks": [], "unavailable_checks": sorted(configured)}
     both = sum(len(it["gold"]) > 1 for it in gold_its)
-    print(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
+    detail(f"  gold: {len(gold_its)} rows ({src['source']} from source, {src['review']} from review"
           f"{f', {both} with two acceptable labels' if both else ''}"
           f"{f', {src['excluded']} excluded as ambiguous or needing more context' if src['excluded'] else ''})")
     spot = [it for it in its if it["review_kind"] == "audit"]
     out["spot_checks"] = len(spot)
     if gap := sum(it["verdict"] == "needs_context" for it in spot):
         out["needs_context"] = gap
-        print(f"  context: {gap} of {len(spot)} random spot checks ({gap / len(spot):.0%}) needed more than the state "
+        detail(f"  context: {gap} of {len(spot)} random spot checks ({gap / len(spot):.0%}) needed more than the state "
               f"shows to decide; give the state more (earlier or later turns, what happened next)")
     reviewed = src["review"] + src["excluded"] > 0 and any(it["raw_gold"] for it in its)  # raw vs reviewed needs a key
 
@@ -2187,12 +2225,12 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
         tw = sum(weights.values())
         yes = sum(weights[it["id"]] for it in gold_its if "yes" in it["gold"]) / tw if q["type"] == "noul" else None
         note = " [weighted to the population]"
-        print("  weighted to the population (source sampling weights)"
+        detail("  weighted to the population (source sampling weights)"
               + (f": {yes:.0%} yes among these rows, {sum('yes' in it['gold'] for it in gold_its) / len(gold_its):.0%} in the sample" if yes is not None else ""))
+    out["weighted"] = bool(weights)
     w = (lambda it: weights[it["id"]]) if weights else (lambda it: 1.0)
 
     acc = sum(w(it) * hit(it, answers[it["key"]]) for it in gold_its) / sum(w(it) for it in gold_its)
-    want = conf.get("min_accuracy", 0)
     est = estimate_accuracy(its, answers, {it["id"]: it["row"]["_w"] for it in its} if weights else None)
     if not isinstance(est, str):
         # Headline = the estimate. Accuracy on "current gold" trusts every unreviewed row, so once
@@ -2200,27 +2238,38 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
         e, lo, hi, d = est
         out["accuracy"] = {"value": _r(e), "ci": [_r(lo), _r(hi)], "basis": "estimate",
                            "reviewed": {g: {"reviewed": n, "of": m} for g, (n, m) in d.items()}}
-        check(e >= want, f"estimated accuracy {e:.1%} (95% CI {lo:.1%}–{hi:.1%}) from reviews of "
-              + ", ".join(f"{n}/{m} {g if g == 'random' else g + 'ing'} rows" for g, (n, m) in d.items())
-              + f" (min {want:.0%})", "min_accuracy", e, want)
+        msg = f"estimated accuracy {e:.1%} (95% CI {lo:.1%}–{hi:.1%}) from reviews of " + ", ".join(
+            f"{n}/{m} {g if g == 'random' else g + 'ing'} rows" for g, (n, m) in d.items())
+        if "min_accuracy" in conf:
+            want = conf["min_accuracy"]
+            check(e >= want, f"{msg} (min {want:.0%})", "min_accuracy", e, want)
+        else:
+            detail(f"  {msg}")
         if "random" not in d:
-            print(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
+            detail(f"       not the headline: on current gold {acc:.1%} (trusts unreviewed rows), "
                   f"on the raw answer key {accuracy(its, answers, qid, 'raw_gold'):.1%}")
     else:
         raw = f" (raw source gold: {accuracy(its, answers, qid, 'raw_gold'):.1%})" if reviewed else ""
         out["accuracy"] = {"value": _r(acc), "ci": None, "basis": "gold"}
-        check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})", "min_accuracy", acc, want)
+        if "min_accuracy" in conf:
+            want = conf["min_accuracy"]
+            check(acc >= want, f"accuracy {acc:.1%}{raw}{note} (min {want:.0%})", "min_accuracy", acc, want)
+        else:
+            detail(f"  accuracy {acc:.1%}{raw}{note}")
         if reviewed:
-            print(f"       upper bound only, no estimate: {est}")
+            detail(f"       upper bound only, no estimate: {est}")
 
     ece, table = calibration(calib_pairs(its, answers, weights=weights))
     raw = f" (raw source gold: {calibration(calib_pairs(its, answers, 'raw_gold', weights))[0]:.3f})" if reviewed else ""
     out["calibration_error"] = _r(ece)
-    check(ece <= conf.get("max_calibration_error", 1), f"calibration error {ece:.3f}{raw}{note} (max {conf.get('max_calibration_error', 1)})",
-          "max_calibration_error", ece, conf.get("max_calibration_error", 1))
-    print(f"         {'stated p(yes)' if q['type'] == 'noul' else 'stated p':<13} {'n':>5}   avg stated   observed")
+    if "max_calibration_error" in conf:
+        want = conf["max_calibration_error"]
+        check(ece <= want, f"calibration error {ece:.3f}{raw}{note} (max {want})", "max_calibration_error", ece, want)
+    else:
+        detail(f"  calibration error {ece:.3f}{raw}{note}")
+    detail(f"         {'stated p(yes)' if q['type'] == 'noul' else 'stated p':<13} {'n':>5}   avg stated   observed")
     for lo_, hi_, n, c, a in table:
-        print(f"       {lo_:.1f}–{hi_:.1f}      {n:>6}   {c:>10.3f}   {a:>8.3f}")
+        detail(f"       {lo_:.1f}–{hi_:.1f}      {n:>6}   {c:>10.3f}   {a:>8.3f}")
 
     if q["type"] == "noul":
         pos = [answers[it["key"]]["noul"] for it in gold_its if "yes" in it["gold"]]
@@ -2228,20 +2277,24 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
         if pos and neg:
             auc = auroc(pos, neg)
             out["auroc"] = _r(auc)
-            check(auc >= conf.get("min_auroc", 0),
-                  f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {conf.get('min_auroc', 0)})",
-                  "min_auroc", auc, conf.get("min_auroc", 0))
+            if "min_auroc" in conf:
+                want = conf["min_auroc"]
+                check(auc >= want,
+                      f"AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no; 0.5 = coin toss; unaffected by base rate) (min {want})",
+                      "min_auroc", auc, want)
+            else:
+                detail(f"  AUROC {auc:.3f} ({len(pos)} yes / {len(neg)} no)")
 
     offered = [it for it in gold_its if it["aq"].get("type") == "choice" and isinstance(it["aq"].get("criteria"), dict)]
     lost = [it for it in offered if not it["gold"] & set(it["aq"]["criteria"])]
     if lost:
-        print(f"       {len(lost)} of {len(offered)} rows' gold is not among the options this judgment offered "
+        detail(f"       {len(lost)} of {len(offered)} rows' gold is not among the options this judgment offered "
               f"(sent to the wrong place upstream; no answer here could be right)")
     if it_spec_chain(its):
         own = [(decide(answers[it["key"]])[1], hit(it, answers[it["key"]])) for it in gold_its]
         chn = [(conf_of(it, answers[it["key"]]), h) for it, (_, h) in zip(gold_its, own)]
         sep = lambda xs: auroc([c for c, h in xs if h], [c for c, h in xs if not h]) if 0 < sum(h for _, h in xs) < len(xs) else float("nan")
-        print(f"       confidence is chained (× P(routed here correctly)); it separates right from wrong answers "
+        detail(f"       confidence is chained (× P(routed here correctly)); it separates right from wrong answers "
               f"with AUROC {sep(chn):.3f}, own confidence alone {sep(own):.3f}")
     scored = [(answers[it["key"]], hit(it, answers[it["key"]]), w(it), it.get("path_p", 1.0)) for it in gold_its]
     out["dial"] = print_dial(q, scored)
@@ -2261,16 +2314,16 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
         out["baseline"] = test_baseline(q, gold_its, answers, w, out.get("auroc"))
 
     wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -conf_of(it, answers[it["key"]]))
-    print(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
+    detail(f"       most confident mistakes ({len(wrong)} total; high confidence + wrong = dangerous, or a gold error → hunch review):")
     out["mistakes"] = {"total": len(wrong), "most_confident": [
         {"id": it["id"], "got": decide(answers[it["key"]])[0], "p": _r(conf_of(it, answers[it["key"]])), "gold": sorted(it["gold"])}
         for it in wrong[:SHOW]]}
     for it in wrong[:SHOW]:
         got = f"{decide(answers[it['key']])[0]} {conf_of(it, answers[it['key']]):.2f}"
-        print(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {got:<38} {label_of(it, 50)}")
-    print("       most confused (gold → got):")
+        detail(f"         #{it['id']:>4} gold={gold_str(it['gold']):<32} got {got:<38} {label_of(it, 50)}")
+    detail("       most confused (gold → got):")
     for (g, got), n in Counter((gold_str(it["gold"]), decide(answers[it["key"]])[0]) for it in wrong).most_common(8):
-        print(f"         {n:>3}  {g} → {got}")
+        detail(f"         {n:>3}  {g} → {got}")
 
     order = conf.get("order_stability")
     if order and q["type"] == "choice":
@@ -2291,13 +2344,20 @@ def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict,
                 flips.append((b, v))
                 noisy += min(bm, vm) < NOISE
         rate = len(flips) / len(variants)
-        check(rate <= order.get("max_flip_rate", 1),
-              f"order stability: {len(flips)}/{len(variants)} answers flip ({rate:.1%}, {noisy} within noise band), "
-              f"mean |Δp| of original answer {sum(dp) / len(dp):.3f} (max flip rate {order.get('max_flip_rate', 1):.0%})",
-              "order_stability", rate, order.get("max_flip_rate", 1))
+        msg = (f"order stability: {len(flips)}/{len(variants)} answers flip ({rate:.1%}, {noisy} within noise band), "
+               f"mean |Δp| of original answer {sum(dp) / len(dp):.3f}")
+        if "max_flip_rate" in order:
+            check(rate <= order["max_flip_rate"], f"{msg} (max flip rate {order['max_flip_rate']:.0%})",
+                  "order_stability", rate, order["max_flip_rate"])
+        else:
+            detail(f"  {msg}")
         for b, v in flips[:SHOW]:
-            print(f"         #{b['id']:>4} {v['rid']:<14} {show(answers.get(item(b['spec'], b['row'], qid)['key']) or answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
+            detail(f"         #{b['id']:>4} {v['rid']:<14} {show(answers.get(item(b['spec'], b['row'], qid)['key']) or answers[b['key']]):<36} → {show(vans[v['key']]):<36} {label_of(b, 40)}")
     out["checks"] = check.log[first_check:]
+    configured = {k for k in conf if k in TEST_KEYS and k != "severity"}
+    if "order_stability" in configured and "max_flip_rate" not in conf["order_stability"]:
+        configured.remove("order_stability")
+    out["unavailable_checks"] = sorted(configured - {c["check"] for c in out["checks"]})
     return out
 
 
@@ -2331,17 +2391,17 @@ def test_recall(q: dict, conf: dict, its: list[dict], gold_its: list[dict], answ
         if want is not None:
             check(lo >= want, msg + f" (min {want:.0%} on the interval's lower bound)", "min_recall", lo, want)
         else:
-            print(f"  {msg}")
+            detail(f"  {msg}")
     if want is not None:  # the lowest bar (most rows set aside) whose worst plausible recall still meets it
         ok = next((o for b in sorted({round(v, 3) for v in no_p.values() if v >= 0.5} | {1.001})
                    if (o := (b, *at(b)))[2] >= want), None)
         if ok and ok[0] <= 1:
             b, r, lo, hi, read = ok
             out["lowest_act"] = {"threshold": b, "value": _r(r), "ci": [_r(lo), _r(hi)], "read": _r(read)}
-            print(f"       lowest act for no that keeps recall ≥ {want:.0%} (lower bound): {b} → recall {r:.1%} "
+            detail(f"       lowest act for no that keeps recall ≥ {want:.0%} (lower bound): {b} → recall {r:.1%} "
                   f"({lo:.1%}–{hi:.1%}), a person reads {read:.0%} of rows")
         else:
-            print(f"       no bar keeps recall ≥ {want:.0%} on the lower bound: {len(yes)} gold-yes rows"
+            detail(f"       no bar keeps recall ≥ {want:.0%} on the lower bound: {len(yes)} gold-yes rows"
                   f"{f' (effective {n_eff:.0f} after weights)' if abs(n_eff - len(yes)) > 0.5 else ''} can't show it; "
                   "review more yes rows, or read everything")
     return out
@@ -2371,11 +2431,11 @@ def test_baseline(q: dict, gold_its: list[dict], answers: dict, w, model_auc: fl
     bl = q["baseline"]
     shown = bl if isinstance(bl, str) else f"/{bl['match']}/ in " + ", ".join([bl["columns"]] if isinstance(bl["columns"], str) else bl["columns"])
     fmt = lambda k, v: "–" if v is None else f"{v:.3f}" if k == "auroc" else f"{v:.1%}"
-    print(f"  baseline: {shown}\n       says yes on {sum(said)} of {len(said)} gold rows")
+    detail(f"  baseline: {shown}\n       says yes on {sum(said)} of {len(said)} gold rows")
     for k in ("accuracy", "auroc", "recall", "precision"):
-        print(f"       {k + (' of yes' if k == 'recall' else ''):<14} rule {fmt(k, b[k]):>7}   model {fmt(k, m[k]):>7}")
+        detail(f"       {k + (' of yes' if k == 'recall' else ''):<14} rule {fmt(k, b[k]):>7}   model {fmt(k, m[k]):>7}")
     if not ahead:
-        print(f"       the rule is as accurate as the model or more ({fmt('accuracy', b['accuracy'])} vs "
+        detail(f"       the rule is as accurate as the model or more ({fmt('accuracy', b['accuracy'])} vs "
               f"{fmt('accuracy', m['accuracy'])}): the question has to beat it to earn its cost")
     return {"rule": q["baseline"], "rows": len(said), "said_yes": sum(said), **b, "model": m, "model_ahead": ahead}
 
@@ -2400,20 +2460,20 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
         rows.append((r, fired, {it["qid"]: it for it in res["items"][i * nq:(i + 1) * nq]}))
     k = sum(f for _, f, _ in rows)
     weighted = any(r.get("_w", 1.0) != 1.0 for r, _, _ in rows)  # then every line is, as the groups are
-    print(f"\n{name} (metric: {rule})")
+    detail(f"\n{name} (metric: {rule})")
     if weighted:
-        print("  weighted to the population (source sampling weights)")
+        detail("  weighted to the population (source sampling weights)")
     out: dict = {"rule": rule, "rows": len(rows), "fired": k, "rate": None}
     p = 0.0
     if not rows:
-        print("  on answers: no rows")
+        detail("  on answers: no rows")
     elif weighted:  # the rows sample the population: the rate is an estimate, with an interval
         p, lo, hi, n_eff = wrate([(f, r.get("_w", 1.0)) for r, f, _ in rows])
-        print(f"  on answers: {k} of {len(rows)} rows ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}, effective n {n_eff:.0f})")
+        detail(f"  on answers: {k} of {len(rows)} rows ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}, effective n {n_eff:.0f})")
         out |= {"rate": _r(p), "ci": [_r(lo), _r(hi)], "effective_rows": _r(n_eff)}
     else:
         p = k / len(rows)
-        print(f"  on answers: {k} of {len(rows)} rows ({p:.1%})")
+        detail(f"  on answers: {k} of {len(rows)} rows ({p:.1%})")
         out["rate"] = _r(p)
     first_check = len(check.log)
     check.severity = conf.get("severity", "error")
@@ -2441,12 +2501,12 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
             def rate_line(label: str, key: str, fw: list[tuple[bool, float]], of: str) -> float:
                 hits, n = sum(f for f, _ in fw), len(fw)
                 if not n:
-                    print(f"  {label}: none of {of}")
+                    detail(f"  {label}: none of {of}")
                     out[key] = {"count": 0, "of": 0, "rate": None, "ci": None}
                     return 0.0
                 p, lo, hi, n_eff = wrate(fw) if weighted else (hits / n, *wilson(hits, n), n)  # unweighted: as before
                 eff = f", effective n {n_eff:.0f}" if weighted else ""
-                print(f"  {label}: {hits} of {n} {of} ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}{eff})")
+                detail(f"  {label}: {hits} of {n} {of} ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}{eff})")
                 out[key] = {"count": hits, "of": n, "rate": _r(p), "ci": [_r(lo), _r(hi)]}
                 if weighted:
                     out[key]["effective_rows"] = _r(n_eff)
@@ -2463,6 +2523,8 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
     if by := (spec["metrics"][name] or {}).get("by"):
         out |= test_groups(by, conf, [(r, f) for r, f, _ in rows], pairs if qids else [], check)
     out["checks"] = check.log[first_check:]
+    out["unavailable_checks"] = sorted(
+        ({"max_missed", "max_false_alarms"} & set(conf)) - {c["check"] for c in out["checks"]})
     return out
 
 
@@ -2500,7 +2562,7 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
     stats = {g: wrate(fw) for g, fw in groups.items()}
     gstats = {g: wrate(gs) for g, gs in gold.items()}
     out: dict = {"by": by, "no_group": len(rows) - sum(map(len, groups.values())), "groups": {}}
-    print(f"  by {by}: on answers{', then on gold' if gold else ''} (95% CI{', weighted' if weighted else ''})")
+    detail(f"  by {by}: on answers{', then on gold' if gold else ''} (95% CI{', weighted' if weighted else ''})")
     width, digits = max(map(len, groups), default=0), len(str(max(map(len, groups.values()), default=0)))
     for i, g in enumerate(sorted(groups)):
         fw, (p, lo, hi, n_eff) = groups[g], stats[g]
@@ -2515,13 +2577,13 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
             x["gold_rate"] = {"count": sum(g for g, _ in gs), "of": len(gs), "rate": _r(gp), "ci": [_r(glo), _r(ghi)]}
             line += f"  gold {gp:.1%} ({glo:.1%}–{ghi:.1%})"
         if i < SHOW:
-            print(f"    {g:<{width}}  {line}")
+            detail(f"    {g:<{width}}  {line}")
     if len(groups) > SHOW:
-        print(f"    … {len(groups) - SHOW} more groups in the results file")
+        detail(f"    … {len(groups) - SHOW} more groups in the results file")
     if few := sum(len(fw) < FEW for fw in groups.values()):
-        print(f"    {few} of {len(groups)} groups have under {FEW} rows: their intervals are too wide to say much")
+        detail(f"    {few} of {len(groups)} groups have under {FEW} rows: their intervals are too wide to say much")
     if out["no_group"]:
-        print(f"    {out['no_group']} rows have no {by}, left out of the groups")
+        detail(f"    {out['no_group']} rows have no {by}, left out of the groups")
     if "higher" in conf:
         a, b = map(str, conf["higher"])
         if a not in stats or b not in stats:
@@ -2532,11 +2594,11 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
             out["higher"] = {"groups": [a, b], "difference": _r(d), "ci": [_r(lo), _r(hi)]}
             check(lo > 0, f"{a} higher than {b}: {d * 100:+.1f} points (95% CI {lo * 100:+.1f} to {hi * 100:+.1f})", "higher", lo, 0)
             if lo > 0 and stats[a][1] <= stats[b][2]:
-                print("       the two groups' intervals overlap; the difference's interval does not include 0")
+                detail("       the two groups' intervals overlap; the difference's interval does not include 0")
             if a in gstats and b in gstats:  # the answers' difference can come from the model erring more in one group
                 gd, glo, ghi = newcombe(gstats[a], gstats[b])
                 out["higher"]["gold"] = {"difference": _r(gd), "ci": [_r(glo), _r(ghi)]}
-                print(f"       on gold: {gd * 100:+.1f} points (95% CI {glo * 100:+.1f} to {ghi * 100:+.1f})"
+                detail(f"       on gold: {gd * 100:+.1f} points (95% CI {glo * 100:+.1f} to {ghi * 100:+.1f})"
                       + ("; gold does not show it" if lo > 0 and glo <= 0 else ""))
     return out
 
@@ -2558,7 +2620,7 @@ def test_examples(spec: dict, check: "Checks", all_stats: list) -> list[dict]:
             owner.append(i)
     answers, stats = asyncio.run(fill(spec, open_store(spec), items))
     all_stats.append(stats)
-    print(f"\nexamples ({len(examples)})")
+    detail(f"\nexamples ({len(examples)})")
     out = []
     for i, ex in enumerate(examples):
         name = ex.get("name") or f"example {i + 1}"
@@ -2577,6 +2639,8 @@ def test_examples(spec: dict, check: "Checks", all_stats: list) -> list[dict]:
 
 
 def cmd_test(project: dict, args) -> None:
+    from hunch import presentation
+
     results_path(project).unlink(missing_ok=True)  # never leave an older run's results looking current
     results = execute(project)
     check = Checks()
@@ -2589,7 +2653,7 @@ def cmd_test(project: dict, args) -> None:
         if len(project["nodes"]) > 1:
             where = f", where kept {len(res['rows'])} of {res['input']}" if "where" in spec else ""
             kind = f"union of {', '.join(spec['union'])}" if "union" in spec else f"{res['input']} rows in{where}"
-            print(f"\n══ {n} ({kind})")
+            detail(f"\n══ {n} ({kind})")
         attach_gold(res["items"], load_reviews(spec))  # just before testing: a union shares its branches' items
         ungrade(project, n, res["items"])
         for qid in question_of(spec):
@@ -2598,30 +2662,32 @@ def cmd_test(project: dict, args) -> None:
             rep["questions"][qid] = test_question(spec, qid, q, its, res["answers"], check, all_stats)
             if its and its[0]["q"].get("none"):
                 k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
-                print(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")
+                detail(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")
             esc = [it for it in its if it["key"] in res.get("escalated", {})]
             if its and "escalate" in its[0]["q"]:
                 gold = [it for it in esc if it["gold"]]
                 acc = f"; right on {sum(hit(it, res['answers'][it['key']]) for it in gold)}/{len(gold)} with gold" if gold else ""
                 acting = sum(route(it["q"], res["answers"][it["key"]], it.get("path_p", 1.0)) == "act" for it in esc)
-                print(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows use its answer, "
-                      f"{acting} of them confident enough to act{acc}")
+                detail(f"  escalated to {its[0]['q']['escalate']['model']}: {len(esc)}/{len(its)} rows use its answer, "
+                       f"{acting} of them confident enough to act{acc}")
         for parent, labels in spec.get("_multi", {}).items():
             rep.setdefault("multi", {})[parent] = test_multi(spec, parent, labels, res, check)
         for mname, m in (spec.get("metrics") or {}).items():
             rep.setdefault("metrics", {})[mname] = test_metric(spec, mname, m["rule"], res, check)
         if spec.get("examples"):
             rep["examples"] = test_examples(spec, check, all_stats)
-    print()
+        rep["assessment"] = assessment(rep)
     stats = merge_stats(*all_stats)
-    print_stats(stats)
+    if VERBOSE:
+        print_stats(stats)
     write_results(project, report, check, stats)
     if getattr(args, "receipt", False):
         print(f"receipt: {write_receipt(project, report, check)}")
+    presentation.test(project, args, report, stats, presentation.relative(results_path(project)))
     sys.exit(1 if check.failed else 0)
 
 
-RESULTS_VERSION = 1
+RESULTS_VERSION = 2  # checks now contain only configured acceptance checks; measurements remain separate
 
 
 def ungrade(project: dict, name: str, items: list[dict]) -> None:
@@ -2650,7 +2716,15 @@ def cmd_distill(project: dict, args) -> None:
 
 def cmd_docs(project: dict, args) -> None:
     from hunch.docs import write_docs  # the page generator is its own module; core stays the engine
-    write_docs(project)
+    page = write_docs(project)
+    if getattr(args, "open", False):
+        import webbrowser
+        webbrowser.open(page.resolve().as_uri())
+
+
+def cmd_show(project: dict, args) -> None:
+    from hunch.inspect import show
+    show(project, args)
 
 
 def results_path(project: dict) -> Path:
@@ -2676,7 +2750,8 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     path = results_path(project)
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(UTC).isoformat(timespec="seconds"),
-           "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed, "sample": SAMPLE,
+           "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed,
+           "assessment": overall_assessment(report), "sample": SAMPLE,
            "target": TARGET, "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):  # GitHub Actions: a table on the run's summary page
@@ -2697,7 +2772,8 @@ def write_receipt(project: dict, report: dict, check: "Checks") -> Path:
     (no time, cost, commit or hunch version), so running it again on the same answers changes nothing, even after
     an upgrade, and a diff is a change in what was measured."""
     path = receipt_path(project)
-    doc = {"version": RESULTS_VERSION, "command": "test", "passed": not check.failed, "sample": SAMPLE,
+    doc = {"version": RESULTS_VERSION, "command": "test", "passed": not check.failed,
+           "assessment": overall_assessment(report), "sample": SAMPLE,
            "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     return path
@@ -2705,20 +2781,30 @@ def write_receipt(project: dict, report: dict, check: "Checks") -> Path:
 
 def summary_markdown(doc: dict, name: Path) -> str:
     """results.json as a short Markdown table: per question accuracy, range and failed checks; metrics and examples."""
-    def failed(checks: list[dict]) -> str:
+    def failed(checks: list[dict], unavailable: list[str] | None = None) -> str:
         bad = [f"{c['check']}{' (warn)' if c['severity'] == 'warn' else ''}" for c in checks if not c["passed"]]
-        return "FAIL: " + ", ".join(bad) if bad else "pass"
-    lines = [f"### {name}: {'passed' if doc['passed'] else 'FAILED'}" + (f" (sample of {doc['sample']})" if doc["sample"] else ""),
+        missing = list(unavailable or [])
+        labels = (["FAIL: " + ", ".join(bad)] if bad else []) + (["NOT ASSESSED: " + ", ".join(missing)] if missing else [])
+        return "; ".join(labels) if labels else "passed" if checks else "no checks configured"
+    headline = doc.get("assessment", "passed" if doc["passed"] else "failed").replace("_", " ")
+    lines = [f"### {name}: {headline}" + (f" (sample of {doc['sample']})" if doc["sample"] else ""),
              "", "| | Accuracy | 95% range | Checks |", "|---|---|---|---|"]
     for j, v in doc["judgments"].items():
         for q, x in v["questions"].items():
             a = x.get("accuracy")
             ci = "–".join(f"{c:.1%}" for c in a["ci"]) if a and a["ci"] else ""
-            lines.append(f"| {j}.{q} | {a['value']:.1%} | {ci} | {failed(x['checks'])} |" if a else f"| {j}.{q} | no gold yet | | |")
+            state = failed(x.get("checks", []), x.get("unavailable_checks"))
+            lines.append(f"| {j}.{q} | {a['value']:.1%} | {ci} | {state} |" if a else f"| {j}.{q} | no gold yet | | {state} |")
+        for q, x in (v.get("multi") or {}).items():
+            state = failed(x.get("checks", []), x.get("unavailable_checks"))
+            exact = x.get("exact_set_accuracy")
+            lines.append(f"| {j}.{q} (multi) | {exact:.1%} exact set | | {state} |" if exact is not None
+                         else f"| {j}.{q} (multi) | no gold yet | | {state} |")
         for m, x in (v.get("metrics") or {}).items():
             miss = x.get("missed")
             extra = f", missed {miss['rate']:.1%} ({miss['ci'][0]:.1%}–{miss['ci'][1]:.1%})" if miss and miss["of"] else ""
-            lines.append(f"| {j}.{m} (metric) | fires on {x['rate']:.1%}{extra} | | {failed(x['checks'])} |" if x["rate"] is not None else f"| {j}.{m} (metric) | no rows | | |")
+            state = failed(x.get("checks", []), x.get("unavailable_checks"))
+            lines.append(f"| {j}.{m} (metric) | fires on {x['rate']:.1%}{extra} | | {state} |" if x["rate"] is not None else f"| {j}.{m} (metric) | no rows | | {state} |")
         if v.get("examples"):
             ok = sum(e["passed"] for e in v["examples"])
             names = [e["name"] + (" (warn)" if e["severity"] == "warn" else "") for e in v["examples"] if not e["passed"]]
@@ -2735,23 +2821,28 @@ def test_multi(spec: dict, parent: str, labels: list[str], res: dict, check: "Ch
     scored = [(its, frozenset(l for l, it in its.items() if decide(res["answers"][it["key"]])[0] == "yes"),
                frozenset(l for l, it in its.items() if it["gold"] and "yes" in it["gold"]))
               for its in by_row.values() if all(it["gold"] for it in its.values())]
-    print(f"\n{parent} (multi: {len(labels)} options, {len(by_row)} rows)")
+    detail(f"\n{parent} (multi: {len(labels)} options, {len(by_row)} rows)")
     out: dict = {"type": "multi", "options": labels, "rows": len(by_row), "gold_rows": len(scored)}
     if not scored:
-        return out | {"checks": []}
+        conf = ((spec.get("tests") or {}).get(parent) or {})
+        return out | {"checks": [], "unavailable_checks": ["min_accuracy"] if "min_accuracy" in conf else []}
     exact = sum(got == gold for _, got, gold in scored) / len(scored)
     jac = sum(len(got & gold) / len(got | gold) if got | gold else 1.0 for _, got, gold in scored) / len(scored)
-    want = ((spec.get("tests") or {}).get(parent) or {}).get("min_accuracy", 0)
-    check.severity = ((spec.get("tests") or {}).get(parent) or {}).get("severity", "error")
-    check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f}) (min {want:.0%})",
-          "min_accuracy", exact, want)
-    return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[-1:]}
+    conf = ((spec.get("tests") or {}).get(parent) or {})
+    check.severity = conf.get("severity", "error")
+    first_check = len(check.log)
+    if "min_accuracy" in conf:
+        want = conf["min_accuracy"]
+        check(exact >= want, f"exact-set accuracy {exact:.1%} on {len(scored)} rows with gold "
+              f"(mean overlap {jac:.2f}) (min {want:.0%})", "min_accuracy", exact, want)
+    else:
+        detail(f"  exact-set accuracy {exact:.1%} on {len(scored)} rows with gold (mean overlap {jac:.2f})")
+    return out | {"exact_set_accuracy": _r(exact), "mean_overlap": _r(jac), "checks": check.log[first_check:]}
 
 
 def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dict, old_a: dict,
-                  same_spec: bool) -> dict[str, tuple[str | None, str | None]]:
-    """Prints how this question's answers moved; returns {row id: (old answer, new answer)} for every row whose
-    answer changed, appeared (old None) or disappeared (new None)."""
+                  same_spec: bool) -> tuple[dict[str, tuple[str | None, str | None]], str | None, int]:
+    """Compare answers, returning row changes and a short gold-backed interpretation."""
     lab = lambda a: decide(a)[0] if a else None
     old_by = {it["id"]: it for it in old_its}
     new_ids = {it["id"] for it in new_its}
@@ -2759,11 +2850,11 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
     entered, left = len(new_ids - set(old_by)), len(set(old_by) - new_ids)
     moved = f"; {entered} rows newly reach it, {left} no longer do" if entered or left else ""
     if not old_its:
-        print(f"\n{qid}: new question ({len(new_its)} rows)")
-        return {it["id"]: (None, lab(new_a.get(it["key"]))) for it in new_its}
+        detail(f"\n{qid}: new question ({len(new_its)} rows)")
+        return {it["id"]: (None, lab(new_a.get(it["key"]))) for it in new_its}, None, 0
     if all(o["key"] == n["key"] for o, n in pairs) and not moved:
-        print(f"\n{qid}: unchanged (same keys, 0 calls)")
-        return {}
+        detail(f"\n{qid}: unchanged (same keys, 0 calls)")
+        return {}, None, 0
     flips = []
     for o, n in pairs:
         oa, na = old_a[o["key"]], new_a[n["key"]]
@@ -2771,35 +2862,38 @@ def diff_question(qid: str, new_its: list[dict], old_its: list[dict], new_a: dic
         if ol != nl:
             flips.append((n, oa, na, min(om, nm) < NOISE))
     why = " (its own spec is unchanged: moved by upstream changes)" if same_spec and (flips or moved) else ""
-    print(f"\n{qid}: {len(flips)}/{len(pairs)} rows flip ({sum(f[3] for f in flips)} within noise band){moved}{why}")
+    detail(f"\n{qid}: {len(flips)}/{len(pairs)} rows flip ({sum(f[3] for f in flips)} within noise band){moved}{why}")
     if pairs:  # how far and which way, not just which labels changed (re-asking one spec moves |p| ~0.01)
         noul = new_its[0]["q"]["type"] == "noul"
         prob = (lambda a, _: a["noul"]) if noul else (lambda a, lab: dict(ranked(a)).get(lab, 0.0))
         d = [prob(new_a[n["key"]], decide(old_a[o["key"]])[0]) - prob(old_a[o["key"]], decide(old_a[o["key"]])[0])
              for o, n in pairs]
         what = "p(yes)" if noul else "p(old answer)"
-        print(f"  probabilities moved: mean |Δ| {sum(map(abs, d)) / len(d):.3f}, mean Δ {what} {sum(d) / len(d):+.3f}")
+        detail(f"  probabilities moved: mean |Δ| {sum(map(abs, d)) / len(d):.3f}, mean Δ {what} {sum(d) / len(d):+.3f}")
+    gold_note = None
     if flips and any(n["gold"] for _, n in pairs):
         fixed = sum(hit(n, na) and not hit(n, oa) for n, oa, na, _ in flips if n["gold"])
         broke = sum(hit(n, oa) and not hit(n, na) for n, oa, na, _ in flips if n["gold"])
         p = sign_test(fixed, broke)
         verdict = "significant" if p < 0.05 else "NOT significant: could be noise, get more gold rows"
         common = [n for _, n in pairs]
-        print(f"  gold accuracy on the {sum(bool(n['gold']) for n in common)} shared rows with gold {accuracy([o for o, _ in pairs], old_a, qid):.1%} → "
+        gold_note = f"Gold on changed rows: {fixed} fixed, {broke} broken; paired p={p:.3f} ({verdict})."
+        detail(f"  gold accuracy on the {sum(bool(n['gold']) for n in common)} shared rows with gold {accuracy([o for o, _ in pairs], old_a, qid):.1%} → "
               f"{accuracy(common, new_a, qid):.1%}  (✓ {fixed} fixed, ✗ {broke} broken, "
               f"{sum(1 for n, *_ in flips if n['gold']) - fixed - broke} wrong both times, "
               f"{sum(1 for n, *_ in flips if not n['gold'])} without gold)"
-              f"\n  paired sign test p={p:.3f} → {verdict}")
+               f"\n  paired sign test p={p:.3f} → {verdict}")
     flips.sort(key=lambda f: f[3])  # real flips first, noise-band flips last
     for n, oa, na, noisy in flips[:SHOW]:
         g = n["gold"]
         mark = "✓" if g and hit(n, na) and not hit(n, oa) else ("✗" if g and hit(n, oa) and not hit(n, na) else " ")
-        print(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n, 40)}")
+        detail(f"  {mark} #{n['id']:>4} {show(oa):>36} → {show(na):<36}{' ~noise' if noisy else '       '} {label_of(n, 40)}")
     if len(flips) > SHOW:
-        print(f"  … {len(flips) - SHOW} more")
+        detail(f"  … {len(flips) - SHOW} more")
     return ({n["id"]: (lab(oa), lab(na)) for n, oa, na, _ in flips}
             | {it["id"]: (None, lab(new_a.get(it["key"]))) for it in new_its if it["id"] not in old_by}
-            | {it["id"]: (lab(old_a.get(it["key"])), None) for it in old_its if it["id"] not in new_ids})
+            | {it["id"]: (lab(old_a.get(it["key"])), None) for it in old_its if it["id"] not in new_ids}), gold_note, sum(
+                noisy for _, _, _, noisy in flips)
 
 
 def exposure_rows(spec: dict, x: dict, changed: dict[str, dict]) -> set[str]:
@@ -2849,7 +2943,12 @@ def cmd_diff(project: dict, args) -> None:
         args.against = str(args.path)
     old = load_against(project, args)
     new_r, old_r = execute(project), execute(old)
-    print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
+    from hunch import presentation
+
+    stats = merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values())))
+    print(f"Diff · {args.path} against {args.against}")
+    if VERBOSE:
+        print_stats(stats)
     if args.node:
         pairs = [(args.node, twin_of(args.node, old["order"]))]
     elif len(project["nodes"]) == 1:
@@ -2864,7 +2963,7 @@ def cmd_diff(project: dict, args) -> None:
         spec, ospec = project["nodes"][n], old["nodes"][o]
         same = spec_hash(spec) == spec_hash(ospec)
         if len(project["nodes"]) > 1 or n != o:
-            print(f"\n══ {n}" + (f"  vs  {o}" if n != o else ""))
+            print(f"\n{n}" + (f" vs {o}" if n != o else ""))
         reviews = load_reviews(spec)  # gold is about the data, so both sides use today's reviews
         attach_gold(new_r[n]["items"], reviews)
         attach_gold(old_r[o]["items"], reviews)
@@ -2878,10 +2977,28 @@ def cmd_diff(project: dict, args) -> None:
                 keys = {it["key"] for it in new_its}
                 oq = next((q for q in old_qs if {it["key"] for it in old_r[o]["items"] if it["qid"] == q} & keys), qid)
                 if oq != qid:
-                    print(f"\n{qid}: renamed from {oq!r}")
-            changed[qid] = diff_question(qid, new_its, [it for it in old_r[o]["items"] if it["qid"] == oq],
-                                         new_r[n]["answers"], old_r[o]["answers"], same)
+                    print(f"  {qid}: renamed from {oq!r}")
+            old_its = [it for it in old_r[o]["items"] if it["qid"] == oq]
+            moves, gold_note, noisy = diff_question(qid, new_its, old_its, new_r[n]["answers"], old_r[o]["answers"], same)
+            changed[qid] = moves
+            flips = [(rid, before, after) for rid, (before, after) in moves.items() if before is not None and after is not None]
+            entered = sum(before is None for before, _ in moves.values())
+            left = sum(after is None for _, after in moves.values())
+            shared = len({it["id"] for it in new_its} & {it["id"] for it in old_its})
+            summary = f"{qid}: {len(flips)}/{shared} shared rows changed answer"
+            if entered or left:
+                summary += f"; {entered} entered, {left} left"
+            if noisy:
+                summary += f"; {noisy} near the decision boundary"
+            presentation.line(summary)
+            for rid, before, after in flips[:5]:
+                presentation.line(f"{rid}: {before} → {after}", "    ")
+            if len(flips) > 5:
+                presentation.line(f"{len(flips) - 5} more changed rows", "    ")
+            if gold_note:
+                presentation.line(gold_note, "    ")
         print_exposures(spec, changed)
+    presentation.line(f"Answers: {stats['cached']} cached, {stats['asked']} asked · ${stats['cost']:.5f}")
 
 
 def print_exposures(spec: dict, changed: dict[str, dict]) -> None:
@@ -3339,31 +3456,71 @@ def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = No
 
 def main() -> None:
     commands = {"lint": cmd_lint, "compile": cmd_compile, "run": cmd_run, "test": cmd_test, "suggest": cmd_suggest,
-                "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs, "distill": cmd_distill}
-    p = argparse.ArgumentParser(prog="hunch")
+                "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs, "distill": cmd_distill,
+                "show": cmd_show}
+    descriptions = {
+        "lint": "Check a spec without asking the model.",
+        "compile": "Preview a request and estimate the cost of a run.",
+        "run": "Judge rows, cache answers, and write tables.",
+        "show": "Inspect the last materialized run without asking the model.",
+        "test": "Measure answers against gold and evaluate configured checks.",
+        "diff": "Compare today's answers with an older spec or another model.",
+        "review": "Build gold by reviewing disagreements and spot checks.",
+        "docs": "Generate a shareable HTML report from the last test.",
+        "suggest": "Try and measure question rewrites.",
+        "distill": "Train a small local model from cached answers.",
+    }
+    p = argparse.ArgumentParser(prog="hunch", description="Run, inspect, and measure model judgments.",
+                                epilog="Other commands: hunch ask, init, plugins, install, skill, hook.")
     p.add_argument("--version", action="version", version=f"hunch {__import__('hunch').__version__}")
-    p.add_argument("command", choices=list(commands))
-    p.add_argument("path", type=Path, help="a spec file, or a directory of specs (a project)")
-    p.add_argument("--node", help="one judgment in a project (test, diff, review, compile; run: it and the judgments it reads from)")
-    p.add_argument("--against", help="diff: old spec/project path, or git:REF; review: queue rows it answers differently first")
-    p.add_argument("--source", type=Path, help="run the root judgments on this CSV instead (e.g. a holdout set)")
-    p.add_argument("--question", help="suggest: the question to rewrite")
-    p.add_argument("--n", type=int, default=3, help="suggest: rewrites to try (default 3)")
-    p.add_argument("--writer", default=WRITER, help=f"suggest: the LLM that writes rewrites (default {WRITER})")
-    p.add_argument("--model", help="use this engine for every judgment instead of the spec's (e.g. openrouter:<id>)")
-    p.add_argument("--allow-change", action="store_true", help="run: accept a changed spec under on_change: freeze")
-    p.add_argument("--traffic", action="store_true", help="run the root judgments on rows logged by judge(..., shadow=...)")
-    p.add_argument("--list", action="store_true", help="review: print the queue without prompting")
-    p.add_argument("--limit", type=int, help="review: at most N items")
-    p.add_argument("--audit", type=int, default=30, help="review: random agreeing rows to audit per question (default 30)")
-    p.add_argument("--reviewer", help="review: name recorded with each verdict (default: $USER)")
-    p.add_argument("--max-cost", type=float, help="USD: the most each set of asks may be charged (refused up front on the estimate, kept while asking)")
-    p.add_argument("--receipt", action="store_true", help="test: also write the numbers beside the spec (<spec>.results.json), to commit with a battery")
-    p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
-    p.add_argument("--target", help="run as the specs' targets.NAME say: model, sample, store, max_cost (a flag given here wins)")
+    sub = p.add_subparsers(dest="command", required=True, metavar="COMMAND")
+    for command, desc in descriptions.items():
+        sp = sub.add_parser(command, help=desc, description=desc)
+        sp.add_argument("path", type=Path, help="a spec file or folder of specs")
+        if command in {"compile", "run", "show", "test", "diff", "review", "suggest", "distill"}:
+            sp.add_argument("--node", help="one judgment in a project")
+        if command in {"diff", "review"}:
+            sp.add_argument("--against", help="old spec/project path or git:REF")
+        if command in {"lint", "compile", "run", "test", "diff", "review", "suggest", "distill"}:
+            sp.add_argument("--source", type=Path, help="use this CSV for the root judgments")
+            sp.add_argument("--traffic", action="store_true", help="use rows logged by judge(..., shadow=...)")
+        if command in {"compile", "run", "test", "diff", "review", "suggest", "distill"}:
+            sp.add_argument("--max-cost", type=float, help="maximum USD to spend on missing answers")
+        if command in {"compile", "run", "test", "diff"}:
+            sp.add_argument("--sample", type=int, help="judge a repeatable sample of N root rows")
+        if command in {"run", "test", "diff"}:
+            sp.add_argument("--verbose", action="store_true", help="show diagnostic tables and request details")
+        sp.add_argument("--model", help="use another engine; keeps its tables separate")
+        sp.add_argument("--target", help="use settings from targets.NAME in the spec")
+        if command == "run":
+            sp.add_argument("--allow-change", action="store_true", help="accept a spec change under on_change: freeze")
+        if command == "test":
+            sp.add_argument("--receipt", action="store_true", help="write a stable results file beside the spec")
+        if command == "review":
+            sp.add_argument("--list", action="store_true", help="print the queue without prompting")
+            sp.add_argument("--limit", type=int, help="review at most N items")
+            sp.add_argument("--audit", type=int, default=30, help="random agreeing rows to audit (default 30)")
+            sp.add_argument("--reviewer", help="name recorded with each verdict")
+        if command == "show":
+            sp.add_argument("--id", help="show all stored fields for one row key")
+            sp.add_argument("--limit", type=int, default=20, help="rows to list (default 20)")
+        if command == "docs":
+            sp.add_argument("--open", action="store_true", help="open the generated HTML in a browser")
+        if command == "suggest":
+            sp.add_argument("--question", help="question to rewrite")
+            sp.add_argument("--n", type=int, default=3, help="rewrites to try (default 3)")
+            sp.add_argument("--writer", default=WRITER, help=f"LLM that writes rewrites (default {WRITER})")
+    if len(sys.argv) == 1:
+        p.print_help()
+        return
     args = p.parse_args()
-    global MAX_COST, SAMPLE, TARGET, STORE
+    for name, default in {"node": None, "against": None, "source": None, "traffic": False, "max_cost": None,
+                          "sample": None, "verbose": False, "receipt": False}.items():
+        if not hasattr(args, name):
+            setattr(args, name, default)
+    global MAX_COST, SAMPLE, TARGET, STORE, VERBOSE
     SAMPLE, TARGET, STORE = args.sample, None, None
+    VERBOSE = args.verbose
     MAX_COST = args.max_cost if args.max_cost is not None else MAX_COST  # else $HUNCH_MAX_COST, if set
     project = load_project(args.path)
     project["target"] = args.target
@@ -3379,7 +3536,7 @@ def main() -> None:
             project["nodes"][n]["source"] = args.source.resolve()
         elif args.traffic:
             project["nodes"][n]["source"] = traffic_source(project["nodes"][n])
-    errors, warnings = lint(project)
+    errors, warnings = (lint_targets(project), []) if args.command == "show" else lint(project)
     if args.traffic:  # live traffic has no gold columns: expected, so one line instead of one per question
         nogold = [w for w in warnings if "gold column" in w]
         warnings = [w for w in warnings if w not in nogold]

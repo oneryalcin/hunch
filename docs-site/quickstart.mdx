@@ -28,7 +28,7 @@ You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key. The commands b
     hunch run lobbying.yml --max-cost 0.01
     ```
 
-    The spec asks: **Does this email describe an attempt to influence a law, regulation, or public policy?** `run` asks Jev that question of each email and writes a table of answers to `.hunch/store.sqlite`. Jev supplies the yes/no probabilities; hunch keeps the question and the answers together.
+    The spec asks: **Does this email describe an attempt to influence a law, regulation, or public policy?** `run` asks Jev that question of each email, shows how the answers split, and writes a table to `.hunch/store.sqlite`. To read the stored answers, run `hunch show lobbying.yml`; add `--id e06` to see the email and its answer together.
 
     Run the command again. With the same model, question, and email text, the answers come from the cache and cost nothing. A new question or new email needs a new model answer.
   </Step>
@@ -38,7 +38,7 @@ You need [uv](https://docs.astral.sh/uv/) and a TypeSafe API key. The commands b
     hunch test lobbying.yml --max-cost 0
     ```
 
-    `test` compares the model's answers with the eight published judgments. Look at the disagreements, not only the accuracy number. For example, an email that merely reports a bill's passage is different from one proposing comments to a regulator. The test uses cached answers, so `--max-cost 0` refuses any missing model calls.
+    `test` compares the model's answers with the eight published judgments. It says **measured**, because this starter spec has no acceptance threshold. Look at the disagreements, not only the accuracy number. For example, an email that merely reports a bill's passage is different from one proposing comments to a regulator. The test uses cached answers, so `--max-cost 0` refuses any missing model calls. Run `hunch docs lobbying.yml --open` for the shareable report.
 
     This is a deliberately balanced set of four yes and four no cases. Its score is useful for learning what the question means, **not** for claiming a real-world error rate. The [document-review cookbook](/cookbooks/document-review) shows how to estimate one for a different legal request using a larger, sampled collection.
   </Step>
