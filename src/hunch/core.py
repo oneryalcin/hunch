@@ -2314,17 +2314,28 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
             continue
         rows.append((r, fired, {it["qid"]: it for it in res["items"][i * nq:(i + 1) * nq]}))
     k = sum(f for _, f, _ in rows)
+    weighted = any(r.get("_w", 1.0) != 1.0 for r, _, _ in rows)  # then every line is, as the groups are
     print(f"\n{name} (metric: {rule})")
-    print(f"  on answers: {k} of {len(rows)} rows ({k / len(rows):.1%})" if rows else "  on answers: no rows")
-    out: dict = {"rule": rule, "rows": len(rows), "fired": k, "rate": _r(k / len(rows)) if rows else None}
+    if weighted:
+        print("  weighted to the population (source sampling weights)")
+    out: dict = {"rule": rule, "rows": len(rows), "fired": k, "rate": None}
+    p = 0.0
+    if not rows:
+        print("  on answers: no rows")
+    elif weighted:  # the rows sample the population: the rate is an estimate, with an interval
+        p, lo, hi, n_eff = wrate([(f, r.get("_w", 1.0)) for r, f, _ in rows])
+        print(f"  on answers: {k} of {len(rows)} rows ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}, effective n {n_eff:.0f})")
+        out |= {"rate": _r(p), "ci": [_r(lo), _r(hi)], "effective_rows": _r(n_eff)}
+    else:
+        p = k / len(rows)
+        print(f"  on answers: {k} of {len(rows)} rows ({p:.1%})")
+        out["rate"] = _r(p)
     first_check = len(check.log)
     check.severity = conf.get("severity", "error")
-    if "min_rate" in conf or "max_rate" in conf:
-        rate = k / len(rows) if rows else 0.0
-        if "min_rate" in conf:
-            check(rate >= conf["min_rate"], f"rate {rate:.1%} (min {conf['min_rate']:.1%})", "min_rate", rate, conf["min_rate"])
-        if "max_rate" in conf:
-            check(rate <= conf["max_rate"], f"rate {rate:.1%} (max {conf['max_rate']:.1%})", "max_rate", rate, conf["max_rate"])
+    if "min_rate" in conf:
+        check(p >= conf["min_rate"], f"rate {p:.1%} (min {conf['min_rate']:.1%})", "min_rate", p, conf["min_rate"])
+    if "max_rate" in conf:
+        check(p <= conf["max_rate"], f"rate {p:.1%} (max {conf['max_rate']:.1%})", "max_rate", p, conf["max_rate"])
     if qids:
         census = all(its[q]["gold"] for _, _, its in rows for q in qids)
         pairs = []
@@ -2342,16 +2353,23 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
         basis = f"all {len(pairs)} rows with gold" if census else f"{len(pairs)} random spot checks"
         out["gold"] = {"basis": "census" if census else "spot checks", "rows": len(pairs)}
         if pairs:
-            def rate_line(label: str, key: str, hits: int, n: int, of: str) -> float:
-                lo, hi = wilson(hits, n)
-                print(f"  {label}: {hits} of {n} {of} ({hits / n:.1%}, 95% CI {lo:.1%}–{hi:.1%})" if n else f"  {label}: none of {of}")
-                out[key] = {"count": hits, "of": n, "rate": _r(hits / n) if n else None, "ci": [_r(lo), _r(hi)] if n else None}
-                return hits / n if n else 0.0
-            rate_line(f"on gold ({basis})", "gold_rate", sum(g for _, g, _ in pairs), len(pairs), "rows")
-            passed = [g for f, g, _ in pairs if not f]
-            caught = [g for f, g, _ in pairs if f]
-            missed = rate_line("missed", "missed", sum(passed), len(passed), "rows the rule passed")
-            alarms = rate_line("false alarms", "false_alarms", len(caught) - sum(caught), len(caught), "rows the rule caught")
+            def rate_line(label: str, key: str, fw: list[tuple[bool, float]], of: str) -> float:
+                hits, n = sum(f for f, _ in fw), len(fw)
+                if not n:
+                    print(f"  {label}: none of {of}")
+                    out[key] = {"count": 0, "of": 0, "rate": None, "ci": None}
+                    return 0.0
+                p, lo, hi, n_eff = wrate(fw) if weighted else (hits / n, *wilson(hits, n), n)  # unweighted: as before
+                eff = f", effective n {n_eff:.0f}" if weighted else ""
+                print(f"  {label}: {hits} of {n} {of} ({p:.1%}, 95% CI {lo:.1%}–{hi:.1%}{eff})")
+                out[key] = {"count": hits, "of": n, "rate": _r(p), "ci": [_r(lo), _r(hi)]}
+                if weighted:
+                    out[key]["effective_rows"] = _r(n_eff)
+                return p
+            rate_line(f"on gold ({basis})", "gold_rate", [(g, r.get("_w", 1.0)) for _, g, r in pairs], "rows")
+            missed = rate_line("missed", "missed", [(g, r.get("_w", 1.0)) for f, g, r in pairs if not f], "rows the rule passed")
+            alarms = rate_line("false alarms", "false_alarms", [(not g, r.get("_w", 1.0)) for f, g, r in pairs if f],
+                               "rows the rule caught")
             if "max_missed" in conf:
                 check(missed <= conf["max_missed"], f"missed {missed:.1%} (max {conf['max_missed']:.1%})", "max_missed", missed, conf["max_missed"])
             if "max_false_alarms" in conf:
@@ -2367,6 +2385,8 @@ def wrate(fw: list[tuple[bool, float]]) -> tuple[float, float, float, float]:
     """Weighted share of True, its 95% Wilson interval on the effective sample size (Kish), and that size.
     Unit weights give k/n and wilson(k, n) exactly."""
     sw = sum(w for _, w in fw)
+    if not sw:  # every row weighs 0 (a population share of 0): they stand for no one
+        return 0.0, 0.0, 1.0, 0.0
     p, n_eff = sum(w for f, w in fw if f) / sw, sw * sw / sum(w * w for _, w in fw)
     lo, hi = wilson(p * n_eff, n_eff)
     return p, max(0.0, lo), min(1.0, hi), n_eff

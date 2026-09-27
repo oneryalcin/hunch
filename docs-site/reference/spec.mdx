@@ -317,12 +317,21 @@ stopped (metric: destroys == 'yes' or reaches_outside == 'yes' or sends_out == '
 
 | Line | Meaning |
 | --- | --- |
-| `on answers` | Rows where the rule holds with the model's answers. Every row, so an exact count. |
+| `on answers` | Rows where the rule holds with the model's answers. Every row, so an exact count (with `weights`, an estimate; see below). |
 | `on gold` | The same rule with gold in place of the answers: on every row when every row has gold, otherwise on random spot checks only. |
 | `missed` | Among rows where the rule did not hold on the answers, the share where it holds on gold. |
 | `false alarms` | Among rows where the rule held on the answers, the share where it does not hold on gold. |
 
-Why only random spot checks, and how gold stands in for an answer: [How the numbers work](/reference/how-the-numbers-work#metrics). A rule that reads only columns, no answers, gets the first line only. `test` writes the same numbers to the [results file](/reference/cli#the-results-file) under `metrics`.
+Why only random spot checks, and how gold stands in for an answer: [How the numbers work](/reference/how-the-numbers-work#metrics). A rule that reads only columns, no answers, gets the first line only.
+
+With [`weights`](#weights), every line is weighted to the population. Counts stay the rows seen; each rate is weighted, with a 95% interval on the effective sample size, which the line shows:
+
+```text
+  weighted to the population (source sampling weights)
+  on answers: 113 of 200 rows (72.2%, 95% CI 64.2%–78.9%, effective n 139)
+```
+
+`min_rate` and `max_rate` check the weighted rate. `test` writes the same numbers to the [results file](/reference/cli#the-results-file) under `metrics`.
 
 | Test | Passes when |
 | --- | --- |
@@ -356,7 +365,7 @@ tests:
        on gold: +5.1 points (95% CI -2.8 to +12.9); gold does not show it
 ```
 
-Each group gets its rate on answers with a 95% interval, and on gold when the metric has gold (the same rows as the overall `on gold` line). Unlike the overall line, a group's rate on answers has an interval: comparing groups is a claim about what each group produces, not only about these rows. With [`weights`](#weights), group rates are weighted, and each line shows the effective sample size its interval uses.
+Each group gets its rate on answers with a 95% interval, and on gold when the metric has gold (the same rows as the overall `on gold` line). Unlike the unweighted overall line, a group's rate on answers always has an interval: comparing groups is a claim about what each group produces, not only about these rows. With [`weights`](#weights), group rates are weighted like the overall lines, and each line shows the effective sample size its interval uses.
 
 Rows with no value in the column are left out and counted. A group under 10 rows is still listed, with a note that its interval is too wide to say much.
 

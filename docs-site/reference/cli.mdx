@@ -254,7 +254,7 @@ When `test` finishes, it also writes what it printed as JSON, for CI, dashboards
 | `questions.<q>.spot_checks`, `needs_context` | Random spot checks, and how many of them needed more context. |
 | `questions.<q>.recall` | Yes/no questions with gold-yes rows: `yes_rows`; with `act` for no, `at_act`; with `min_recall`, `lowest_act` (each `threshold`, `value`, `ci`, `read`). See [tests](/reference/spec#tests). |
 | `questions.<q>.baseline` | With `baseline`: `rule`, `rows`, `said_yes`, the rule's `accuracy`, `auroc`, `recall`, `precision`, the same under `model`, and `model_ahead` (the model's accuracy is above the rule's). See [baseline](/reference/spec#baseline). |
-| `judgments.<name>.metrics.<m>` | `rule`, `rows`, `fired`, `rate`; with gold, `gold` (`basis`, `rows`), and `gold_rate`, `missed`, `false_alarms` (each `count`, `of`, `rate`, `ci`); `checks`. See [metrics](/reference/spec#metrics). |
+| `judgments.<name>.metrics.<m>` | `rule`, `rows`, `fired`, `rate` (with weights, weighted, plus `ci` and `effective_rows`); with gold, `gold` (`basis`, `rows`), and `gold_rate`, `missed`, `false_alarms` (each `count`, `of`, `rate`, `ci`, with weights `effective_rows`); `checks`. See [metrics](/reference/spec#metrics). |
 | `judgments.<name>.metrics.<m>` with `by` | Also `by`, `no_group` (rows with no value), `groups` (per value: `rows`, `fired`, `rate`, `ci`, with weights `effective_rows`, with gold `gold_rate`), and with a `higher` test, `higher` (`groups`, `difference`, `ci`, and with gold in both groups, `gold`: `difference`, `ci`). See [per group](/reference/spec#per-group). |
 | `judgments.<name>.examples` | Per example: `name`, `passed`, and `answers` (`question`, `expected`, `got`, `p`, `passed`). See [examples](/reference/spec#examples). |
 

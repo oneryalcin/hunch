@@ -664,7 +664,21 @@
                   "type": [
                     "number",
                     "null"
-                  ]
+                  ],
+                  "description": "Share of rows where the rule holds on answers; weighted when the source has weights"
+                },
+                "ci": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "With sampling weights: 95% interval [low, high] of the weighted rate"
+                },
+                "effective_rows": {
+                  "type": "number",
+                  "description": "With sampling weights: Kish's effective sample size"
                 },
                 "gold": {
                   "type": "object",
@@ -703,6 +717,10 @@
                       "minItems": 2,
                       "maxItems": 2,
                       "description": "95% interval [low, high]"
+                    },
+                    "effective_rows": {
+                      "type": "number",
+                      "description": "With sampling weights: Kish's effective sample size"
                     }
                   }
                 },
@@ -732,6 +750,10 @@
                       "minItems": 2,
                       "maxItems": 2,
                       "description": "95% interval [low, high]"
+                    },
+                    "effective_rows": {
+                      "type": "number",
+                      "description": "With sampling weights: Kish's effective sample size"
                     }
                   }
                 },
@@ -761,6 +783,10 @@
                       "minItems": 2,
                       "maxItems": 2,
                       "description": "95% interval [low, high]"
+                    },
+                    "effective_rows": {
+                      "type": "number",
+                      "description": "With sampling weights: Kish's effective sample size"
                     }
                   }
                 },
