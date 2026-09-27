@@ -290,7 +290,7 @@ def compile_baseline(b) -> tuple:
         def rule(row: dict) -> bool:
             try:
                 return bool(pred(row))
-            except Unknown:  # an upstream answer it reads is missing: the rule can't say yes
+            except (Unknown, ValueError):  # an upstream answer it reads is missing, or a number compared to text
                 return False
         return rule, used
     cols = b.get("columns") if isinstance(b, dict) else None
@@ -299,7 +299,7 @@ def compile_baseline(b) -> tuple:
             and isinstance(cols, list) and cols and all(isinstance(c, str) and c for c in cols)):
         raise ValueError(f"{b!r} is neither a where-expression nor {{match: <regex>, columns: [<column>, ...]}}")
     rx = re.compile(b["match"])
-    return (lambda row: any(rx.search("" if row.get(c) is None else str(row[c])) for c in cols)), set(cols)
+    return (lambda row: any(row.get(c) not in (None, "") and rx.search(str(row[c])) for c in cols)), set(cols)
 
 
 def answer_columns(spec: dict) -> list[str]:
@@ -2068,7 +2068,8 @@ def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "
     if q["type"] == "noul" and any("yes" in it["gold"] for it in gold_its):
         out["recall"] = test_recall(q, conf, its, gold_its, answers, w, check)
 
-    if q["type"] == "noul" and "baseline" in q:
+    if q["type"] == "noul" and "baseline" in q and len({json.dumps(it["q"].get("baseline")) for it in its}) == 1:
+        # a union reports it only when every branch has the same rule; each branch is tested with its own
         out["baseline"] = test_baseline(q, gold_its, answers, w, out.get("auroc"))
 
     wrong = sorted((it for it in gold_its if not hit(it, answers[it["key"]])), key=lambda it: -conf_of(it, answers[it["key"]]))
