@@ -97,6 +97,7 @@ tests:
 | [`on_change`](#on_change) | no | What happens to past answers when the spec changes. |
 | [`description`](#description) | no | What the judgment decides, in a sentence for people. |
 | [`exposures`](#exposures) | no | What uses the judgment's answers: apps, hooks, dashboards, jobs. |
+| [`targets`](#targets) | no | Other ways to run the spec, picked with `--target`: another engine, a sample, another store. |
 
 ### `judgment`
 
@@ -462,6 +463,37 @@ uses:
 | union | The values of the question on any branch. |
 
 Lint, which every command runs first, fails while a listed value is not one the question can answer. `hunch diff` counts, per exposure, the rows whose answer moved into or out of a listed value. [Change a spec safely](/guides/change-a-spec#apps-depend-on-answer-names) shows both.
+
+### `targets`
+
+Named ways to run the same spec. `--target NAME` picks one; without `--target`, the spec runs as written.
+
+```yaml
+model: jev-1.13.0
+targets:
+  dev:
+    model: deepseek:deepseek-flash
+    sample: 50
+    store: .hunch/dev.sqlite
+    max_cost: 0.05
+```
+
+```sh
+hunch test triage.yml --target dev
+```
+
+| Key | What it does |
+| --- | --- |
+| `model` | The engine this target answers with. As under `--model`, its tables and results get the engine's suffix, so the spec's own stay untouched. Answers are keyed by model, so none is shared between engines. |
+| `sample` | Judge only this many root rows, as `--sample N`. |
+| `store` | The SQLite store, relative to the spec's folder. It replaces `HUNCH_STORE`, so a dev run never writes to the store that variable names. |
+| `max_cost` | US dollars, as `--max-cost`. If `HUNCH_MAX_COST` is lower, that still holds. |
+
+A flag given on the command line wins over the target: `--target dev --model X` answers with X.
+
+In a folder of specs, each judgment answers with its own `targets.NAME.model`, and a judgment without one uses its `model`. `sample`, `store` and `max_cost` apply to the whole run, so specs that set them must agree.
+
+Lint fails on an unknown key inside a target, and on a `--target` that no spec defines. `targets` is not part of the spec hash, so adding one makes no test stale. `test` records the target in its results and `hunch docs` shows it. `test --receipt` refuses a target: a receipt records the spec as written.
 
 ## Question keys
 

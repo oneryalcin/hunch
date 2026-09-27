@@ -4,7 +4,7 @@ export UV_CONFIG_FILE := $(CURDIR)/uv.toml
 .PHONY: help check lint docs build clean release
 
 help:
-	@echo "make check     what CI runs: lint, lock files, docs coverage and schema, recipe lint, docs build and links"
+	@echo "make check     what CI runs: lint, lock files, docs coverage and schema, tests, recipe lint, docs build and links"
 	@echo "make lint      ruff, the version CI pins (make lint FIX=1 applies safe fixes)"
 	@echo "make docs      preview the docs site at http://localhost:3000"
 	@echo "make build     build the wheel and sdist into dist/ and check their metadata"
@@ -17,6 +17,7 @@ check: lint
 	uv run docs-site/benchmark.py --check
 	uv venv -q --clear .hunch/plugin-venv && uv pip install -q --python .hunch/plugin-venv -e . -e plugins/hunch-engine-ollama pytest
 	cd plugins/hunch-engine-ollama && ../../.hunch/plugin-venv/bin/python -m pytest -q -p no:cacheprovider
+	.hunch/plugin-venv/bin/python -m pytest -q -p no:cacheprovider tests
 	uv run hunch lint src/hunch/recipes/agent_commands
 	uv run hunch lint src/hunch/recipes/tickets
 	uv run hunch lint src/hunch/recipes/rag_answers

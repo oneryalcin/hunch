@@ -35,6 +35,13 @@
         "null"
       ]
     },
+    "target": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The --target the test ran with; null when the specs ran as written. Absent from receipts, which are always as written"
+    },
     "cost": {
       "type": [
         "number",

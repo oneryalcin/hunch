@@ -19,6 +19,13 @@
         "null"
       ]
     },
+    "target": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The --target hunch docs ran with; each judgment's model is then that target's engine. null: as written"
+    },
     "project": {
       "type": "string"
     },

@@ -56,8 +56,9 @@ HUNCH_ONLY_FIELDS = {"act", "gold", "escalate", "baseline", "_multi"}  # routing
 QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
-             "weights", "chain", "view", "clip", "redact", "on_change", "description", "exposures"}
+             "weights", "chain", "view", "clip", "redact", "on_change", "description", "exposures", "targets"}
 META_KEYS = ("description", "exposures")  # for people and `hunch docs`: never sent, never in a key or spec hash
+TARGET_KEYS = {"model", "sample", "store", "max_cost"}  # targets.<name>: how --target <name> runs the spec
 EXPOSURE_KEYS = {"name", "kind", "owner", "uses", "url", "description"}
 EXPOSURE_KINDS = ("app", "hook", "dashboard", "job")
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
@@ -67,6 +68,8 @@ METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "h
 FEW = 10  # a group with fewer rows than this is reported, but its interval is too wide to say much
 SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN and does not fail `test`
 SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
+TARGET: str | None = None  # --target NAME: recorded with test results; None runs every spec as written
+STORE: Path | None = None  # the store a target names; beats $HUNCH_STORE
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = int(os.environ.get("HUNCH_CONCURRENCY", 16))  # requests in flight per fill
 RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx, transport): the scale test reads it
@@ -745,6 +748,65 @@ def lint_meta(spec: dict, values: dict[str, list[str]]) -> tuple[list[str], list
     return errors, warnings
 
 
+def lint_targets(project: dict) -> list[str]:
+    """targets: {name: {model, sample, store, max_cost}}. A mistyped key would run a dev target on the production
+    engine or store without a word, so it is an error, not a warning. With --target, the name must exist, and what
+    applies to the whole run (sample, store, max_cost) must agree between the judgments that set it."""
+    errors, used = [], {}
+    for n in project["order"]:
+        spec, ts = project["nodes"][n], project["nodes"][n].get("targets")
+        if ts is None:
+            continue
+        if not isinstance(ts, dict) or not ts or not all(isinstance(t, dict) for t in ts.values()):
+            errors.append(f"{n}: targets maps each name to its settings, e.g. {{dev: {{model: …, sample: 50}}}}")
+            continue
+        for tn, t in ts.items():
+            at = f"{n}: targets.{tn}"
+            errors += [f"{at}: unknown key {k!r} (a target sets {', '.join(sorted(TARGET_KEYS))})" for k in sorted(set(t) - TARGET_KEYS)]
+            if "model" in t and "union" in spec:
+                errors.append(f"{at}.model: a union asks nothing; set it on the judgments it combines")
+            elif "model" in t and not (isinstance(t["model"], str) and t["model"]):
+                errors.append(f"{at}.model: an engine, e.g. deepseek:deepseek-flash")
+            elif "model" in t and (t["model"].endswith("latest") or ":~" in t["model"]):
+                errors.append(f"{at}.model: pin an exact version, not {t['model']!r}")
+            if "sample" in t and not (type(t["sample"]) is int and t["sample"] > 0):
+                errors.append(f"{at}.sample: a number of rows, got {t['sample']!r}")
+            if "max_cost" in t and not (type(t["max_cost"]) in (int, float) and t["max_cost"] >= 0):
+                errors.append(f"{at}.max_cost: US dollars, got {t['max_cost']!r}")
+            if "store" in t and not (isinstance(t["store"], str) and t["store"]):
+                errors.append(f"{at}.store: the path of a SQLite file, got {t['store']!r}")
+            elif "store" in t:
+                t = t | {"store": str((spec["_dir"] / Path(t["store"]).expanduser()).resolve())}
+            for k in ("sample", "store", "max_cost"):
+                if k in t and isinstance(t[k], (int, float, str)):
+                    used.setdefault((tn, k), {}).setdefault(t[k], n)
+    name = project.get("target")
+    if name and not any(name in (s.get("targets") or {}) for s in project["nodes"].values() if isinstance(s.get("targets"), dict)):
+        have = sorted({t for s in project["nodes"].values() if isinstance(s.get("targets"), dict) for t in s["targets"]})
+        errors.append(f"--target {name}: no judgment here defines it ({'targets: ' + ', '.join(have) if have else 'no targets:'})")
+    for (tn, k), vals in used.items():
+        if len(vals) > 1:
+            errors.append(f"targets.{tn}.{k} differs between judgments ({', '.join(f'{n}: {v}' for v, n in vals.items())}); "
+                          f"one run has one {k}")
+    return errors
+
+
+def apply_target(project: dict, name: str, keep_model: bool = False) -> dict:
+    """--target NAME on a linted project: each judgment answers with its targets.NAME.model (tables get the engine's
+    suffix, as under --model, so the spec's own tables stay untouched); a judgment without one runs as written.
+    Returns what applies to the whole run: sample, store (resolved against the spec that names it), max_cost."""
+    run = {}
+    for spec in project["nodes"].values():
+        t = (spec.get("targets") or {}).get(name) or {}
+        if "model" in t and not keep_model and "union" not in spec and t["model"] != spec.get("model"):
+            spec["_table_suffix"] = "__" + re.sub(r"\W+", "_", t["model"]).strip("_")
+            spec["model"] = t["model"]
+        run |= {k: t[k] for k in ("sample", "max_cost") if k in t}
+        if "store" in t:
+            run["store"] = (spec["_dir"] / Path(t["store"]).expanduser()).resolve()
+    return run
+
+
 def lint(project: dict) -> tuple[list[str], list[str]]:
     """Lint every judgment, tracking which columns flow along each ref() so where-clauses and state are
     checked before anything runs."""
@@ -770,8 +832,10 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             errors += tag([f"missing {', '.join(missing)} (every judgment needs model, key, state and questions)"])
             columns[name] = None
             continue
+        targets = spec.get("targets") if isinstance(spec.get("targets"), dict) else {}
         for m in [spec["model"], *[q["escalate"]["model"] for q in spec["questions"].values()
-                                   if isinstance(q, dict) and isinstance(q.get("escalate"), dict) and "model" in q["escalate"]]]:
+                                   if isinstance(q, dict) and isinstance(q.get("escalate"), dict) and "model" in q["escalate"]],
+                  *[t["model"] for t in targets.values() if isinstance(t, dict) and isinstance(t.get("model"), str)]]:
             prefix = str(m).split(":", 1)[0] if ":" in str(m) else None
             if prefix and prefix not in engines.RESERVED and prefix not in engines.loaded():
                 broken = {p: e for p, e in engines.installed().items() if isinstance(e, Exception)}
@@ -804,6 +868,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
         # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
         columns[name] = None if header is None else header + answer_columns(spec) + ["_path_p"] + (["_w"] if "weights" in spec else [])
+    errors += lint_targets(project)
     if len(project["nodes"]) == 1:  # a single spec: no need to name it in every message
         name = project["order"][0]
         errors = [x.removeprefix(f"{name}: ") for x in errors]
@@ -818,6 +883,8 @@ _conns: dict[tuple[Path, int], sqlite3.Connection] = {}
 
 
 def store_path(start: Path) -> Path:
+    if STORE is not None:
+        return STORE
     if os.environ.get("HUNCH_STORE"):
         return Path(os.environ["HUNCH_STORE"]).resolve()
     start = start.resolve()
@@ -1805,7 +1872,7 @@ def cmd_run(project: dict, args) -> None:
         for n in project["order"]:
             print(f"{n}: --sample {SAMPLE}: {len(results[n]['rows'])} rows judged")
         print_stats(merge_stats(*(r["stats"] for r in results.values())))
-        print("answers are cached; tables not replaced (run without --sample to write them)")
+        print("answers are cached; tables not replaced (run without a sample to write them)")
         return
     for i_node, n in enumerate(project["order"]):
         res, spec = results[n], project["nodes"][n]
@@ -1849,8 +1916,8 @@ def table_name(spec: dict) -> str:
 
 def spec_hash(spec: dict) -> str:
     """What the judgment asks: not its policy (on_change) or where this run's rows come from (source, which
-    --source and --traffic replace), so freeze guards the questions, not the data."""
-    return digest({k: v for k, v in spec.items() if not k.startswith("_") and k not in ("on_change", "source", *META_KEYS)})[:12]
+    --source and --traffic replace) or how other targets would run it, so freeze guards the questions, not the data."""
+    return digest({k: v for k, v in spec.items() if not k.startswith("_") and k not in ("on_change", "source", "targets", *META_KEYS)})[:12]
 
 
 def accuracy(items: list[dict], answers: dict, qid: str, gold: str = "gold") -> float | None:
@@ -2457,7 +2524,8 @@ def cmd_docs(project: dict, args) -> None:
 
 def results_path(project: dict) -> Path:
     """.hunch/target/<tested spec or folder, relative to the store's folder>.json: one file per spec or project, so
-    projects sharing a store keep their own; with --model, the engine's suffix too (`triage__deepseek_deepseek_flash`)."""
+    projects sharing a store keep their own; with --model, the engine's suffix too (`triage__deepseek_deepseek_flash`);
+    with --target, its name (`triage@dev`), so a dev test never replaces the results docs and CI read."""
     spec = project["nodes"][project["order"][0]]
     store = store_path(spec["_dir"])
     tested = Path(project["path"]).resolve()
@@ -2465,7 +2533,8 @@ def results_path(project: dict) -> Path:
         name = tested.relative_to(store.parent.parent).with_suffix("")
     except ValueError:  # tested outside the store's folder (HUNCH_STORE elsewhere)
         name = Path(tested.stem)
-    return store.parent / "target" / name.with_name(name.name + spec.get("_table_suffix", "")).with_suffix(".json")
+    return store.parent / "target" / name.with_name(name.name + spec.get("_table_suffix", "")
+                                                    + (f"@{TARGET}" if TARGET else "")).with_suffix(".json")
 
 
 def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> None:
@@ -2476,7 +2545,7 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(UTC).isoformat(timespec="seconds"),
            "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed, "sample": SAMPLE,
-           "cost": _r(stats.get("cost")), "judgments": report}
+           "target": TARGET, "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):  # GitHub Actions: a table on the run's summary page
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
@@ -2645,6 +2714,8 @@ def cmd_diff(project: dict, args) -> None:
                      "(the same specs on another engine)")
         args.against = str(args.path)
     old = load_against(project, args)
+    if TARGET:  # both sides on the same target: a diff compares logic, not targets
+        apply_target(old, TARGET)  # --model, if given, is the new side's engine only, as without a target
     new_r, old_r = execute(project), execute(old)
     print_stats(merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values()))))
     if args.node:
@@ -3157,11 +3228,13 @@ def main() -> None:
     p.add_argument("--max-cost", type=float, help="USD: the most each set of asks may be charged (refused up front on the estimate, kept while asking)")
     p.add_argument("--receipt", action="store_true", help="test: also write the numbers beside the spec (<spec>.results.json), to commit with a battery")
     p.add_argument("--sample", type=int, help="compile, run, test, diff: judge only N root rows, the same N every time; run keeps its tables")
+    p.add_argument("--target", help="run as the specs' targets.NAME say: model, sample, store, max_cost (a flag given here wins)")
     args = p.parse_args()
-    global MAX_COST, SAMPLE
-    SAMPLE = args.sample
+    global MAX_COST, SAMPLE, TARGET, STORE
+    SAMPLE, TARGET, STORE = args.sample, None, None
     MAX_COST = args.max_cost if args.max_cost is not None else MAX_COST  # else $HUNCH_MAX_COST, if set
     project = load_project(args.path)
+    project["target"] = args.target
     if args.model:  # another engine on the same specs: its tables get a suffix, the spec's own stay untouched
         for spec in project["nodes"].values():
             spec["_table_suffix"] = "__" + re.sub(r"\W+", "_", args.model).strip("_")
@@ -3187,6 +3260,14 @@ def main() -> None:
         print(f"lint error: {e}", file=sys.stderr)
     if errors:
         sys.exit(2)
+    if args.target:
+        if args.receipt:
+            sys.exit("--receipt records the spec as written; run it without --target")
+        run = apply_target(project, args.target, keep_model=bool(args.model))
+        TARGET, STORE = args.target, run.get("store")  # None: the usual store
+        SAMPLE = args.sample if args.sample is not None else run.get("sample")
+        if args.max_cost is None and "max_cost" in run:  # a cap: $HUNCH_MAX_COST still holds if it is lower
+            MAX_COST = run["max_cost"] if MAX_COST is None else min(MAX_COST, run["max_cost"])
     commands[args.command](project, args)
 
 
