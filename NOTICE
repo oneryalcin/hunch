@@ -29,3 +29,7 @@ This product includes third-party data:
   condense its Topic-Specific Guidelines (NIST, https://trec.nist.gov/data/legal10.html); fetch.py downloads the EDRM
   Enron Email Data Set v2 (ZL Technologies, CC BY 3.0 US) and the track's judgments, and nothing from them is committed.
   See prototype/examples/discovery/NOTICE.md.
+- prototype/examples/screening/*.yml: quote the eligibility criteria of three published systematic reviews (the
+  authors' text, as recorded in SYNERGY, De Bruin et al. 2023, https://doi.org/10.34894/HE6NAQ); docs-site/snippets/screening-data.jsx carries
+  six paper titles (OpenAlex metadata, CC0). fetch.py builds the papers locally from SYNERGY and PubMed; nothing from
+  them is committed. See prototype/examples/screening/NOTICE.md.

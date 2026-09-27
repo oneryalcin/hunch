@@ -482,6 +482,18 @@ From the second survey (beyond coding): the social scientist's and investigator'
 - **Cost:** both wordings, four topics, $2.51 plus a $0.03 trial; 96-116 s per topic.
 - **Adversarial review (Fable, 8 findings, fixed):** the keyword strawman and the page's regex printed without `\b`; bars tuned on the test set; adjudication described wrongly; the leak framed sideways; "455,449 for every topic" after dropping broken rows; condensations drop minor rules (e.g. lobbying's conference and FERC rules, privilege's business-vs-legal predominance); an 80% privilege floor presented as a win; first-pass -1 counted as no.
 
+## Findings, round 23: screening papers for systematic reviews (2026-09-27)
+
+SYNERGY (CC0; the 2025 "plus" source, 119 reviews): three reviews with screening labels and published criteria, van Dis 2019 (anxiety CBT, 9,883), Moran 2020 (diet and risk, 5,244), Appenzeller-Herzog 2019 (Wilson disease, 2,896). `gold` = the title-and-abstract decision; `included` = final. Abstracts can't be republished (legal note accepted by the user); `.cache/` only.
+
+- **OpenAlex lost most abstracts**; PubMed E-utilities fill gaps (coverage 90% / 71% / 63%). Filges 2018 (class size) dropped: PubMed covers 5% of it. Title-only papers are much harder.
+- **Give the model what a screener sees.** The first run had title and abstract only and said yes to letters, reviews and editorials the criteria exclude (Wilson: 201 letters, 440 reviews in the pile); adding OpenAlex `type` and journal (`venue`) fixed it and moved every number a little (anxiety, all papers in the review: 32.8% → 30.4% of the pile).
+- **Zero-shot ranking vs active learning** (ASReview 3.0.8 elas_u4, 3 seeds, local, same text): papers in the review found, as share of pile read at 95% / all but one / all: anxiety hunch 27.8 / 28.0 / 30.4 vs AL 16.7-17.2 / 18.9-24.8 / 26.7-29.2; diet 29.5 / 36.8 / 41.9 vs 51.9-52.2 / 64.9-65.3 / 70.7-70.9; Wilson 27.6 / 27.6 / 38.9 vs 36.8-37.3 / 36.8-37.3 / 72.4-72.7. On the screeners' keeps (WSS@95's basis) AL wins anxiety and Wilson (31.7-32.3 vs 37.3; 44.2-50.9 vs 77.3), hunch wins diet (44.9 vs 52.6). The "all" column hinges on single, often title-only papers; a first write-up led with it and was corrected in review.
+- **Wilson disease**: screeners kept poster-session records and patient cohorts (might compare drugs; only the full text says). No recall bar possible on the screeners' keeps.
+- **Recall bars chosen on half**: anxiety 0.96 → 95.3% on the other half reading 40.2%; diet 0.96 → 96.1% reading 45.8%; no paper in either review set aside.
+- **Cost:** $0.76 for 18,023 papers with type and journal (anxiety 165 s); $1.49 with the first run and the trial.
+- **Adversarial review (Fable, 11 findings, fixed):** run time misreported (82 s was diet's); two puzzle notes wrong (a "poster session" record holding one off-topic abstract; a "zinc therapy" paper that is a letter); hunch never saw publication type; the "all papers" headline rested on one title-only paper; the lesson hid AL's win on WSS@95; a YAML fold broke "risk-sensitive"; PubMed parsing joined translated abstracts and dropped section labels; NOTICE implied CC0 for quoted criteria.
+
 ## Lessons from dlt (prior art, see 03 related work)
 
 Decisions for the real build:
