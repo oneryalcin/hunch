@@ -444,6 +444,122 @@
                       "description": "The lowest bar for no whose interval's lower bound meets min_recall"
                     }
                   }
+                },
+                "baseline": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "rule",
+                    "rows",
+                    "said_yes",
+                    "accuracy",
+                    "recall",
+                    "precision",
+                    "auroc",
+                    "model",
+                    "model_ahead"
+                  ],
+                  "description": "noul with baseline: the rule and the model scored on the same gold rows, weighted alike; null where a share has no rows",
+                  "properties": {
+                    "rule": {
+                      "type": [
+                        "string",
+                        "object"
+                      ],
+                      "description": "As in the spec"
+                    },
+                    "rows": {
+                      "type": "integer"
+                    },
+                    "said_yes": {
+                      "type": "integer"
+                    },
+                    "accuracy": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "recall": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Share of gold-yes rows it says yes on"
+                    },
+                    "precision": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Share of its yes answers that gold says yes"
+                    },
+                    "auroc": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "model": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "accuracy",
+                        "recall",
+                        "precision",
+                        "auroc"
+                      ],
+                      "properties": {
+                        "accuracy": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "recall": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of gold-yes rows it says yes on"
+                        },
+                        "precision": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of its yes answers that gold says yes"
+                        },
+                        "auroc": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "minimum": 0,
+                          "maximum": 1
+                        }
+                      },
+                      "description": "The model's label (yes at p(yes) >= 0.5) on the same rows; auroc from p(yes)"
+                    },
+                    "model_ahead": {
+                      "type": "boolean",
+                      "description": "The model's accuracy is above the rule's"
+                    }
+                  }
                 }
               }
             }

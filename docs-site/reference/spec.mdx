@@ -439,6 +439,7 @@ Lint, which every command runs first, fails while a listed value is not one the 
 | `act` | The confidence needed to act on an answer without review. | no |
 | `gold` | The source column holding the right answer. | no |
 | `escalate` | `{model: <engine>}`: re-ask answers below `act` on another engine. | no |
+| `baseline` | A rule that answers without a model (`noul`), scored by `test` on the same gold. | no |
 
 Keys not sent are not in the cache key; changing them asks nothing.
 
@@ -521,6 +522,38 @@ Re-asks answers below `act` on another engine. The new answer is used only if it
 act: 0.95
 escalate: {model: "deepseek:deepseek-flash"}
 ```
+
+### `baseline`
+
+A rule that answers a yes/no question without a model: a keyword search, or a condition on columns. `test` scores it on the same gold rows as the model and prints both; with `weights`, accuracy, recall and precision are weighted, AUROC is not. When the rule is as accurate as the model, `test` says so.
+
+A regex, found in any of the columns (yes when it is):
+
+```yaml
+baseline:
+  match: '(?i)nepal|earthquake'
+  columns: [text, title]
+```
+
+Case-sensitive unless it starts with `(?i)`. An empty cell matches nothing. Or a [`where`](#where) expression, yes when it holds:
+
+```yaml
+baseline: "region == 'asia'"
+```
+
+```text
+baseline: /(?i)nepal|quake/ in text
+     says yes on 5 of 8 gold rows
+     accuracy       rule   87.5%   model   87.5%
+     auroc          rule   0.875   model   0.875
+     recall of yes  rule  100.0%   model   75.0%
+     precision      rule   80.0%   model  100.0%
+     the rule is as accurate as the model or
+     more (87.5% vs 87.5%): the question has
+     to beat it to earn its cost
+```
+
+The model's side is its own label: yes at p(yes) ≥ 0.5. AUROC is p(yes) for the model, yes or no for the rule. The rule can read any column that reaches the judgment except its questions' gold columns. A non-numeric cell compared to a number says no. A union reports the rule when every branch has the same one; each branch is tested with its own. `test` writes the same numbers to the [results file](/reference/cli#the-results-file) under `baseline`.
 
 ### `none`
 
