@@ -92,7 +92,7 @@ tests:
 | [`reviews`](#reviews) | no | Where human verdicts are kept. |
 | [`weights`](#weights) | no | Correct for a source that over- or under-samples some rows. |
 | [`tests`](#tests) | no | Pass/fail thresholds that `hunch test` checks. |
-| [`metrics`](#metrics) | no | Rules over the answers, counted by `hunch test` on answers and on gold. |
+| [`metrics`](#metrics) | no | Rules over the answers, counted by `hunch test` on answers and on gold, overall or per group. |
 | [`examples`](#examples) | no | Rows whose answers are pinned: each one is a check in `hunch test`. |
 | [`on_change`](#on_change) | no | What happens to past answers when the spec changes. |
 | [`description`](#description) | no | What the judgment decides, in a sentence for people. |
@@ -328,7 +328,39 @@ Why only random spot checks, and how gold stands in for an answer: [How the numb
 | `min_rate`, `max_rate` | The share of rows where the rule holds on answers is at least / at most this. |
 | `max_missed` | The missed rate is at most this. |
 | `max_false_alarms` | The false-alarm rate is at most this. |
+| `higher` | `[group, other group]`, for a metric with `by`: the first group's rate on answers is higher. See below. |
 | `severity` | `error` (default) or `warn`, as for questions. |
+
+#### Per group
+
+`by: <column>` reports the metric once per value of that column, such as a party or a period. The column can be a source column or an answer of this judgment. The overall lines stay as they are.
+
+```yaml
+metrics:
+  health_share:
+    rule: health == 'yes'
+    by: period
+tests:
+  health_share:
+    higher: [after_2008, before_2008]
+```
+
+```text
+  by period: on answers, then on gold (95% CI)
+    after_2008    42 of 196   21.4% (16.3%–27.7%)  gold 21.9% (16.7%–28.2%)
+    before_2008   23 of 196   11.7% (7.9%–17.0%)  gold 16.8% (12.2%–22.7%)
+    8 rows have no period, left out of the groups
+  PASS after_2008 higher than before_2008: +9.7 points (95% CI +2.3 to +17.0)
+       the two groups' intervals overlap; the difference's interval does not include 0
+```
+
+Each group gets its rate on answers with a 95% interval, and on gold when the metric has gold (the same rows as the overall `on gold` line). Unlike the overall line, a group's rate on answers has an interval: comparing groups is a claim about what each group produces, not only about these rows. With [`weights`](#weights), group rates are weighted and the interval uses the effective sample size.
+
+Rows with no value in the column are left out and counted. A group under 10 rows is still listed, with a note that its interval is too wide to say much.
+
+`higher: [a, b]` passes when the 95% interval of the difference, a's rate minus b's, lies above 0. It can pass while the two groups' intervals overlap; `test` says so. It fails when either group has no rows. One `higher` per metric: each extra comparison you run is another chance of a false pass, so pick the pair before you look.
+
+Details: [How the numbers work](/reference/how-the-numbers-work#metrics-per-group).
 
 ### `examples`
 

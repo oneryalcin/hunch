@@ -63,7 +63,8 @@ EXPOSURE_KINDS = ("app", "hook", "dashboard", "job")
 ON_CHANGE = ("reask", "new_rows_only", "freeze")
 TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_auroc", "min_recall", "order_stability",
              "severity"}
-METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "severity"}  # tests on a metric, by its name
+METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "higher", "severity"}  # tests on a metric, by its name
+FEW = 10  # a group with fewer rows than this is reported, but its interval is too wide to say much
 SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN and does not fail `test`
 SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
@@ -502,6 +503,8 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                     errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
             except (ValueError, SyntaxError) as e:
                 errors.append(f"metrics.{name}: {e}")
+            if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
+                errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
@@ -578,8 +581,10 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 errors.append(f"{where_}: {v!r} is not a level of {qid} (0–{len(q['criteria']) - 1} or a level's text)")
     metrics = spec.get("metrics") or {}
     for name, m in metrics.items():
-        if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule"}:
-            errors.append(f"metrics.{name}: needs one key, rule: <condition over answers and columns>")
+        if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule", "by"}:
+            errors.append(f"metrics.{name}: needs rule: <condition over answers and columns>, and optionally by: <column>")
+        elif "by" in m and not (isinstance(m["by"], str) and m["by"]):
+            errors.append(f"metrics.{name}: by is one column name, got {m['by']!r}")
         if name in spec["questions"] or name in spec.get("_multi", {}):
             errors.append(f"metrics.{name}: a question has the same name")
     for qid, conf in (spec.get("tests") or {}).items():
@@ -591,6 +596,12 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
         if qid in metrics:
             for k in set(conf) - METRIC_TEST_KEYS:
                 warnings.append(f"tests.{qid}: unknown metric test {k!r} (typo?)")
+            if "higher" in conf:
+                h = conf["higher"]
+                if not isinstance(metrics[qid], dict) or "by" not in metrics[qid]:
+                    errors.append(f"tests.{qid}.higher: compares two groups, so the metric needs by: <column>")
+                elif not (isinstance(h, list) and len(h) == 2 and str(h[0]) != str(h[1])):
+                    errors.append(f"tests.{qid}.higher: [group, other group], got {h!r}")
             continue
         if qid in spec.get("_multi", {}):
             if set(conf) - {"min_accuracy", "severity"}:
@@ -2159,7 +2170,7 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
                 g[q], g[f"{q}_p"] = label, 1.0
                 if its[q]["q"]["type"] == "noul":
                     g[f"{q}_pyes"] = 1.0 if label == "yes" else 0.0
-            pairs.append((fired, bool(pred(g))))
+            pairs.append((fired, bool(pred(g)), r))
         basis = f"all {len(pairs)} rows with gold" if census else f"{len(pairs)} random spot checks"
         out["gold"] = {"basis": "census" if census else "spot checks", "rows": len(pairs)}
         if pairs:
@@ -2168,9 +2179,9 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
                 print(f"  {label}: {hits} of {n} {of} ({hits / n:.1%}, 95% CI {lo:.1%}–{hi:.1%})" if n else f"  {label}: none of {of}")
                 out[key] = {"count": hits, "of": n, "rate": _r(hits / n) if n else None, "ci": [_r(lo), _r(hi)] if n else None}
                 return hits / n if n else 0.0
-            rate_line(f"on gold ({basis})", "gold_rate", sum(g for _, g in pairs), len(pairs), "rows")
-            passed = [g for f, g in pairs if not f]
-            caught = [g for f, g in pairs if f]
+            rate_line(f"on gold ({basis})", "gold_rate", sum(g for _, g, _ in pairs), len(pairs), "rows")
+            passed = [g for f, g, _ in pairs if not f]
+            caught = [g for f, g, _ in pairs if f]
             missed = rate_line("missed", "missed", sum(passed), len(passed), "rows the rule passed")
             alarms = rate_line("false alarms", "false_alarms", len(caught) - sum(caught), len(caught), "rows the rule caught")
             if "max_missed" in conf:
@@ -2178,7 +2189,70 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
             if "max_false_alarms" in conf:
                 check(alarms <= conf["max_false_alarms"], f"false alarms {alarms:.1%} (max {conf['max_false_alarms']:.1%})",
                       "max_false_alarms", alarms, conf["max_false_alarms"])
+    if by := (spec["metrics"][name] or {}).get("by"):
+        out |= test_groups(by, conf, [(r, f) for r, f, _ in rows], pairs if qids else [], check)
     out["checks"] = check.log[first_check:]
+    return out
+
+
+def wrate(fw: list[tuple[bool, float]]) -> tuple[float, float, float, float]:
+    """Weighted share of True, its 95% Wilson interval on the effective sample size (Kish), and that size.
+    Unit weights give k/n and wilson(k, n) exactly."""
+    sw = sum(w for _, w in fw)
+    p, n_eff = sum(w for f, w in fw if f) / sw, sw * sw / sum(w * w for _, w in fw)
+    return p, *wilson(p * n_eff, n_eff), n_eff
+
+
+def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[tuple], check: "Checks") -> dict:
+    """A metric per value of `by`: the rule's rate on answers in each group, with a 95% interval (rows are a sample
+    of what the group produces, which is what a comparison of groups is about; weighted when the source has
+    `weights`), and on gold where the metric has gold. `higher: [a, b]` checks that a's rate on answers is above
+    b's: the 95% interval of the difference (Newcombe's, from the two Wilson intervals) must lie above 0."""
+    groups: dict[str, list[tuple[bool, float]]] = {}
+    gold: dict[str, list[tuple[bool, float]]] = {}
+    for r, fired in rows:
+        if r.get(by) not in (None, ""):
+            groups.setdefault(str(r[by]), []).append((fired, r.get("_w", 1.0)))
+    for _, g, r in pairs:
+        if r.get(by) not in (None, ""):
+            gold.setdefault(str(r[by]), []).append((g, r.get("_w", 1.0)))
+    weighted = any(r.get("_w", 1.0) != 1.0 for r, _ in rows)
+    stats = {g: wrate(fw) for g, fw in groups.items()}
+    out: dict = {"by": by, "no_group": len(rows) - sum(map(len, groups.values())), "groups": {}}
+    print(f"  by {by}: on answers{', then on gold' if gold else ''} (95% CI{', weighted' if weighted else ''})")
+    width, digits = max(map(len, groups), default=0), len(str(max(map(len, groups.values()), default=0)))
+    for i, g in enumerate(sorted(groups)):
+        fw, (p, lo, hi, n_eff) = groups[g], stats[g]
+        k = sum(f for f, _ in fw)
+        x = out["groups"][g] = {"rows": len(fw), "fired": k, "rate": _r(p), "ci": [_r(lo), _r(hi)]}
+        line = f"{k:>{digits}} of {len(fw):<{digits}}  {p:6.1%} ({lo:.1%}–{hi:.1%})"
+        if weighted:
+            x["effective_rows"] = _r(n_eff)
+        if gs := gold.get(g):
+            gp, glo, ghi, _ = wrate(gs)
+            x["gold_rate"] = {"count": sum(g for g, _ in gs), "of": len(gs), "rate": _r(gp), "ci": [_r(glo), _r(ghi)]}
+            line += f"  gold {gp:.1%} ({glo:.1%}–{ghi:.1%})"
+        if i < SHOW:
+            print(f"    {g:<{width}}  {line}")
+    if len(groups) > SHOW:
+        print(f"    … {len(groups) - SHOW} more groups in the results file")
+    if few := sum(len(fw) < FEW for fw in groups.values()):
+        print(f"    {few} of {len(groups)} groups have under {FEW} rows: their intervals are too wide to say much")
+    if out["no_group"]:
+        print(f"    {out['no_group']} rows have no {by}, left out of the groups")
+    if "higher" in conf:
+        a, b = map(str, conf["higher"])
+        if a not in stats or b not in stats:
+            gone = next(g for g in (a, b) if g not in stats)
+            check(False, f"{a} higher than {b}: no rows in group {gone!r} (groups: {', '.join(sorted(groups)[:SHOW])})", "higher", None, 0)
+        else:
+            (pa, la, ha, _), (pb, lb, hb, _) = stats[a], stats[b]
+            d = pa - pb
+            lo, hi = d - math.hypot(pa - la, hb - pb), d + math.hypot(ha - pa, pb - lb)
+            out["higher"] = {"groups": [a, b], "difference": _r(d), "ci": [_r(lo), _r(hi)]}
+            check(lo > 0, f"{a} higher than {b}: {d * 100:+.1f} points (95% CI {lo * 100:+.1f} to {hi * 100:+.1f})", "higher", lo, 0)
+            if lo > 0 and la <= hb:
+                print("       the two groups' intervals overlap; the difference's interval does not include 0")
     return out
 
 

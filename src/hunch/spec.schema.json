@@ -131,7 +131,7 @@
     },
     "metrics": {
       "type": "object",
-      "description": "Rules over a row, counted on answers and on gold, with misses and false alarms.",
+      "description": "Rules over a row, counted on answers and on gold, with misses and false alarms; with by, per group.",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
@@ -142,6 +142,10 @@
           "rule": {
             "type": "string",
             "description": "A condition over answers and columns, as in where: destroys == 'yes' or sends_out == 'yes'."
+          },
+          "by": {
+            "type": "string",
+            "description": "A column or answer: hunch test also reports the rule per value of it, each with a 95% interval."
           }
         }
       }
@@ -410,6 +414,18 @@
         "max_false_alarms": {
           "$ref": "#/definitions/share",
           "description": "Metric: the false-alarm rate is at most this."
+        },
+        "higher": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": [
+              "string",
+              "number"
+            ]
+          },
+          "description": "Metric with by: [group, other group]; the first group's rate on answers is higher (the 95% interval of the difference is above 0)."
         },
         "severity": {
           "$ref": "#/definitions/severity"
