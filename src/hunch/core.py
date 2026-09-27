@@ -600,7 +600,8 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 h = conf["higher"]
                 if not isinstance(metrics[qid], dict) or "by" not in metrics[qid]:
                     errors.append(f"tests.{qid}.higher: compares two groups, so the metric needs by: <column>")
-                elif not (isinstance(h, list) and len(h) == 2 and str(h[0]) != str(h[1])):
+                elif not (isinstance(h, list) and len(h) == 2 and all(isinstance(x, (str, int, float)) for x in h)
+                          and str(h[0]) != str(h[1])):
                     errors.append(f"tests.{qid}.higher: [group, other group], got {h!r}")
             continue
         if qid in spec.get("_multi", {}):
@@ -2200,7 +2201,14 @@ def wrate(fw: list[tuple[bool, float]]) -> tuple[float, float, float, float]:
     Unit weights give k/n and wilson(k, n) exactly."""
     sw = sum(w for _, w in fw)
     p, n_eff = sum(w for f, w in fw if f) / sw, sw * sw / sum(w * w for _, w in fw)
-    return p, *wilson(p * n_eff, n_eff), n_eff
+    lo, hi = wilson(p * n_eff, n_eff)
+    return p, max(0.0, lo), min(1.0, hi), n_eff
+
+
+def newcombe(a: tuple, b: tuple) -> tuple[float, float, float]:
+    """a's rate minus b's, and its 95% interval (Newcombe's hybrid score, from each rate's (p, lo, hi))."""
+    d = a[0] - b[0]
+    return d, d - math.hypot(a[0] - a[1], b[2] - b[0]), d + math.hypot(a[2] - a[0], b[0] - b[1])
 
 
 def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[tuple], check: "Checks") -> dict:
@@ -2218,6 +2226,7 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
             gold.setdefault(str(r[by]), []).append((g, r.get("_w", 1.0)))
     weighted = any(r.get("_w", 1.0) != 1.0 for r, _ in rows)
     stats = {g: wrate(fw) for g, fw in groups.items()}
+    gstats = {g: wrate(gs) for g, gs in gold.items()}
     out: dict = {"by": by, "no_group": len(rows) - sum(map(len, groups.values())), "groups": {}}
     print(f"  by {by}: on answers{', then on gold' if gold else ''} (95% CI{', weighted' if weighted else ''})")
     width, digits = max(map(len, groups), default=0), len(str(max(map(len, groups.values()), default=0)))
@@ -2228,8 +2237,9 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
         line = f"{k:>{digits}} of {len(fw):<{digits}}  {p:6.1%} ({lo:.1%}–{hi:.1%})"
         if weighted:
             x["effective_rows"] = _r(n_eff)
+            line += f"  effective n {n_eff:.0f}"
         if gs := gold.get(g):
-            gp, glo, ghi, _ = wrate(gs)
+            gp, glo, ghi, _ = gstats[g]
             x["gold_rate"] = {"count": sum(g for g, _ in gs), "of": len(gs), "rate": _r(gp), "ci": [_r(glo), _r(ghi)]}
             line += f"  gold {gp:.1%} ({glo:.1%}–{ghi:.1%})"
         if i < SHOW:
@@ -2246,13 +2256,16 @@ def test_groups(by: str, conf: dict, rows: list[tuple[dict, bool]], pairs: list[
             gone = next(g for g in (a, b) if g not in stats)
             check(False, f"{a} higher than {b}: no rows in group {gone!r} (groups: {', '.join(sorted(groups)[:SHOW])})", "higher", None, 0)
         else:
-            (pa, la, ha, _), (pb, lb, hb, _) = stats[a], stats[b]
-            d = pa - pb
-            lo, hi = d - math.hypot(pa - la, hb - pb), d + math.hypot(ha - pa, pb - lb)
+            d, lo, hi = newcombe(stats[a], stats[b])
             out["higher"] = {"groups": [a, b], "difference": _r(d), "ci": [_r(lo), _r(hi)]}
             check(lo > 0, f"{a} higher than {b}: {d * 100:+.1f} points (95% CI {lo * 100:+.1f} to {hi * 100:+.1f})", "higher", lo, 0)
-            if lo > 0 and la <= hb:
+            if lo > 0 and stats[a][1] <= stats[b][2]:
                 print("       the two groups' intervals overlap; the difference's interval does not include 0")
+            if a in gstats and b in gstats:  # the answers' difference can come from the model erring more in one group
+                gd, glo, ghi = newcombe(gstats[a], gstats[b])
+                out["higher"]["gold"] = {"difference": _r(gd), "ci": [_r(glo), _r(ghi)]}
+                print(f"       on gold: {gd * 100:+.1f} points (95% CI {glo * 100:+.1f} to {ghi * 100:+.1f})"
+                      + ("; gold does not show it" if lo > 0 and glo <= 0 else ""))
     return out
 
 

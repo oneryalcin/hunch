@@ -352,13 +352,16 @@ tests:
     8 rows have no period, left out of the groups
   PASS after_2008 higher than before_2008: +9.7 points (95% CI +2.3 to +17.0)
        the two groups' intervals overlap; the difference's interval does not include 0
+       on gold: +5.1 points (95% CI -2.8 to +12.9); gold does not show it
 ```
 
-Each group gets its rate on answers with a 95% interval, and on gold when the metric has gold (the same rows as the overall `on gold` line). Unlike the overall line, a group's rate on answers has an interval: comparing groups is a claim about what each group produces, not only about these rows. With [`weights`](#weights), group rates are weighted and the interval uses the effective sample size.
+Each group gets its rate on answers with a 95% interval, and on gold when the metric has gold (the same rows as the overall `on gold` line). Unlike the overall line, a group's rate on answers has an interval: comparing groups is a claim about what each group produces, not only about these rows. With [`weights`](#weights), group rates are weighted, and each line shows the effective sample size its interval uses.
 
 Rows with no value in the column are left out and counted. A group under 10 rows is still listed, with a note that its interval is too wide to say much.
 
-`higher: [a, b]` passes when the 95% interval of the difference, a's rate minus b's, lies above 0. It can pass while the two groups' intervals overlap; `test` says so. It fails when either group has no rows. One `higher` per metric: each extra comparison you run is another chance of a false pass, so pick the pair before you look.
+`higher: [a, b]` passes when the 95% interval of the difference, a's rate minus b's, lies above 0. It can pass while the two groups' intervals overlap; `test` says so. It fails when either group has no rows.
+
+The check is on the model's answers. When both groups have gold, `test` prints the same difference on gold. In the example it does not hold there: the model misses more health bills before 2008, which widens the gap. A finding that passes on answers but not on gold is a finding about the model, until more gold says otherwise. One `higher` per metric: each extra comparison you run is another chance of a false pass, so pick the pair before you look.
 
 Details: [How the numbers work](/reference/how-the-numbers-work#metrics-per-group).
 

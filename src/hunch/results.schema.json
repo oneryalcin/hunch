@@ -738,6 +738,24 @@
                       "minItems": 2,
                       "maxItems": 2,
                       "description": "95% interval of the difference [low, high] (Newcombe)"
+                    },
+                    "gold": {
+                      "type": "object",
+                      "description": "The same difference on gold, when both groups have gold",
+                      "properties": {
+                        "difference": {
+                          "type": "number"
+                        },
+                        "ci": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "description": "95% interval of the difference [low, high] (Newcombe)"
+                        }
+                      }
                     }
                   }
                 },
