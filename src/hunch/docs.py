@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from hunch import core
+from hunch import core, settings
 
 MANIFEST_VERSION = 1
 STATUS = {  # status → (label, what it means), in the order the inventory lists them: what needs a look first
@@ -60,7 +60,7 @@ def manifest(project: dict) -> dict:
         out[n] = {"file": str(f.relative_to(base)) if f and f.is_relative_to(base) else (str(f) if f else None),
                   "spec_hash": core.spec_hash(s), "upstream": core.upstream(s), **spec}
     first = nodes[project["order"][0]]
-    return {"version": MANIFEST_VERSION, "git_sha": core.git_sha(first["_dir"]) or None, "target": core.TARGET,
+    return {"version": MANIFEST_VERSION, "git_sha": core.git_sha(first["_dir"]) or None, "target": settings.TARGET,
             "project": root.stem if root.is_file() else root.name, "judgments": out}
 
 

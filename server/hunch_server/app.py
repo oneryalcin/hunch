@@ -21,11 +21,11 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
-from hunch import core
+from hunch import core, settings
 
 ROOT = Path(os.environ.get("HUNCH_PROJECTS", ".")).resolve()
 TOKEN = os.environ.get("HUNCH_SERVER_TOKEN")
-core.MAX_COST = float(os.environ.get("HUNCH_SERVER_MAX_COST", "0.01"))  # per judgment asked by one request
+settings.MAX_COST = float(os.environ.get("HUNCH_SERVER_MAX_COST", "0.01"))  # per judgment asked by one request
 DRIFT_ALERT = 0.10  # total variation distance between two runs' label shares that is flagged
 
 

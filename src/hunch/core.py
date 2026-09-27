@@ -48,7 +48,7 @@ from pathlib import Path
 import httpx
 import yaml
 
-from hunch import engines
+from hunch import engines, settings
 
 API = "https://api.typesafe.ai/v1/systemone"
 PRICE_PER_INPUT_TOKEN = 0.042 / 1_000_000  # output tokens are free
@@ -68,13 +68,8 @@ TEST_KEYS = {"min_accuracy", "max_calibration_error", "min_act_accuracy", "min_a
 METRIC_TEST_KEYS = {"min_rate", "max_rate", "max_missed", "max_false_alarms", "higher", "severity"}  # tests on a metric, by its name
 FEW = 10  # a group with fewer rows than this is reported, but its interval is too wide to say much
 SEVERITIES = ("error", "warn")  # a failing check with severity warn prints WARN and does not fail `test`
-SAMPLE: int | None = None  # --sample N: root rows cut to N, fixed by key hash, so repeated samples stay cached
-TARGET: str | None = None  # --target NAME: recorded with test results; None runs every spec as written
-STORE: Path | None = None  # the store a target names; beats $HUNCH_STORE
-VERBOSE = False  # CLI diagnostic detail; measurements and checks never depend on this
 REQUEST_OVERHEAD_TOKENS = 275  # measured on jev-1.13.0: fixed input tokens per request beyond ~chars/4
 CONCURRENCY = int(os.environ.get("HUNCH_CONCURRENCY", 16))  # requests in flight per fill
-RETRIES: Counter = Counter()  # why requests were retried this process (429, 5xx, transport): the scale test reads it
 NOISE = 0.10  # measured run-to-run sd ~0.03 on ambiguous choices; flips inside this margin are flagged
 DIAL = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99]
 SHOW = 12  # rows listed per section; summaries always cover everything
@@ -82,13 +77,8 @@ SHOW = 12  # rows listed per section; summaries always cover everything
 
 def detail(*args, **kwargs) -> None:
     """The full diagnostic report, requested with --verbose."""
-    if VERBOSE:
+    if settings.VERBOSE:
         print(*args, **kwargs)
-# --max-cost (USD per fill): refuse to start if the estimate is above it, and never send a request that could take
-# the charged cost above it (see worst_cost)
-MAX_COST: float | None = float(os.environ["HUNCH_MAX_COST"]) if os.environ.get("HUNCH_MAX_COST") else None
-CHARGED = 0.0  # USD charged by every fill in this process, as the engines report it
-SPEND_LIMIT: float | None = None  # a total across fills, on CHARGED (hunch.sql's budget: one query, many fills)
 RESERVED = {"answers", "traffic"}  # the store's own table; a judgment of that name would drop the cache when materialized
 REVIEW_FIELDS = ["qid", "row_id", "state_hash", "verdict", "label", "reviewer", "at", "kind"]
 # kind = why the row was reviewed: "audit" (random sample of agreements) | "disputed" | "uncertain". Only audits may
@@ -1002,8 +992,8 @@ _conns: dict[tuple[Path, int], sqlite3.Connection] = {}
 
 
 def store_path(start: Path) -> Path:
-    if STORE is not None:
-        return STORE
+    if settings.STORE is not None:
+        return settings.STORE
     if os.environ.get("HUNCH_STORE"):
         return Path(os.environ["HUNCH_STORE"]).resolve()
     start = start.resolve()
@@ -1023,7 +1013,7 @@ def open_store(spec: dict) -> sqlite3.Connection:
     path = store_path(spec["_dir"])
     if (path, threading.get_ident()) in _conns:  # one connection per thread: WAL lets them share the file
         return _conns[(path, threading.get_ident())]
-    if not path.exists() and VERBOSE:  # the command summary shows the chosen store; verbose explains why it is new
+    if not path.exists() and settings.VERBOSE:  # the command summary shows the chosen store; verbose explains why it is new
         print(f"new answer store: {path} (HUNCH_STORE=... to share one)", file=sys.stderr)
     path.parent.mkdir(exist_ok=True)
     db = sqlite3.connect(path, timeout=30, isolation_level=None, check_same_thread=False)
@@ -1210,12 +1200,12 @@ async def post(client: httpx.AsyncClient, sem, url: str, body: dict) -> dict:
                 r = await client.post(url, json=body)
             except httpx.TransportError as e:
                 last = repr(e)
-                RETRIES["transport"] += 1
+                settings.RETRIES["transport"] += 1
                 await asyncio.sleep(0.5 * 2**attempt)
                 continue
             if r.status_code in (429, 529) or r.status_code >= 500:
                 last = f"HTTP {r.status_code}"
-                RETRIES[r.status_code] += 1
+                settings.RETRIES[r.status_code] += 1
                 await asyncio.sleep(min(float(r.headers.get("retry-after") or 0.5 * 2**attempt), 30))
                 continue
             if r.status_code >= 400:
@@ -1304,9 +1294,9 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
         for w in oversized([it for g in group for it in g])[:5]:
             print(f"  size warning: {w}", file=sys.stderr)
         est = estimate_cost(model, group)
-        cap = MAX_COST  # this fill's cap: --max-cost, and what is left of a total across fills
-        if SPEND_LIMIT is not None:
-            cap = max(0.0, SPEND_LIMIT - CHARGED) if cap is None else min(cap, max(0.0, SPEND_LIMIT - CHARGED))
+        cap = settings.MAX_COST  # this fill's cap: --max-cost, and what is left of a total across fills
+        if settings.SPEND_LIMIT is not None:
+            cap = max(0.0, settings.SPEND_LIMIT - settings.CHARGED) if cap is None else min(cap, max(0.0, settings.SPEND_LIMIT - settings.CHARGED))
         if cap is not None and est > cap:
             raise SystemExit(f"{spec.get('judgment', '')}: would ask {sum(map(len, group))} answers in {len(group)} requests "
                              f"(~${est:.4f}), above --max-cost ${cap:.4g}; nothing asked")
@@ -1326,7 +1316,6 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
             sem, gate = asyncio.Semaphore(n), asyncio.Semaphore(n)
 
             async def one(g: list[dict]) -> None:
-                global CHARGED
                 async with gate:
                     worst = worst_cost(model, g)
                     if cap is not None and (stop[0] or stats["cost"] + held[0] + worst > cap):
@@ -1345,16 +1334,16 @@ async def fill(spec: dict, db, items: list[dict]) -> tuple[dict, dict]:
                       [[it["key"], res["model"], json.dumps(res["answers"][it["rid"]]), tokens / len(g)] for it in g])
                 stats["tokens"] += tokens
                 stats["cost"] += res["cost"]
-                CHARGED += res["cost"]
+                settings.CHARGED += res["cost"]
                 stats["asked"] += len(g)
                 for it in g:
                     have[it["key"]] = res["answers"][it["rid"]]
 
-            t0, r0 = time.perf_counter(), dict(RETRIES)
+            t0, r0 = time.perf_counter(), dict(settings.RETRIES)
             results = await asyncio.gather(*[one(g) for g in group], return_exceptions=True)
             dt = time.perf_counter() - t0
-            retried = {k: v - r0.get(k, 0) for k, v in RETRIES.items() if v - r0.get(k, 0)}
-            if VERBOSE or retried:
+            retried = {k: v - r0.get(k, 0) for k, v in settings.RETRIES.items() if v - r0.get(k, 0)}
+            if settings.VERBOSE or retried:
                 print(f"  {stats['requests']} requests in {dt:.1f}s ({stats['requests'] / dt:.1f}/s at concurrency {n})"
                       + (f"; retried {retried}" if retried else ""), file=sys.stderr)
         failed = [r for r in results if isinstance(r, BaseException)]
@@ -1659,8 +1648,8 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
         inp = results[ups[0]]["rows"] if ups else (rows_in if rows_in is not None else rows(spec))
         if not ups and "weights" in spec and rows_in is None:
             inp = weigh(inp, spec["weights"])
-        if not ups and rows_in is None and SAMPLE is not None:
-            inp = sorted(inp, key=lambda r: hashlib.sha256(str(r.get(spec["key"], "")).encode()).hexdigest())[:SAMPLE]
+        if not ups and rows_in is None and settings.SAMPLE is not None:
+            inp = sorted(inp, key=lambda r: hashlib.sha256(str(r.get(spec["key"], "")).encode()).hexdigest())[:settings.SAMPLE]
         keep, unknown, known, passed, unknown_rows = inp, 0, 0, 0, []
         if "where" in spec:
             pred, _ = compile_where(spec["where"])
@@ -2018,9 +2007,9 @@ def cmd_run(project: dict, args) -> None:
     except BaseException as e:
         failed(project["order"], e)
         raise
-    if SAMPLE is not None:  # a sample must never replace a table that downstream readers take for the whole
+    if settings.SAMPLE is not None:  # a sample must never replace a table that downstream readers take for the whole
         presentation.run(project, args, results, presentation.relative(store_path(project["nodes"][project["order"][0]]["_dir"])), None,
-                         sample=SAMPLE)
+                         sample=settings.SAMPLE)
         return
     for i_node, n in enumerate(project["order"]):
         res, spec = results[n], project["nodes"][n]
@@ -2045,13 +2034,13 @@ def cmd_run(project: dict, args) -> None:
             detail(f"{n}: union of {len(spec['union'])} judgments → table \"{n}{spec.get('_table_suffix', '')}\" ({len(res['rows'])} rows)")
             continue
         where = f", where kept {len(res['rows'])}" if "where" in spec else ""
-        if VERBOSE:
+        if settings.VERBOSE:
             print_stats(res["stats"], f"{n}: {res['input']} rows in{where}; answers")
         for qid, q in spec["questions"].items():
             if "act" in q:
                 k = sum(1 for r in res["rows"] if r.get(f"{qid}_route") == "review")
                 detail(f"  {qid}: {k} rows below act={q['act']} → review queue")
-    if len(project["nodes"]) > 1 and VERBOSE:
+    if len(project["nodes"]) > 1 and settings.VERBOSE:
         print_stats(merge_stats(*(r["stats"] for r in results.values())), "total")
     where = store_path(project["nodes"][project["order"][0]]["_dir"])
     presentation.run(project, args, results, presentation.relative(where), run_id, sample=None)
@@ -2709,7 +2698,7 @@ def cmd_test(project: dict, args) -> None:
             rep["examples"] = test_examples(spec, check, all_stats)
         rep["assessment"] = assessment(rep)
     stats = merge_stats(*all_stats)
-    if VERBOSE:
+    if settings.VERBOSE:
         print_stats(stats)
     write_results(project, report, check, stats)
     if getattr(args, "receipt", False):
@@ -2770,7 +2759,7 @@ def results_path(project: dict) -> Path:
     except ValueError:  # tested outside the store's folder (HUNCH_STORE elsewhere)
         name = Path(tested.stem)
     suffix = spec.get("_table_suffix", "")
-    suffix += f"@{TARGET}" if TARGET and not suffix.endswith(f"@{TARGET}") else ""
+    suffix += f"@{settings.TARGET}" if settings.TARGET and not suffix.endswith(f"@{settings.TARGET}") else ""
     return store.parent / "target" / name.with_name(name.name + suffix).with_suffix(".json")
 
 
@@ -2782,8 +2771,8 @@ def write_results(project: dict, report: dict, check: "Checks", stats: dict) -> 
     path.parent.mkdir(parents=True, exist_ok=True)
     doc = {"version": RESULTS_VERSION, "command": "test", "at": datetime.now(UTC).isoformat(timespec="seconds"),
            "git_sha": git_sha(spec["_dir"]) or None, "passed": not check.failed,
-           "assessment": overall_assessment(report), "sample": SAMPLE,
-           "target": TARGET, "cost": _r(stats.get("cost")), "judgments": report}
+           "assessment": overall_assessment(report), "sample": settings.SAMPLE,
+           "target": settings.TARGET, "cost": _r(stats.get("cost")), "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     if os.environ.get("GITHUB_STEP_SUMMARY"):  # GitHub Actions: a table on the run's summary page
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
@@ -2804,7 +2793,7 @@ def write_receipt(project: dict, report: dict, check: "Checks") -> Path:
     an upgrade, and a diff is a change in what was measured."""
     path = receipt_path(project)
     doc = {"version": RESULTS_VERSION, "command": "test", "passed": not check.failed,
-           "assessment": overall_assessment(report), "sample": SAMPLE,
+           "assessment": overall_assessment(report), "sample": settings.SAMPLE,
            "judgments": report}
     path.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
     return path
@@ -2959,8 +2948,8 @@ def load_against(project: dict, args) -> dict:
                 sys.exit(f"--against's {n!r} reads {missing}, which {twin!r}'s rows don't have: these projects don't "
                          f"judge the same data, so there is nothing to compare row by row")
             old["nodes"][n]["source"] = absolute_source(project["nodes"][twin])
-    if TARGET:  # the same target on both sides (if the old specs define it): compare logic, not targets.
-        apply_target(old, TARGET)  # --model, if given, is the new side's engine only, as without a target
+    if settings.TARGET:  # the same target on both sides (if the old specs define it): compare logic, not targets.
+        apply_target(old, settings.TARGET)  # --model, if given, is the new side's engine only, as without a target
     return old
 
 
@@ -2978,7 +2967,7 @@ def cmd_diff(project: dict, args) -> None:
 
     stats = merge_stats(*(r["stats"] for r in (*new_r.values(), *old_r.values())))
     print(f"Diff · {args.path} against {args.against}")
-    if VERBOSE:
+    if settings.VERBOSE:
         print_stats(stats)
     if args.node:
         pairs = [(args.node, twin_of(args.node, old["order"]))]
@@ -3224,11 +3213,11 @@ async def llm_text(model: str, prompt: str, temperature: float = 0.7) -> tuple[s
         raise SystemExit(f"set {ep['key']} for the writer ({model})")
     body = {"model": llm_route(model)[0], "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 32000, "temperature": temperature}  # reasoning models think first: leave room
-    if MAX_COST is not None:  # worst case: the whole reply allowance used
+    if settings.MAX_COST is not None:  # worst case: the whole reply allowance used
         p_in, p_out = llm_prices(model)
         worst = len(prompt.encode()) * p_in + body["max_tokens"] * p_out  # at most a token per byte
-        if worst > MAX_COST:
-            raise SystemExit(f"writer {model}: up to ${worst:.4f} per rewrite, above --max-cost ${MAX_COST}; nothing asked")
+        if worst > settings.MAX_COST:
+            raise SystemExit(f"writer {model}: up to ${worst:.4f} per rewrite, above --max-cost ${settings.MAX_COST}; nothing asked")
     async with httpx.AsyncClient(headers={"Authorization": f"Bearer {os.environ[ep['key']]}"}, timeout=300) as client:
         j = await post(client, asyncio.Semaphore(1), f"{ep['base']}/chat/completions", body)
     u = j["usage"]
@@ -3549,10 +3538,9 @@ def main() -> None:
                           "sample": None, "verbose": False, "receipt": False}.items():
         if not hasattr(args, name):
             setattr(args, name, default)
-    global MAX_COST, SAMPLE, TARGET, STORE, VERBOSE
-    SAMPLE, TARGET, STORE = args.sample, None, None
-    VERBOSE = args.verbose
-    MAX_COST = args.max_cost if args.max_cost is not None else MAX_COST  # else $HUNCH_MAX_COST, if set
+    settings.SAMPLE, settings.TARGET, settings.STORE = args.sample, None, None
+    settings.VERBOSE = args.verbose
+    settings.MAX_COST = args.max_cost if args.max_cost is not None else settings.MAX_COST  # else $HUNCH_MAX_COST, if set
     project = load_project(args.path)
     project["target"] = args.target
     if args.model:  # another engine on the same specs: its tables get a suffix, the spec's own stay untouched
@@ -3584,12 +3572,31 @@ def main() -> None:
         if args.receipt:
             sys.exit("--receipt records the spec as written; run it without --target")
         run = apply_target(project, args.target, keep_model=bool(args.model))
-        TARGET, STORE = args.target, run.get("store")  # None: the usual store
-        SAMPLE = args.sample if args.sample is not None else run.get("sample")
+        settings.TARGET, settings.STORE = args.target, run.get("store")  # None: the usual store
+        settings.SAMPLE = args.sample if args.sample is not None else run.get("sample")
         if args.max_cost is None and "max_cost" in run:  # a cap: $HUNCH_MAX_COST still holds if it is lower
-            MAX_COST = run["max_cost"] if MAX_COST is None else min(MAX_COST, run["max_cost"])
+            settings.MAX_COST = run["max_cost"] if settings.MAX_COST is None else min(settings.MAX_COST, run["max_cost"])
     commands[args.command](project, args)
 
+
+MOVED = {"SAMPLE", "TARGET", "STORE", "VERBOSE", "MAX_COST", "CHARGED", "SPEND_LIMIT", "RETRIES"}
+
+
+class _Core(type(sys)):
+    """Before 0.4 these lived here, and `hunch.core.MAX_COST = 0.0` was the documented cap. Setting one now would set a
+    name nothing reads, and a run meant to be capped wouldn't be: so reading or setting one is an error naming
+    hunch.settings."""
+    def __getattr__(self, name):
+        raise AttributeError(f"hunch.core.{name} moved to hunch.settings.{name}" if name in MOVED
+                             else f"module 'hunch.core' has no attribute {name!r}")
+
+    def __setattr__(self, name, value):
+        if name in MOVED:
+            raise AttributeError(f"hunch.core.{name} moved: set hunch.settings.{name}")
+        super().__setattr__(name, value)
+
+
+sys.modules[__name__].__class__ = _Core
 
 if __name__ == "__main__":
     main()
