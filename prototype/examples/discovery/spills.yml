@@ -30,5 +30,7 @@ questions:
       this email, with its attachments, fall under that request?
     gold: gold
 
+# No recall bar: 184 judged spill emails weigh as 8 once weighted to the collection (three of them stand for
+# most of it), too few to promise any recall.
 tests:                    # a regression bar, set below what was measured (AUROC 0.902)
   spills: {min_auroc: 0.87}

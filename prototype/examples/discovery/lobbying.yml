@@ -35,6 +35,8 @@ questions:
       litigation filings, unless they state a position the company is lobbying for; a biography of an
       official. Does this email, with its attachments, fall under that request?
     gold: gold
+    act: {yes: 1.0, no: 0.65}     # a person reads every yes and every unsure no; a no this sure is set aside
 
-tests:                    # a regression bar, set below what was measured (AUROC 0.949)
-  lobbying: {min_auroc: 0.92}
+tests:   # regression bars: AUROC below what was measured (0.949); recall at act, on its 95% lower bound
+         # (hunch test prints the lowest act for no that keeps it)
+  lobbying: {min_auroc: 0.92, min_recall: 0.8}
