@@ -219,7 +219,7 @@ clip: {request: 3000, final_reply: -3000}
 
 ### `where`
 
-Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number; an empty cell matches no numeric condition. `lint` rejects a column that does not reach the spec.
+Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number (`' 12 '` and `1e3` count); a cell that isn't one (empty, `n/a`, `nan`) matches no numeric condition, `!=` included, so `not year > 2008` keeps it. `lint` rejects a column that does not reach the spec.
 
 ```yaml
 where: purpose == 'install' and purpose_p >= 0.5

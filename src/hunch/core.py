@@ -237,6 +237,15 @@ class Unknown(Exception):
     """A where-clause needs an answer that doesn't exist yet (dry runs: compile)."""
 
 
+def _number(text: str) -> float | None:
+    """A cell read as a number, or None when it isn't one ('', 'n/a', 'nan')."""
+    try:
+        x = float(text)
+    except ValueError:
+        return None
+    return None if x != x else x
+
+
 def compile_where(expr: str):
     """(predicate, columns used). Columns, constants, comparisons, `in`, and/or/not; nothing else runs."""
     tree = ast.parse(expr, mode="eval")
@@ -268,13 +277,11 @@ def compile_where(expr: str):
                 a, b = left, right
                 if not isinstance(o, (ast.In, ast.NotIn)):  # CSV values are text: compare as numbers when one side is
                     if isinstance(b, (int, float)) and isinstance(a, str):
-                        if not a.strip():
-                            return False  # an empty cell matches no numeric condition
-                        a = float(a)
+                        if (a := _number(a)) is None:
+                            return False  # an empty or non-numeric cell matches no numeric condition
                     elif isinstance(a, (int, float)) and isinstance(b, str):
-                        if not b.strip():
+                        if (b := _number(b)) is None:
                             return False
-                        b = float(b)
                 if not _CMP[type(o)](a, b):
                     return False
                 left = right
@@ -294,7 +301,7 @@ def compile_baseline(b) -> tuple:
         def rule(row: dict) -> bool:
             try:
                 return bool(pred(row))
-            except (Unknown, ValueError):  # an upstream answer it reads is missing, or a number compared to text
+            except Unknown:  # an upstream answer it reads is missing
                 return False
         return rule, used
     cols = b.get("columns") if isinstance(b, dict) else None
