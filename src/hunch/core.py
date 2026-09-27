@@ -1771,13 +1771,29 @@ def cmd_compile(project: dict, args) -> None:
                                               and expected_total < total else ""))
 
 
-def materialize(spec: dict, db, out_rows: list[dict], run_id: str = "", keys: dict | None = None) -> None:
+def output_columns(project: dict, results: dict, name: str) -> list[str]:
+    """A judgment's output columns: from its rows, or, when it kept none, from its input and questions."""
+    if results[name]["rows"]:
+        return list(dict.fromkeys(c for r in results[name]["rows"] for c in r))
+    spec, ups = project["nodes"][name], upstream(project["nodes"][name])
+    if "union" in spec:
+        return list(dict.fromkeys([c for u in ups for c in output_columns(project, results, u)] + ["_branch"]))
+    inp = output_columns(project, results, ups[0]) if ups else source_header(spec) + (["_w"] if "weights" in spec else [])
+    multi = list(spec.get("_multi", {}))  # rows put a multi question's combined set after its parts
+    return list(dict.fromkeys(inp + ["_path_p"] + [c for c in answer_columns(spec) if c not in multi] + multi))
+
+
+def materialize(spec: dict, db, out_rows: list[dict], run_id: str = "", keys: dict | None = None,
+                columns: list[str] | None = None) -> None:
     """The judgment's table: its input columns plus its answers, like a dbt model's select *, plus lineage:
     `_hunch_run_id` and, per question, `<qid>_key` (the content address of the answer in the store).
+    `columns` are used when there are no rows, so a filter that keeps nothing still leaves a (empty) table.
     Replaced in one transaction, so a reader sees the previous complete run or this one, never a mix."""
+    lineage = []
     if keys is not None:
         out_rows = [{**r, "_hunch_run_id": run_id, **keys.get(i, {})} for i, r in enumerate(out_rows)]
-    cols = list(dict.fromkeys(c for r in out_rows for c in r))
+        lineage = ["_hunch_run_id", *(f"{q}_key" for q in spec["questions"])]
+    cols = list(dict.fromkeys(c for r in out_rows for c in r)) or [*(columns or []), *lineage]
     typed = ", ".join(f'"{c}" {"real" if c.endswith(("_p", "_pyes")) else "text"}' for c in cols)
     table = table_name(spec)
     db.execute("begin immediate")
@@ -1894,7 +1910,7 @@ def cmd_run(project: dict, args) -> None:
                 for i, it in enumerate(res["items"]):
                     keys.setdefault(i // nq, {})[f"{it['qid']}_key"] = it["key"]
                 record_row_answers(db, table_name(spec), [it for it in res["items"] if it["key"] in res["answers"]], run_id)
-            materialize(spec, db, res["rows"], run_id, keys)
+            materialize(spec, db, res["rows"], run_id, keys, output_columns(project, results, n))
         except BaseException as e:
             failed(project["order"][i_node:], e)
             raise
