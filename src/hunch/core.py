@@ -896,7 +896,8 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 elif q["type"] != branches[0]["questions"].get(spec.get("question"), q)["type"]:
                     errors += tag([f"branch {b['judgment']!r} asks {spec['question']!r} as {q['type']}, others differently"])
             known = [columns[u] for u in ups]
-            columns[name] = None if None in known else sorted({c for cs in known for c in cs} | {"_branch"})
+            # only what every branch has: a row from a branch without a column has no value for it (KeyError)
+            columns[name] = None if None in known else sorted(set.intersection(*map(set, known or [[]])) | {"_branch"})
             for k in sorted({k for k in spec if not k.startswith("_")} - UNION_KEYS):
                 if k in SPEC_KEYS:
                     errors += tag([f"a union takes no {k!r}: it combines its branches' answers"])

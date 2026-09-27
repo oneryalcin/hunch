@@ -69,3 +69,15 @@ def test_a_population_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # li
     with pytest.raises(SystemExit):
         hunch("lint")
     assert "weights.population maps each value" in capsys.readouterr().err
+
+
+def test_a_union_metric_over_a_column_one_branch_lacks_is_a_lint_error(hunch, capsys):  # else KeyError in test
+    hunch.project = hunch.dir
+    for b, col in (("x", "grp"), ("y", "other")):
+        (hunch.dir / f"{b}.csv").write_text(f"id,text,{col}\n{b},a,1\n")
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: urgent", f"judgment: {b}").replace("rows.csv", f"{b}.csv")
+                                            .replace("weights: {by: grp, population: {x: 0.5, y: 0.5}}\n", ""))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x, y]\nquestion: urgent\nmetrics:\n  m: {rule: \"other > 0\"}\n")
+    with pytest.raises(SystemExit):
+        hunch("test")
+    assert "u: metrics.m: rule uses 'other'" in capsys.readouterr().err
