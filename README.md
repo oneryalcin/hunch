@@ -78,7 +78,7 @@ Engines: TypeSafe's Jev, any LLM read through its answer-token probabilities (`d
 
 ## Status
 
-v0.3. hunch has run on public datasets, real coding-agent sessions and a 100,000-row test, but no one outside the project has used it yet. Expect the spec format to change before 1.0.
+v0.4. hunch has run on public datasets, real coding-agent sessions and a 100,000-row test, but no one outside the project has used it yet. Expect the spec format to change before 1.0.
 
 ## License
 

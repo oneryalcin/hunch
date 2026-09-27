@@ -24,7 +24,7 @@ from hunch.spec import load_project, load_spec  # noqa: F401
 from hunch.store import table_name  # noqa: F401
 from hunch.suggest import spec_yaml  # noqa: F401
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 
 def load(obj, base: str | Path = ".") -> dict:
