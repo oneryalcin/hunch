@@ -111,7 +111,7 @@ To see what a pull request does to the answers, add a step with `hunch diff eval
 Exit 1 has two causes, and the last line of the log tells them apart. Here is the [quickstart](/quickstart)'s guard tested with `--max-cost 0` on a fresh store, before any answers exist:
 
 ```text
-command_guard: would ask 114 answers in 38 requests (~$0.0010), above --max-cost $0.0; nothing asked
+command_guard: would ask 114 answers in 38 requests (~$0.0012), above --max-cost $0; nothing asked
 ```
 
 A script can tell them apart without reading the log. A finished `test` writes its results to `.hunch/target/`, as JSON with a `passed` field; a stopped one writes nothing. See [the results file](/reference/cli#the-results-file).

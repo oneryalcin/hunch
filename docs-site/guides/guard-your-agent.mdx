@@ -38,7 +38,7 @@ The agent runs `hunch hook run hunch/command_guard.yml` before each shell comman
 When the agent asks to wipe a project after you change your mind about a framework, Claude Code shows:
 
 ```text
-hunch command guard: destroys (p=0.94)
+hunch command guard: destroys (p=0.95)
 ```
 
 The guard never approves a command, so it can't loosen your permissions, only add a question. Codex can't ask before a command runs yet, so there the guard refuses it and tells the agent to get your confirmation. A command it has seen before takes about 0.1 seconds to judge, a new one about 0.4 seconds, at about $0.00003. Each command is capped at $0.01 unless `HUNCH_MAX_COST` says otherwise.

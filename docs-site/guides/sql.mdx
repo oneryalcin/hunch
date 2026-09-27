@@ -26,19 +26,19 @@ con.sql("""
 ┌─────────────────────────────────────────────────────────────────────────────┬──────┬────────┐
 │ command                                                                     │  p   │ route  │
 ├─────────────────────────────────────────────────────────────────────────────┼──────┼────────┤
-│ rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo "removed broken venv" … │ 0.7  │ review │
-│ rm -rf Dockerfile README.md app node_modules package-lock.json package.json │ 0.94 │ act    │
-│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit\user" …       │ 0.82 │ review │
-│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit" …             │ 0.81 │ review │
-│ Remove-Item -Recurse -Force "d:\Yggdrasil\jsx-transpiler" …                   │ 0.72 │ review │
-│ cd d:\Epilog\nRemove-Item internals\atoms.c, internals\variables.c, …         │ 0.81 │ review │
-│ rm -rf d:/DMLS/build d:/DMLS/builddmls.exe d:/DMLS/dmls_save.bin …          │ 0.92 │ act    │
+│ rm -rf ~/.local/share/pipx/venvs/fdroidserver; echo "removed broken venv" … │ 0.74 │ review │
+│ rm -rf Dockerfile README.md app node_modules package-lock.json package.json │ 0.95 │ act    │
+│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit\user" …       │ 0.81 │ review │
+│ Remove-Item -Recurse -Force "d:\prettify-reddit\app\api\reddit" …             │ 0.82 │ review │
+│ Remove-Item -Recurse -Force "d:\Yggdrasil\jsx-transpiler" …                   │ 0.7  │ review │
+│ cd d:\Epilog\nRemove-Item internals\atoms.c, internals\variables.c, …         │ 0.8  │ review │
+│ rm -rf d:/DMLS/build d:/DMLS/builddmls.exe d:/DMLS/dmls_save.bin …          │ 0.93 │ act    │
 └─────────────────────────────────────────────────────────────────────────────┴──────┴────────┘
 ```
 
 The function is named after the judgment and takes the spec's `state` columns, in order. It returns a struct with one field per question, each holding what [`judge()`](/guides/use-in-your-app) returns for one row: `label`, `p` (the probability of that label) and `route` (`act`, `review`, or empty when the question has no `act`). `review` means the guard's bar for acting alone, 0.9, wasn't met: five of the seven are for a person to look at, and two it is sure of.
 
-DuckDB hands the function up to 2,048 rows at a time, and each batch is one hunch run: requests go out together, and every answer is kept in the store like any other. The first query sent Jev 38 requests, one per distinct command, for $0.001 in about a second. Run it again and it takes 0.06 s and asks nothing. `hunch run` on the same rows afterwards found all 114 answers already there: SQL, batch and `judge()` share one cache.
+DuckDB hands the function up to 2,048 rows at a time, and each batch is one hunch run: requests go out together, and every answer is kept in the store like any other. The first query sent Jev 38 requests, one per distinct command, for $0.0012 in about a second. Run it again and it takes 0.07 s and asks nothing. `hunch run` on the same rows afterwards found all 114 answers already there: SQL, batch and `judge()` share one cache.
 
 ## It is still measured
 
@@ -100,7 +100,7 @@ from (select *, command_guard(request, cwd, description, command) as g
       from read_csv('hunch/commands.csv', all_varchar = true))
 ```
 
-`dbt run` built it in 0.13 s from the store: 38 commands, 7 that destroy something, 9 that send data out, 12 that need a look. From here it is an ordinary table: dbt tests it, documents it, and downstream models join it.
+`dbt run` built it in 0.13 s from the store: 38 commands, 7 that destroy something, 8 that send data out, 16 that need a look. From here it is an ordinary table: dbt tests it, documents it, and downstream models join it.
 
 ## Details
 
