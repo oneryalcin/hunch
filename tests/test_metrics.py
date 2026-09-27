@@ -45,6 +45,16 @@ def test_a_metric_on_a_union_reads_its_one_question(hunch):  # a union has no `q
     assert (m["fired"], m["rows"]) == (2, 2)
 
 
+def test_a_malformed_metric_on_a_union_is_a_lint_error_not_a_crash_in_test(hunch, capsys):  # lint skipped unions
+    (hunch.dir / "rows.csv").write_text("id,text,grp\nq,a,x\n")
+    hunch.project = hunch.dir
+    (hunch.dir / "x.yml").write_text(SPEC.replace("judgment: urgent", "judgment: x"))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x]\nquestion: urgent\nmetrics:\n  m: {rule: \"nope == 1\"}\n")
+    with pytest.raises(SystemExit):
+        hunch("test")
+    assert "u: metrics.m: rule uses 'nope'" in capsys.readouterr().err
+
+
 def test_a_population_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # lint called .values() on it
     (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
     (hunch.dir / "spec.yml").write_text(SPEC.replace("{x: 0.5, y: 0.5}", "[x, y]"))

@@ -57,6 +57,7 @@ QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
              "weights", "chain", "view", "clip", "redact", "on_change", "description", "exposures", "targets"}
+UNION_KEYS = {"judgment", "union", "question", "key", "reviews", "metrics", "tests", "description", "exposures", "targets"}
 META_KEYS = ("description", "exposures")  # for people and `hunch docs`: never sent, never in a key or spec hash
 TARGET_KEYS = {"model", "sample", "store", "max_cost"}  # targets.<name>: how --target <name> runs the spec
 EXPOSURE_KEYS = {"name", "kind", "owner", "uses", "url", "description"}
@@ -562,17 +563,6 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                     errors.append(f"where uses {col!r}, which does not reach this judgment")
             except (ValueError, SyntaxError) as e:
                 errors.append(f"where: {e}")
-        for name, m in (spec.get("metrics") or {}).items():
-            if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
-                continue  # reported below
-            try:
-                _, used = compile_where(m["rule"])
-                for col in sorted(used - set(header) - set(answer_columns(spec))):
-                    errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
-            except (ValueError, SyntaxError) as e:
-                errors.append(f"metrics.{name}: {e}")
-            if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
-                errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
@@ -645,8 +635,6 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             errors.append(f"{where_}: severity must be one of {SEVERITIES}")
         for k in set(ex) - {"name", "row", "expect", "severity"}:
             warnings.append(f"{where_}: unknown key {k!r} (typo?)")
-        if "union" in spec:
-            errors.append(f"{where_}: a union has no questions of its own; put examples on its branches")
         for col in state_columns(spec):
             if col not in ex["row"]:
                 errors.append(f"{where_}: row needs the state column {col!r}")
@@ -663,13 +651,32 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 errors.append(f"{where_}: {v!r} is not an option of {qid}")
             elif q["type"] == "score" and next(iter(normalize_gold(q, str(v)))) not in {str(n) for n in range(len(q["criteria"]))}:
                 errors.append(f"{where_}: {v!r} is not a level of {qid} (0–{len(q['criteria']) - 1} or a level's text)")
+    e, w = lint_rules(spec, header, spec["questions"])
+    return errors + e, warnings + w
+
+
+def lint_rules(spec: dict, header: list[str] | None, questions: dict) -> tuple[list[str], list[str]]:
+    """(errors, warnings) for metrics and tests, on a judgment or a union (`questions`: the one it combines)."""
+    errors, warnings = [], []
+    if header is not None:
+        for name, m in (spec.get("metrics") or {}).items():
+            if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
+                continue  # reported below
+            try:
+                _, used = compile_where(m["rule"])
+                for col in sorted(used - set(header) - set(answer_columns(spec))):
+                    errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
+            except (ValueError, SyntaxError) as e:
+                errors.append(f"metrics.{name}: {e}")
+            if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
+                errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
     metrics = spec.get("metrics") or {}
     for name, m in metrics.items():
         if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule", "by"}:
             errors.append(f"metrics.{name}: needs rule: <condition over answers and columns>, and optionally by: <column>")
         elif "by" in m and not (isinstance(m["by"], str) and m["by"]):
             errors.append(f"metrics.{name}: by is one column name, got {m['by']!r}")
-        if name in spec["questions"] or name in spec.get("_multi", {}):
+        if name in questions or name in spec.get("_multi", {}):
             errors.append(f"metrics.{name}: a question has the same name")
     for qid, conf in (spec.get("tests") or {}).items():
         if isinstance(conf, dict) and conf.get("severity", "error") not in SEVERITIES:
@@ -693,17 +700,17 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 warnings.append(f"tests.{qid}: a multi question takes min_accuracy (exact set); per-option tests go "
                                 f"under {qid}__<option>")
             continue
-        if qid not in spec["questions"]:
+        if qid not in questions:
             errors.append(f"tests: no question {qid!r}")
             continue
         for k in set(conf) - TEST_KEYS:
             warnings.append(f"tests.{qid}: unknown test {k!r} (typo?)")
-        if "min_recall" in conf and spec["questions"][qid]["type"] != "noul":
+        if "min_recall" in conf and questions[qid]["type"] != "noul":
             errors.append(f"tests.{qid}.min_recall: recall of yes rows applies to noul questions")
-        elif "min_recall" in conf and act_needed(spec["questions"][qid], "no") is None:
+        elif "min_recall" in conf and act_needed(questions[qid], "no") is None:
             errors.append(f"tests.{qid}.min_recall: needs `act` (below it a person reads the row; above it a \"no\" is "
                           "set aside unread)")
-        if "order_stability" in conf and spec["questions"][qid]["type"] != "choice":
+        if "order_stability" in conf and questions[qid]["type"] != "choice":
             warnings.append(f"tests.{qid}: order_stability only applies to choice questions")
     return errors, warnings
 
@@ -880,6 +887,15 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                     errors += tag([f"branch {b['judgment']!r} asks {spec['question']!r} as {q['type']}, others differently"])
             known = [columns[u] for u in ups]
             columns[name] = None if None in known else sorted({c for cs in known for c in cs} | {"_branch"})
+            for k in sorted({k for k in spec if not k.startswith("_")} - UNION_KEYS):
+                if k in SPEC_KEYS:
+                    errors += tag([f"a union takes no {k!r}: it combines its branches' answers"])
+                else:
+                    warnings += tag([f"unknown spec key {k!r} (typo?)"])
+            q = spec.get("question")
+            asked = next((b["questions"][q] for b in branches if q in (b.get("questions") or {})), None)
+            e, w = lint_rules(spec, columns[name], {q: asked} if asked else {})
+            errors, warnings = errors + tag(e), warnings + tag(w)
             continue
         missing = [k for k in ("model", "key", "state", "questions") if k not in spec]
         if missing:  # the checks below read them; report once instead of crashing
