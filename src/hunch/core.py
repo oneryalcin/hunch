@@ -233,6 +233,9 @@ _ALLOWED = (ast.Expression, ast.BoolOp, ast.And, ast.Or, ast.UnaryOp, ast.Not, a
             ast.Constant, ast.List, ast.Tuple, *_CMP)
 
 
+_NAN = object()  # `-cell` of a cell that isn't a number: matches no condition, as the cell itself doesn't
+
+
 class Unknown(Exception):
     """A where-clause needs an answer that doesn't exist yet (dry runs: compile)."""
 
@@ -269,14 +272,18 @@ def compile_where(expr: str):
             return row[node.id]
         if isinstance(node, (ast.List, ast.Tuple)):
             return [val(e, row) for e in node.elts]
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            x = val(node.operand, row)  # a cell is text: read it as a number
+            x = _number(x) if isinstance(x, str) else x
+            return _NAN if x is None or x is _NAN else -x
         return ev(node, row)
 
     def ev(node, row):
         if isinstance(node, ast.BoolOp):
             parts = (ev(v, row) for v in node.values)
             return all(parts) if isinstance(node.op, ast.And) else any(parts)
-        if isinstance(node, ast.UnaryOp):
-            return -val(node.operand, row) if isinstance(node.op, ast.USub) else not ev(node.operand, row)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not ev(node.operand, row)
         if isinstance(node, ast.Compare):
             left = val(node.left, row)
             for o, c in zip(node.ops, node.comparators):
@@ -286,9 +293,11 @@ def compile_where(expr: str):
                 left = right
             return True
         x = val(node, row)  # a bare column: false when it reads false or 0, or is blank, as `== False` reads it
-        return bool(x) and not (isinstance(x, str) and (not x.strip() or _cell(x, False) == 0))
+        return x is not _NAN and bool(x) and not (isinstance(x, str) and (not x.strip() or _cell(x, False) == 0))
 
     def cmp(o, a, b) -> bool:
+        if a is _NAN or b is _NAN:
+            return False
         if o in (ast.In, ast.NotIn) and isinstance(b, list):  # item by item, as == and != compare
             return any(cmp(ast.Eq, a, x) for x in b) if o is ast.In else all(cmp(ast.NotEq, a, x) for x in b)
         if o in (ast.In, ast.NotIn) and not (isinstance(a, str) and isinstance(b, str)):

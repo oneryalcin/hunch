@@ -58,6 +58,13 @@ def test_a_number_in_text_matches_nothing_not_a_crash(hunch):  # `in <string>` n
     assert output(hunch, "recent") == []
 
 
+def test_minus_reads_a_cell_as_a_number_not_a_crash(hunch):  # `-'2010'` raised TypeError
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2010\n2,b,n/a\n3,c,2001\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("year > 2008", "-year > -2008"))
+    hunch("run")
+    assert output(hunch, "recent") == [("3",)]
+
+
 def test_a_bare_yes_no_answer_in_where_is_a_lint_warning(hunch, capsys):  # it keeps the 'no' rows too
     (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2010\n")
     (hunch.dir / "spec.yml").write_text(SPEC)
