@@ -31,3 +31,15 @@ def test_a_population_share_of_0_is_a_lint_error_not_a_crash_in_test(hunch, caps
         hunch("test")
     assert "shares must be numbers above 0" in capsys.readouterr().err
 
+
+
+def test_a_metric_on_a_union_reads_its_one_question(hunch):  # a union has no `questions`: KeyError
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    hunch.project = hunch.dir
+    for b in ("x", "y"):
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: urgent", f"judgment: {b}")
+                                            .replace("weights: {by: grp, population: {x: 0.5, y: 0.5}}", f"where: grp == '{b}'"))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x, y]\nquestion: urgent\nmetrics:\n  m: {rule: \"urgent == 'yes'\"}\n")
+    hunch("test")
+    m = json.loads(next((hunch.dir / ".hunch" / "target").glob("*.json")).read_text())["judgments"]["u"]["metrics"]["m"]
+    assert (m["fired"], m["rows"]) == (2, 2)

@@ -314,7 +314,7 @@ tests:
 
 ### `metrics`
 
-A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). In a rule, a question's name stands for that row's answer (`'yes'`/`'no'`, an option, a level), with `<question>_p` and `<question>_pyes` beside it; source columns work too. `hunch test` counts the rule twice, and compares the two.
+A metric is a rule over one row: a condition on the judgment's answers and its columns, in the same language as [`where`](#where). In a rule, a question's name stands for that row's answer (`'yes'`/`'no'`, an option, a level), with `<question>_p` and `<question>_pyes` beside it; source columns work too. On a [union](#union-and-question), a rule reads its `question`, the branches' columns and `_branch`. `hunch test` counts the rule twice, and compares the two.
 
 This example is from the [command guard](/cookbooks/command-guard), whose three yes/no questions are named `destroys`, `reaches_outside` and `sends_out`:
 

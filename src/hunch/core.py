@@ -2324,8 +2324,9 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
     labels are acceptable, the model's if it is one of them."""
     conf = (spec.get("tests") or {}).get(name, {})
     pred, used = compile_where(rule)
-    qids = [q for q in spec["questions"] if {q, f"{q}_p", f"{q}_pyes"} & used]
-    nq = len(spec["questions"])
+    qs = question_of(spec)  # a union has one question, and one item per row
+    qids = [q for q in qs if {q, f"{q}_p", f"{q}_pyes"} & used]
+    nq = len(qs)
     rows = []  # (fired on answers, gold row items or None)
     for i, r in enumerate(res["rows"]):
         try:
