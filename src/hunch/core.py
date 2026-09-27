@@ -57,6 +57,7 @@ QUESTION_KEYS = {"type", "instructions", "criteria", "none"} | HUNCH_ONLY_FIELDS
 NONE = "none_of_these"  # the option `none:` adds to a choice question
 SPEC_KEYS = {"judgment", "model", "source", "key", "state", "questions", "tests", "where", "union", "question", "reviews", "metrics", "examples",
              "weights", "chain", "view", "clip", "redact", "on_change", "description", "exposures", "targets"}
+UNION_KEYS = {"judgment", "union", "question", "key", "reviews", "metrics", "tests", "description", "exposures", "targets"}
 META_KEYS = ("description", "exposures")  # for people and `hunch docs`: never sent, never in a key or spec hash
 TARGET_KEYS = {"model", "sample", "store", "max_cost"}  # targets.<name>: how --target <name> runs the spec
 EXPOSURE_KEYS = {"name", "kind", "owner", "uses", "url", "description"}
@@ -233,6 +234,9 @@ _ALLOWED = (ast.Expression, ast.BoolOp, ast.And, ast.Or, ast.UnaryOp, ast.Not, a
             ast.Constant, ast.List, ast.Tuple, *_CMP)
 
 
+_NAN = object()  # `-cell` of a cell that isn't a number: matches no condition, as the cell itself doesn't
+
+
 class Unknown(Exception):
     """A where-clause needs an answer that doesn't exist yet (dry runs: compile)."""
 
@@ -269,14 +273,18 @@ def compile_where(expr: str):
             return row[node.id]
         if isinstance(node, (ast.List, ast.Tuple)):
             return [val(e, row) for e in node.elts]
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+            x = val(node.operand, row)  # a cell is text: read it as a number
+            x = _number(x) if isinstance(x, str) else x
+            return _NAN if x is None or x is _NAN else -x
         return ev(node, row)
 
     def ev(node, row):
         if isinstance(node, ast.BoolOp):
             parts = (ev(v, row) for v in node.values)
             return all(parts) if isinstance(node.op, ast.And) else any(parts)
-        if isinstance(node, ast.UnaryOp):
-            return -val(node.operand, row) if isinstance(node.op, ast.USub) else not ev(node.operand, row)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not ev(node.operand, row)
         if isinstance(node, ast.Compare):
             left = val(node.left, row)
             for o, c in zip(node.ops, node.comparators):
@@ -285,11 +293,16 @@ def compile_where(expr: str):
                     return False
                 left = right
             return True
-        return bool(val(node, row))
+        x = val(node, row)  # a bare column: false when it reads false or 0, or is blank, as `== False` reads it
+        return x is not _NAN and bool(x) and not (isinstance(x, str) and (not x.strip() or _cell(x, False) == 0))
 
     def cmp(o, a, b) -> bool:
+        if a is _NAN or b is _NAN:
+            return False
         if o in (ast.In, ast.NotIn) and isinstance(b, list):  # item by item, as == and != compare
             return any(cmp(ast.Eq, a, x) for x in b) if o is ast.In else all(cmp(ast.NotEq, a, x) for x in b)
+        if o in (ast.In, ast.NotIn) and not (isinstance(a, str) and isinstance(b, str)):
+            return False  # substring: text in text only; anything else matches neither `in` nor `not in`
         if o not in (ast.In, ast.NotIn):  # CSV values are text: compare as numbers when one side is
             if isinstance(b, (int, float)) and isinstance(a, str):
                 if (a := _cell(a, b)) is None:
@@ -300,6 +313,17 @@ def compile_where(expr: str):
         return _CMP[o](a, b)
 
     return (lambda row: ev(tree.body, row)), {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+
+
+def bare_names(expr: str) -> set[str]:
+    """Columns an expression reads on their own (`flag`, `not flag`, `a and flag`), not compared with anything."""
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError:
+        return set()  # lint reports it
+    kids = [tree.body, *(v for n in ast.walk(tree) if isinstance(n, ast.BoolOp) for v in n.values),
+            *(n.operand for n in ast.walk(tree) if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not))]
+    return {k.id for k in kids if isinstance(k, ast.Name)}
 
 
 def compile_baseline(b) -> tuple:
@@ -539,17 +563,6 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                     errors.append(f"where uses {col!r}, which does not reach this judgment")
             except (ValueError, SyntaxError) as e:
                 errors.append(f"where: {e}")
-        for name, m in (spec.get("metrics") or {}).items():
-            if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
-                continue  # reported below
-            try:
-                _, used = compile_where(m["rule"])
-                for col in sorted(used - set(header) - set(answer_columns(spec))):
-                    errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
-            except (ValueError, SyntaxError) as e:
-                errors.append(f"metrics.{name}: {e}")
-            if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
-                errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
     for qid, q in spec["questions"].items():
         for k in set(q) - QUESTION_KEYS:
             warnings.append(f"{qid}: unknown key {k!r} (typo?)")
@@ -622,8 +635,6 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
             errors.append(f"{where_}: severity must be one of {SEVERITIES}")
         for k in set(ex) - {"name", "row", "expect", "severity"}:
             warnings.append(f"{where_}: unknown key {k!r} (typo?)")
-        if "union" in spec:
-            errors.append(f"{where_}: a union has no questions of its own; put examples on its branches")
         for col in state_columns(spec):
             if col not in ex["row"]:
                 errors.append(f"{where_}: row needs the state column {col!r}")
@@ -640,18 +651,46 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 errors.append(f"{where_}: {v!r} is not an option of {qid}")
             elif q["type"] == "score" and next(iter(normalize_gold(q, str(v)))) not in {str(n) for n in range(len(q["criteria"]))}:
                 errors.append(f"{where_}: {v!r} is not a level of {qid} (0–{len(q['criteria']) - 1} or a level's text)")
-    metrics = spec.get("metrics") or {}
+    e, w = lint_rules(spec, header, spec["questions"])
+    return errors + e, warnings + w
+
+
+def lint_rules(spec: dict, header: list[str] | None, questions: dict) -> tuple[list[str], list[str]]:
+    """(errors, warnings) for metrics and tests, on a judgment or a union (`questions`: the one it combines)."""
+    errors, warnings = [], []
+    metrics, tests = (spec.get(k) if spec.get(k) is not None else {} for k in ("metrics", "tests"))
+    if not isinstance(metrics, dict):
+        errors.append(f"metrics: maps each name to {{rule: <condition>, by: <column>}}, got {metrics!r}")
+        metrics = {}
+    if not isinstance(tests, dict):
+        errors.append(f"tests: maps each question or metric to its checks ({{min_accuracy: 0.9}}), got {tests!r}")
+        tests = {}
+    if header is not None:
+        for name, m in metrics.items():
+            if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
+                continue  # reported below
+            try:
+                _, used = compile_where(m["rule"])
+                for col in sorted(used - set(header) - set(answer_columns(spec))):
+                    errors.append(f"metrics.{name}: rule uses {col!r}, which is neither a column nor an answer of this judgment")
+            except (ValueError, SyntaxError) as e:
+                errors.append(f"metrics.{name}: {e}")
+            if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
+                errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
     for name, m in metrics.items():
         if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule", "by"}:
             errors.append(f"metrics.{name}: needs rule: <condition over answers and columns>, and optionally by: <column>")
         elif "by" in m and not (isinstance(m["by"], str) and m["by"]):
             errors.append(f"metrics.{name}: by is one column name, got {m['by']!r}")
-        if name in spec["questions"] or name in spec.get("_multi", {}):
+        if name in questions or name in spec.get("_multi", {}):
             errors.append(f"metrics.{name}: a question has the same name")
-    for qid, conf in (spec.get("tests") or {}).items():
-        if isinstance(conf, dict) and conf.get("severity", "error") not in SEVERITIES:
+    for qid, conf in tests.items():
+        if not isinstance(conf, dict):
+            errors.append(f"tests.{qid}: maps each check to its value ({{min_accuracy: 0.9}}), got {conf!r}")
+            continue
+        if conf.get("severity", "error") not in SEVERITIES:
             errors.append(f"tests.{qid}: severity must be one of {SEVERITIES}")
-        for k, v in (conf.items() if isinstance(conf, dict) else []):
+        for k, v in conf.items():
             if k.startswith(("min_", "max_")) and not (isinstance(v, (int, float)) and 0 <= v <= 1):
                 errors.append(f"tests.{qid}.{k}: {v!r} must be a share between 0 and 1 (0.9 for 90%)")
         if qid in metrics:
@@ -670,17 +709,17 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
                 warnings.append(f"tests.{qid}: a multi question takes min_accuracy (exact set); per-option tests go "
                                 f"under {qid}__<option>")
             continue
-        if qid not in spec["questions"]:
+        if qid not in questions:
             errors.append(f"tests: no question {qid!r}")
             continue
         for k in set(conf) - TEST_KEYS:
             warnings.append(f"tests.{qid}: unknown test {k!r} (typo?)")
-        if "min_recall" in conf and spec["questions"][qid]["type"] != "noul":
+        if "min_recall" in conf and questions[qid]["type"] != "noul":
             errors.append(f"tests.{qid}.min_recall: recall of yes rows applies to noul questions")
-        elif "min_recall" in conf and act_needed(spec["questions"][qid], "no") is None:
+        elif "min_recall" in conf and act_needed(questions[qid], "no") is None:
             errors.append(f"tests.{qid}.min_recall: needs `act` (below it a person reads the row; above it a \"no\" is "
                           "set aside unread)")
-        if "order_stability" in conf and spec["questions"][qid]["type"] != "choice":
+        if "order_stability" in conf and questions[qid]["type"] != "choice":
             warnings.append(f"tests.{qid}: order_stability only applies to choice questions")
     return errors, warnings
 
@@ -833,11 +872,21 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
     """Lint every judgment, tracking which columns flow along each ref() so where-clauses and state are
     checked before anything runs."""
     errors, warnings, columns = [], [], {}
+    yes_no = {}  # per judgment: the yes/no answers that reach it (its own, and every upstream's)
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
         tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
-        e, w = lint_meta(spec, question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]]))
+        values = question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]])
+        yes_no[name] = {q for q, vs in values.items() if set(vs) == {"yes", "no"}}.union(*(yes_no.get(u, ()) for u in ups))
+        e, w = lint_meta(spec, values)
         errors, warnings = errors + tag(e), warnings + tag(w)
+        ms = spec.get("metrics") if isinstance(spec.get("metrics"), dict) else {}  # lint_rules reports any other shape
+        rules = {"where": spec.get("where"),
+                 **{f"metrics.{k}": m.get("rule") for k, m in ms.items() if isinstance(m, dict)},
+                 **{f"{k}: baseline": q.get("baseline") for k, q in (spec.get("questions") or {}).items() if isinstance(q, dict)}}
+        for where_, rule in rules.items():  # a yes/no answer is text: 'no' holds on its own
+            for col in sorted(bare_names(rule) & yes_no[name]) if isinstance(rule, str) else ():
+                warnings += tag([f"{where_}: {col!r} on its own holds for 'no' too; write {col} == 'yes'"])
         if "union" in spec:
             branches = [project["nodes"][u] for u in ups]
             for b in branches:
@@ -847,7 +896,17 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 elif q["type"] != branches[0]["questions"].get(spec.get("question"), q)["type"]:
                     errors += tag([f"branch {b['judgment']!r} asks {spec['question']!r} as {q['type']}, others differently"])
             known = [columns[u] for u in ups]
-            columns[name] = None if None in known else sorted({c for cs in known for c in cs} | {"_branch"})
+            # only what every branch has: a row from a branch without a column has no value for it (KeyError)
+            columns[name] = None if None in known else sorted(set.intersection(*map(set, known or [[]])) | {"_branch"})
+            for k in sorted({k for k in spec if not k.startswith("_")} - UNION_KEYS):
+                if k in SPEC_KEYS:
+                    errors += tag([f"a union takes no {k!r}: it combines its branches' answers"])
+                else:
+                    warnings += tag([f"unknown spec key {k!r} (typo?)"])
+            q = spec.get("question")
+            asked = next((b["questions"][q] for b in branches if q in (b.get("questions") or {})), None)
+            e, w = lint_rules(spec, columns[name], {q: asked} if asked else {})
+            errors, warnings = errors + tag(e), warnings + tag(w)
             continue
         missing = [k for k in ("model", "key", "state", "questions") if k not in spec]
         if missing:  # the checks below read them; report once instead of crashing
@@ -887,12 +946,17 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             wt = spec["weights"]
             if ups:
                 errors += tag(["weights describe how source rows were sampled; set them on the judgment that reads the file"])
+            elif not isinstance(wt, dict):
+                errors += tag([f"weights needs by: <column> and population: {{<value>: <share>, ...}}, got {wt!r}"])
             elif header is not None and wt.get("by") not in header:
                 errors += tag([f"weights.by column {wt.get('by')!r} not in the source"])
-            elif any(not isinstance(v, (int, float)) or not v > 0 for v in wt.get("population", {}).values()):
+            elif not isinstance(wt.get("population"), dict) or not wt["population"]:
+                errors += tag([f"weights.population maps each value of by to its share ({{x: 0.2, y: 0.8}}), "
+                               f"got {wt.get('population')!r}"])
+            elif any(isinstance(v, bool) or not isinstance(v, (int, float)) or not v > 0 for v in wt["population"].values()):
                 errors += tag([f"weights.population shares must be numbers above 0, got {wt.get('population')} (a row "
                                "whose share is 0 stands for no one: leave it out of the source)"])
-            elif abs(sum(wt.get("population", {}).values()) - 1) > 0.01:
+            elif abs(sum(wt["population"].values()) - 1) > 0.01:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
         # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
         columns[name] = None if header is None else header + answer_columns(spec) + ["_path_p"] + (["_w"] if "weights" in spec else [])
@@ -2324,8 +2388,9 @@ def test_metric(spec: dict, name: str, rule: str, res: dict, check: "Checks") ->
     labels are acceptable, the model's if it is one of them."""
     conf = (spec.get("tests") or {}).get(name, {})
     pred, used = compile_where(rule)
-    qids = [q for q in spec["questions"] if {q, f"{q}_p", f"{q}_pyes"} & used]
-    nq = len(spec["questions"])
+    qs = question_of(spec)  # a union has one question, and one item per row
+    qids = [q for q in qs if {q, f"{q}_p", f"{q}_pyes"} & used]
+    nq = len(qs)
     rows = []  # (fired on answers, gold row items or None)
     for i, r in enumerate(res["rows"]):
         try:

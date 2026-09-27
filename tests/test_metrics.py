@@ -31,3 +31,53 @@ def test_a_population_share_of_0_is_a_lint_error_not_a_crash_in_test(hunch, caps
         hunch("test")
     assert "shares must be numbers above 0" in capsys.readouterr().err
 
+
+
+def test_a_metric_on_a_union_reads_its_one_question(hunch):  # a union has no `questions`: KeyError
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    hunch.project = hunch.dir
+    for b in ("x", "y"):
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: urgent", f"judgment: {b}")
+                                            .replace("weights: {by: grp, population: {x: 0.5, y: 0.5}}", f"where: grp == '{b}'"))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x, y]\nquestion: urgent\nmetrics:\n  m: {rule: \"urgent == 'yes'\"}\n")
+    hunch("test")
+    m = json.loads(next((hunch.dir / ".hunch" / "target").glob("*.json")).read_text())["judgments"]["u"]["metrics"]["m"]
+    assert (m["fired"], m["rows"]) == (2, 2)
+
+
+def test_metrics_as_a_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # lint called .items() on it
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("  first: {rule: \"text == 'a'\"}", "  - first"))
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "metrics: maps each name to" in capsys.readouterr().err
+
+
+def test_a_malformed_metric_on_a_union_is_a_lint_error_not_a_crash_in_test(hunch, capsys):  # lint skipped unions
+    (hunch.dir / "rows.csv").write_text("id,text,grp\nq,a,x\n")
+    hunch.project = hunch.dir
+    (hunch.dir / "x.yml").write_text(SPEC.replace("judgment: urgent", "judgment: x"))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x]\nquestion: urgent\nmetrics:\n  m: {rule: \"nope == 1\"}\n")
+    with pytest.raises(SystemExit):
+        hunch("test")
+    assert "u: metrics.m: rule uses 'nope'" in capsys.readouterr().err
+
+
+def test_a_population_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # lint called .values() on it
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("{x: 0.5, y: 0.5}", "[x, y]"))
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "weights.population maps each value" in capsys.readouterr().err
+
+
+def test_a_union_metric_over_a_column_one_branch_lacks_is_a_lint_error(hunch, capsys):  # else KeyError in test
+    hunch.project = hunch.dir
+    for b, col in (("x", "grp"), ("y", "other")):
+        (hunch.dir / f"{b}.csv").write_text(f"id,text,{col}\n{b},a,1\n")
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: urgent", f"judgment: {b}").replace("rows.csv", f"{b}.csv")
+                                            .replace("weights: {by: grp, population: {x: 0.5, y: 0.5}}\n", ""))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x, y]\nquestion: urgent\nmetrics:\n  m: {rule: \"other > 0\"}\n")
+    with pytest.raises(SystemExit):
+        hunch("test")
+    assert "u: metrics.m: rule uses 'other'" in capsys.readouterr().err
