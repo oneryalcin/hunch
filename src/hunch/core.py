@@ -658,8 +658,15 @@ def lint_node(spec: dict, header: list[str] | None) -> tuple[list[str], list[str
 def lint_rules(spec: dict, header: list[str] | None, questions: dict) -> tuple[list[str], list[str]]:
     """(errors, warnings) for metrics and tests, on a judgment or a union (`questions`: the one it combines)."""
     errors, warnings = [], []
+    metrics, tests = (spec.get(k) if spec.get(k) is not None else {} for k in ("metrics", "tests"))
+    if not isinstance(metrics, dict):
+        errors.append(f"metrics: maps each name to {{rule: <condition>, by: <column>}}, got {metrics!r}")
+        metrics = {}
+    if not isinstance(tests, dict):
+        errors.append(f"tests: maps each question or metric to its checks ({{min_accuracy: 0.9}}), got {tests!r}")
+        tests = {}
     if header is not None:
-        for name, m in (spec.get("metrics") or {}).items():
+        for name, m in metrics.items():
             if not isinstance(m, dict) or not isinstance(m.get("rule"), str):
                 continue  # reported below
             try:
@@ -670,7 +677,6 @@ def lint_rules(spec: dict, header: list[str] | None, questions: dict) -> tuple[l
                 errors.append(f"metrics.{name}: {e}")
             if isinstance(m.get("by"), str) and m["by"] not in {*header, *answer_columns(spec)}:
                 errors.append(f"metrics.{name}: by {m['by']!r} is neither a column nor an answer of this judgment")
-    metrics = spec.get("metrics") or {}
     for name, m in metrics.items():
         if not isinstance(m, dict) or not isinstance(m.get("rule"), str) or set(m) - {"rule", "by"}:
             errors.append(f"metrics.{name}: needs rule: <condition over answers and columns>, and optionally by: <column>")
@@ -678,10 +684,13 @@ def lint_rules(spec: dict, header: list[str] | None, questions: dict) -> tuple[l
             errors.append(f"metrics.{name}: by is one column name, got {m['by']!r}")
         if name in questions or name in spec.get("_multi", {}):
             errors.append(f"metrics.{name}: a question has the same name")
-    for qid, conf in (spec.get("tests") or {}).items():
-        if isinstance(conf, dict) and conf.get("severity", "error") not in SEVERITIES:
+    for qid, conf in tests.items():
+        if not isinstance(conf, dict):
+            errors.append(f"tests.{qid}: maps each check to its value ({{min_accuracy: 0.9}}), got {conf!r}")
+            continue
+        if conf.get("severity", "error") not in SEVERITIES:
             errors.append(f"tests.{qid}: severity must be one of {SEVERITIES}")
-        for k, v in (conf.items() if isinstance(conf, dict) else []):
+        for k, v in conf.items():
             if k.startswith(("min_", "max_")) and not (isinstance(v, (int, float)) and 0 <= v <= 1):
                 errors.append(f"tests.{qid}.{k}: {v!r} must be a share between 0 and 1 (0.9 for 90%)")
         if qid in metrics:
@@ -871,8 +880,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
         yes_no[name] = {q for q, vs in values.items() if set(vs) == {"yes", "no"}}.union(*(yes_no.get(u, ()) for u in ups))
         e, w = lint_meta(spec, values)
         errors, warnings = errors + tag(e), warnings + tag(w)
+        ms = spec.get("metrics") if isinstance(spec.get("metrics"), dict) else {}  # lint_rules reports any other shape
         rules = {"where": spec.get("where"),
-                 **{f"metrics.{k}": m.get("rule") for k, m in (spec.get("metrics") or {}).items() if isinstance(m, dict)},
+                 **{f"metrics.{k}": m.get("rule") for k, m in ms.items() if isinstance(m, dict)},
                  **{f"{k}: baseline": q.get("baseline") for k, q in (spec.get("questions") or {}).items() if isinstance(q, dict)}}
         for where_, rule in rules.items():  # a yes/no answer is text: 'no' holds on its own
             for col in sorted(bare_names(rule) & yes_no[name]) if isinstance(rule, str) else ():

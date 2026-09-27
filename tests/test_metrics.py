@@ -45,6 +45,14 @@ def test_a_metric_on_a_union_reads_its_one_question(hunch):  # a union has no `q
     assert (m["fired"], m["rows"]) == (2, 2)
 
 
+def test_metrics_as_a_list_is_a_lint_error_not_a_traceback(hunch, capsys):  # lint called .items() on it
+    (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("  first: {rule: \"text == 'a'\"}", "  - first"))
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "metrics: maps each name to" in capsys.readouterr().err
+
+
 def test_a_malformed_metric_on_a_union_is_a_lint_error_not_a_crash_in_test(hunch, capsys):  # lint skipped unions
     (hunch.dir / "rows.csv").write_text("id,text,grp\nq,a,x\n")
     hunch.project = hunch.dir
