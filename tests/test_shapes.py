@@ -70,3 +70,24 @@ def test_clip_or_redact_in_the_wrong_shape_is_a_lint_error(hunch, capsys, key, v
     with pytest.raises(SystemExit):
         hunch("lint")
     assert f"{key}: " in capsys.readouterr().err
+
+
+def test_an_outer_union_asks_only_what_an_inner_union_carries(hunch, capsys):  # lint passed; u's rows dropped
+    branches(hunch, "x", "y", "z")
+    for b in ("x", "y", "z"):  # every leaf asks both; u carries only urgent
+        f = hunch.dir / f"{b}.yml"
+        f.write_text(f.read_text() + "  severity: {type: noul, instructions: \"Is it severe?\"}\n")
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x, y]\nquestion: urgent\n")
+    (hunch.dir / "uu.yml").write_text("judgment: uu\nunion: [u, z]\nquestion: severity\n")
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "branch 'u' has no question 'severity'" in capsys.readouterr().err
+
+
+def test_an_upstream_without_a_key_is_a_lint_error(hunch, capsys):  # KeyError in topo_project
+    branches(hunch, "x")
+    (hunch.dir / "x.yml").write_text((hunch.dir / "x.yml").read_text().replace("key: id\n", ""))
+    (hunch.dir / "u.yml").write_text("judgment: u\nunion: [x]\nquestion: urgent\n")
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "missing key" in capsys.readouterr().err

@@ -120,7 +120,8 @@ def load_spec(path: Path, text: str | None = None) -> dict:
         sys.exit(f"{path}: a spec is a YAML mapping (judgment:, source:, questions: …)")
     # shapes the project graph and question expansion read before lint runs: a clear message, not a traceback
     for k in ("judgment", "model", "source", "where", "question"):
-        if (k in spec or k == "judgment") and not (isinstance(spec.get(k), str) and spec[k]):
+        needed = k == "judgment" or (k == "question" and "union" in spec)
+        if (k in spec or needed) and not (isinstance(spec.get(k), str) and spec[k]):
             sys.exit(f"{path}: {k}: is text, got {spec.get(k)!r}")
     if "union" in spec and not (isinstance(spec["union"], list) and spec["union"]
                                 and all(isinstance(u, str) for u in spec["union"])):
@@ -220,7 +221,7 @@ def topo_project(specs: list[dict], path: Path | None = None) -> dict:
         visit(name, [])
     for name in order:  # defaults a downstream node inherits from its first upstream
         spec, ups = nodes[name], upstream(nodes[name])
-        if ups:
+        if ups and "key" in nodes[ups[0]]:  # an upstream without one: lint says it is missing
             spec.setdefault("key", nodes[ups[0]]["key"])
     return {"path": path or specs[0]["_dir"], "nodes": nodes, "order": order}
 
@@ -923,7 +924,7 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                     errors += tag([f"branch {u!r} asks {q!r} as {x.get('type')}, others differently"])
             known = [columns[u] for u in ups]
             # only what every branch has: a row from a branch without a column has no value for it (KeyError)
-            columns[name] = None if None in known else sorted(set.intersection(*map(set, known)) | {"_branch"})
+            columns[name] = None if None in known else sorted(set.intersection(*map(set, known or [[]])) | {"_branch"})
             if columns[name] is not None and spec.get("key") not in columns[name]:
                 errors += tag([f"key {spec.get('key')!r} is not a column every branch has"])
             for k in sorted({k for k in spec if not k.startswith("_")} - UNION_KEYS):
@@ -1816,10 +1817,12 @@ def question_of(spec: dict) -> list[str]:
 
 def asked(project: dict, name: str, qid: str) -> dict | None:
     """The question `qid` as judgment `name` asks it; a union's, as its first branch that asks it (a branch may
-    itself be a union)."""
+    itself be a union, which carries only its own `question`)."""
     spec = project["nodes"].get(name, {})
     if "union" not in spec:
         return (spec.get("questions") or {}).get(qid)
+    if spec.get("question") != qid:
+        return None
     return next((q for u in upstream(spec) if (q := asked(project, u, qid))), None)
 
 
