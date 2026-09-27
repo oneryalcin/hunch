@@ -46,6 +46,8 @@ hunch.results(obj, base: str | Path = ".", judgment: str | None = None) -> list[
 
 A judgment's table from its last complete run, one dict per row. Default: the last judgment in dependency order. Columns: [Store](/reference/store#judgment-tables).
 
+The table belongs to whichever spec with that judgment name ran last. If that wasn't this spec as it is now (it was edited since, or another spec shares the name), `results` raises `SystemExit` rather than return another spec's answers, and names the `hunch run` that writes the table for this one; with the answers cached, that run is free. A judgment that has never run raises too.
+
 ```python
 rows = hunch.results("prototype/examples/claude_code/command_guard.yml")
 len(rows)            # 1315

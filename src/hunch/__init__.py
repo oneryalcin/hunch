@@ -55,14 +55,25 @@ def run(obj, base: str | Path = ".") -> dict:
 
 
 def results(obj, base: str | Path = ".", judgment: str | None = None) -> list[dict]:
-    """The materialized table of a judgment (the last complete run), as a list of dicts."""
-    from hunch.core import open_store
+    """The materialized table of a judgment (the last complete run), as a list of dicts. Refuses a table another
+    version of the spec wrote, or another spec with the same judgment name: its answers aren't this spec's."""
+    from hunch.core import open_store, spec_hash
     project = load(obj, base)
     spec = project["nodes"][judgment or project["order"][-1]]
-    db = open_store(spec)
-    cur = db.execute(f'select * from "{table_name(spec)}"')
+    db, name = open_store(spec), table_name(spec)
+    if not db.execute("select 1 from sqlite_master where type = 'table' and name = ?", (name,)).fetchone():
+        raise SystemExit(f"{name}: no table yet; `hunch run {project['path']}` writes it")
+    cur = db.execute(f'select * from "{name}"')
     cols = [c[0] for c in cur.description]
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    run = rows and rows[0].get("_hunch_run_id") and db.execute(
+        "select spec_hash, finished_at from _hunch_runs where run_id = ? and judgment = ?",
+        (rows[0]["_hunch_run_id"], name)).fetchone()
+    if run and run[0] != spec_hash(spec):
+        raise SystemExit(f"{name}: the table was written at {run[1]} by another version of this spec, or by another "
+                         f"spec with the same judgment name; `hunch run {project['path']}` writes it for this one "
+                         "(free when the answers are cached)")
+    return rows
 
 
 def judge_model(cls, spec: dict, base: str | Path = ".", **fields):
