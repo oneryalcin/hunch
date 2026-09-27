@@ -5,9 +5,10 @@ documentation still holds is a judgment. This source hands the model the facts, 
 
     source: py(rows.py:rows)     # in the spec
 
-`signature_change` reads like "parameter colProj (ColumnReadProjection) removed; parameter columnSchema
-(ColumnMetadata) added", or "none". `param_rule` is the plain rule for @param comments alone: `yes` when the
-parameter the comment names is gone or has a new type, else `no`; empty for other comments.
+`signature_change` reads like "return type HttpPanel → HttpPanelResponse; parameter w renamed to toolItem", or
+"none": parameters renamed, removed, added or retyped, and the return type. A renamed method is not reported.
+`param_rule` is the plain rule for @param comments alone: `yes` when the parameter the comment names is gone or has
+a new type, else `no`; empty for other comments.
 """
 import csv
 import re
@@ -16,19 +17,27 @@ from pathlib import Path
 HERE = Path(__file__).parent
 
 
+def plain(text: str) -> str:
+    """`text` without generics, nested ones included: `List<Map<K, V>>` → `List`."""
+    while (shorter := re.sub(r"<[^<>]*>", "", text)) != text:
+        text = shorter
+    return text
+
+
 def signature(code: str):
-    """(return type, [(type, name)]) of a Java method, or None when the header can't be read."""
-    head = code[: code.find("{")] if "{" in code else code
-    head = re.sub(r"@\w+(\([^)]*\))?", " ", head)  # annotations
-    m = re.search(r"([\w\[\]<>?,.\s]+?)\s*\((.*)\)", head, re.S)
+    """(return type, [(type, name)]) of a Java method, or None when the header can't be read. Types lose their
+    generics (`List<String>` is `List`), so a change inside the angle brackets is not reported."""
+    code = re.sub(r"@\w+(\s*\([^()]*\))?", " ", code)  # annotations first: their arguments can hold braces
+    head = plain(code[: code.find("{")] if "{" in code else code)
+    m = re.search(r"([\w\[\]?,.\s]+?)\s*\((.*)\)", head, re.S)
     if not m:
         return None
-    words = re.sub(r"<[^<>]*>", "", m.group(1)).split()  # drop generics, then the words before the name
+    words = m.group(1).split()  # the words before the name
     ret = words[-2] if len(words) >= 2 else ""
     if ret in {"public", "private", "protected", "static", "final", "synchronized", "abstract", "native"}:
         ret = ""  # a constructor
     params = []
-    for a in re.sub(r"<[^<>]*>", "", m.group(2)).split(","):
+    for a in m.group(2).split(","):
         parts = [p for p in a.split() if p != "final"]
         if len(parts) >= 2:
             params.append((" ".join(parts[:-1]), parts[-1]))
@@ -43,8 +52,13 @@ def change(old: str, new: str) -> str:
     if a[0] != b[0]:
         out.append(f"return type {a[0] or 'none'} → {b[0] or 'none'}")
     ta, tb = {n: t for t, n in a[1]}, {n: t for t, n in b[1]}
-    out += [f"parameter {n} ({t}) removed" for n, t in ta.items() if n not in tb]
-    out += [f"parameter {n} ({t}) added" for n, t in tb.items() if n not in ta]
+    renamed = {}  # same position, same type, new name
+    for (t1, n1), (t2, n2) in zip(a[1], b[1]):
+        if n1 != n2 and t1 == t2 and n1 not in tb and n2 not in ta:
+            renamed[n1] = n2
+    out += [f"parameter {n} renamed to {renamed[n]}" for n in renamed]
+    out += [f"parameter {n} ({t}) removed" for n, t in ta.items() if n not in tb and n not in renamed]
+    out += [f"parameter {n} ({t}) added" for n, t in tb.items() if n not in ta and n not in renamed.values()]
     out += [f"parameter {n} type {ta[n]} → {tb[n]}" for n in ta if n in tb and ta[n] != tb[n]]
     return "; ".join(out) or "none"
 

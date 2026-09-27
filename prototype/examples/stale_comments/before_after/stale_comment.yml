@@ -4,7 +4,6 @@ judgment: stale_comment
 model: jev-1.13.0
 source: ../comments.csv
 key: id
-reviews: ../stale_comment.reviews.csv
 state: [comment, old_code, new_code]
 clip: {old_code: 6000, new_code: 6000}
 questions:

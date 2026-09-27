@@ -6,7 +6,6 @@ source: ../comments.csv
 key: id
 state: [comment, new_code]
 clip: {new_code: 6000}
-reviews: ../stale_comment.reviews.csv
 questions:
   stale:
     type: noul

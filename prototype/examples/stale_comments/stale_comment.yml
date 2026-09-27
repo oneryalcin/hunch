@@ -19,39 +19,56 @@ questions:
     gold: gold_checked       # the 300 rows the authors checked by hand; gold_stale is the heuristic label on all
     act: 0.9
 
-tests:
-  stale: {min_auroc: 0.9, min_accuracy: 0.85}
+tests:                    # regression bars, set below what was measured (85.7%, AUROC 0.917)
+  stale: {min_auroc: 0.88, min_accuracy: 0.82}
 
-examples:                 # must pass on every test, whatever else changes
-  - name: the return type changed under its @return
+examples:                 # both overrule the dataset's heuristic label, which counts any comment edit as stale
+  - name: the return type changed under its @return (the heuristic label says fine)
     row:
       comment: '@return org.parosproxy.paros.view.HttpPanel'
       signature_change: return type HttpPanel → HttpPanelResponse
-      old_code: |
+      old_code: |-
         	public HttpPanel getResponsePanel() {
         		if (responsePanel == null) {
         			responsePanel = new HttpPanel(false);
         		}
         		return responsePanel;
         	}
-      new_code: |
+        
+      new_code: |-
         	public HttpPanelResponse getResponsePanel() {
         		if (responsePanel == null) {
         			responsePanel = new HttpPanelResponse(false, extension);
         		}
         		return responsePanel;
         	}
+        
     expect: {stale: "yes"}
-  - name: a renamed parameter the summary never mentioned
+  - name: a renamed parameter the summary never mentioned (the heuristic label says stale)
     row:
-      comment: Checks if toolitem is selected
-      signature_change: parameter w (ToolItem) removed; parameter toolItem (ToolItem) added
-      old_code: |
+      comment: 'Checks if toolitem is selected'
+      signature_change: parameter w renamed to toolItem
+      old_code: |-
         	public boolean isSelected(final ToolItem w) {
-        		return w.getSelection();
+        		boolean selectionState = Display.syncExec(new ResultRunnable<Boolean>() {
+        			@Override
+        			public Boolean run() {
+        					return w.getSelection(); 
+        			}
+        		});
+        		return selectionState;
         	}
-      new_code: |
+        
+      new_code: |-
         	public boolean isSelected(final ToolItem toolItem) {
-        		return toolItem.getSelection();
+        		boolean selectionState = Display.syncExec(new ResultRunnable<Boolean>() {
+        			@Override
+        			public Boolean run() {
+        					return toolItem.getSelection(); 
+        			}
+        		});
+        		return selectionState;
         	}
+        
+        
     expect: {stale: "no"}

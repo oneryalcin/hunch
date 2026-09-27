@@ -1,7 +1,6 @@
 class Example {
 
 	/**
-	 * Gets the response panel.
 	 * @return org.parosproxy.paros.view.HttpPanel
 	 */
 	private HttpPanelResponse getResponsePanel() {
@@ -11,11 +10,9 @@ class Example {
 		return responsePanel;
 	}
 
-
 	/**
-	 * Checks if toolitem is selected.
-	 * @param w the tool item
-	 * @return whether it is selected
+	 * Checks if toolitem is selected
+	 * @param w given widget
 	 */
 	public boolean isSelected(final ToolItem toolItem) {
 		boolean selectionState = Display.syncExec(new ResultRunnable<Boolean>() {
@@ -26,6 +23,4 @@ class Example {
 		});
 		return selectionState;
 	}
-
-
 }
