@@ -5,9 +5,8 @@ description: "The ideas hunch is built from, each resting on the one before: row
 
 import { ActDial } from "/snippets/act-dial.jsx";
 import { DIAL_ROWS } from "/snippets/dial-rows.jsx";
-import { ReviewLoop } from "/snippets/figures.jsx";
 
-Each idea on this page rests on the one before it.
+A command, a support message and a model answer look different, but hunch handles them in the same order: choose a row, ask a question, compare answers with evidence, then decide which answers need a person.
 
 ## A row is one thing you judge
 
@@ -22,7 +21,7 @@ The answer is always typed, never free text. The type decides its shape:
 | Type | The answer | For example |
 |---|---|---|
 | `choice` | one option, with a probability for each | how an agent's turn went: worked, failed, redirected, unclear |
-| `noul` | the probability that the answer is yes | would this command destroy something hard to undo |
+| `noul` (yes/no) | the probability that the answer is yes | would this command destroy something hard to undo |
 | `score` | a level on a described scale | how risky a change is, from harmless to irreversible |
 | `multi` | yes or no for each option, asked as one `noul` per option | which kinds of side effect a command has |
 
@@ -34,7 +33,7 @@ A folder of specs is a [project](/reference/projects), where one judgment can re
 
 ## Every answer is stored under its exact input
 
-When hunch asks a question, it stores the answer in `.hunch/store.sqlite`. The answer is filed under a key made from the exact request: the model, the state, and the question as sent. The same request is never paid for twice.
+When hunch asks a question, it stores the answer in `.hunch/store.sqlite`. Its cache key covers the exact request: the model, the state, and the question as sent. A later run can reuse an answer while that request and store remain the same.
 
 Here is what goes into that key, and what stays out:
 
@@ -53,27 +52,27 @@ tests: {...}                  # not sent, not in the key
 
 This one rule explains much of how hunch behaves:
 
-- A re-run with nothing changed costs nothing.
+- A re-run with nothing changed uses the stored answers and asks nothing.
 - Changing one question asks only that question again.
 - Old answers stay in the store, so `diff` can compare two versions of a spec without asking anything.
 
 ## Gold is the answer you trust
 
-To say how often the model is right, you need rows where the right answer is known. hunch calls that gold. It comes from an answer-key column in your data (`gold:`), or from your own verdicts in review.
+To measure how often the model is right, you need rows with an answer to compare against. hunch calls these answers gold. They come from an answer-key column in your data (`gold:`), or from your verdicts in review. The measured rate describes those rows; how well it applies to future rows depends on how representative they are.
 
 An answer key is someone else's judgment, and it can be wrong ([one public key](/cookbooks/banking-intents) was wrong four times as often as the model). So hunch treats a key as a starting point: the rows where the model and the key disagree are the first ones it asks you about.
 
-## act decides what a person sees
+## `act` sets a bar for review
 
-An answer given at 0.55 deserves less trust than one given at 0.99. `act` is the confidence below which an answer is not acted on automatically; those rows go to review instead.
+An answer with probability 0.99 clears a higher bar than one with 0.55, but the number alone does not prove that either answer is right. `act` is the confidence below which an answer should go to a person instead of being acted on automatically. Your application or hook uses that bar to choose what happens next.
 
-Choosing `act` is a trade. Set it higher and fewer rows are automated, but fewer of those are wrong. `hunch test` shows this trade as a dial, with one line per threshold, so you can pick with numbers. Neither `act` nor `gold` is sent to the model, so changing them asks nothing.
+Choosing `act` is a trade: raising it sends more rows to review. On labelled or reviewed rows, `hunch test` shows the share above each threshold and the mistakes in that share. Neither `act` nor `gold` is sent to the model, so changing them asks nothing.
 
 Here is that trade on 770 real answers from the [banking cookbook](/cookbooks/banking-intents). Each dot is one message, the most confident at the top. Move `act` and watch mistakes leave the automated block and land with a person:
 
 <ActDial rows={DIAL_ROWS} initial={0.9} />
 
-At 0.90, 82.6% of answers are automated and 8.2% of those are wrong. Point at a red dot near the top: some of the model's most confident "mistakes" are the answer key's.
+At 0.90, 82.6% of these answers clear the bar; 8.2% of that group disagree with the answer key. Raising the bar moves rows from the automated group to review. Some red dots near the top mark errors in the answer key rather than the model, which is why disagreements deserve review.
 
 ## Review turns your verdicts into gold
 
@@ -93,8 +92,8 @@ The examples use TypeSafe's Jev, a model built to return typed answers with prob
 
 ## How the pieces meet
 
-Work goes round this loop: `run` a spec, `review` a sample, `test`, then change the spec and `diff` to see what flipped.
+The spec and row go to an engine, which returns an answer and probability. When a question sets `act`, its bar routes the answer toward application code or review. Without `act`, the route is empty and your code decides what to do. Reviewed answers become gold for `hunch test`.
 
-<ReviewLoop />
+![With an act threshold set, a row and spec go to an engine; its answer and probability route toward application code or human review. Without act, code handles the answer. Review verdicts become gold for tests.](/images/decision-route.svg)
 
-Your application can call the same spec with [`hunch.judge(...)`](/guides/use-in-your-app).
+In practice, `run` a spec, `review` a sample, `test`, then change the spec and `diff` to see what flipped. Your application can call the same spec with [`hunch.judge(...)`](/guides/use-in-your-app).

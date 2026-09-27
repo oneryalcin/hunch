@@ -1,9 +1,11 @@
 ---
 title: "Cookbooks"
-description: "Nine real problems worked through with hunch, each with its spec, its numbers, and what did not work."
+description: "Eleven real problems worked through with hunch, each with its spec, its numbers, and what did not work."
 ---
 
 Each cookbook starts from a real dataset and a question someone would want answered about it. It shows the spec, what was run, what came out, and where the approach fell short. Every number comes from a run in the repository: the example specs are in `prototype/examples/`, and the design notes behind them in `docs/04-design.md`.
+
+Several cases use AI review panels, source labels or the author's own reviews. Those are different forms of evidence, and none alone establishes how a spec will work on your data. Each case's measurement notes say which it used.
 
 <CardGroup cols={2}>
   <Card title="Grade Claude Code sessions" icon="robot" href="/cookbooks/claude-code-sessions">
@@ -37,7 +39,7 @@ Each cookbook starts from a real dataset and a question someone would want answe
     A confident "no" is reliable; a confident "yes" is not.
   </Card>
   <Card title="100,000 product reviews" icon="gauge" href="/cookbooks/amazon-reviews">
-    57.5 requests per second, $1.55, and a cached re-run in 4 seconds.
+    100,000 rows: 96,000 new requests at 57.5 per second for $1.55, then a cached re-run in 4 seconds.
   </Card>
 </CardGroup>
 

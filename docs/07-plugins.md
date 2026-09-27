@@ -1,12 +1,8 @@
-# Plugins: what they solve, who writes them, what hunch needs (2026-09-26)
+# Plugins and extension boundaries
 
-Status: decided 2026-09-26, after two independent answers and an adversarial review with a fact check (below).
-Supersedes the "engine, source and sink plugins through Python entry points" step in 06-roadmap's order: engines
-are the only code plugin; sources go through dlt and `py()`; there are no sink plugins.
-The first version was written in conversation; two agents then answered the same question without reading it
-(one from dbt's history, one as a sceptic comparing pytest, Great Expectations, dlt, LangChain, OpenTelemetry and
-Terraform). Where all three agreed, the text stands; where the reviews were better, it changed, and "What the
-reviews changed" says how.
+Decision recorded 26 September 2026: **engines are the only code plugin type**. Read rows through `py()` or dlt, and write results through existing data tools; hunch has no source or sink plugin API. This supersedes the broader plugin proposal in the [roadmap](06-roadmap.md). The [spec reference](../docs-site/reference/spec.mdx) and [engine reference](../docs-site/reference/engines.mdx) describe current usage.
+
+The rest of this note explains the decision, the evidence from dbt and other tools, and what would justify adding another extension point. Two independent reviews and a fact check shaped it; their changes are recorded at the end.
 
 ## What hunch is, and where its parts join
 
@@ -102,30 +98,16 @@ alerting on top without any plugin API. This is cheap and needs no permission fr
 - **An `act` bar tuned for one engine is wrong for another.** A battery names the built-in engine it was measured
   on, so it reproduces anywhere, and lists the other engines it was measured with.
 
-## Suggested order
+## What shipped, and what would come next
 
-1. **Batteries with receipts.** (Done 2026-09-26: `rag-answers` ships all 900 rows; `hunch test --receipt` writes
-   `results.json` beside a battery, and the three with data ship one; the skill lists the batteries.) A battery ships all the labelled rows it was measured on (not a sample), its data
-   licence, and its results beside the spec (today `hunch test` writes them only under the git-ignored `.hunch/`,
-   so a battery-level results path comes first), reproducible with `hunch test`. And it is found by agents: `hunch
-   skill` teaches a coding agent the batteries that exist and when to reach for one, since the first users work in
-   Claude Code and Codex.
-2. (Done 2026-09-26: `results.schema.json` and `manifest.schema.json`, checked in CI against real files; CI
-   fails a battery whose receipt is stale; `reference/files` is the contract; `results_comment.py` the example
-   consumer.) **Document and version the artifacts** (`results.json`, `manifest.json`, `*.reviews.csv`): a JSON Schema, a
-   version field, a changelog and one example consumer (a GitHub Action that comments a spec's numbers on a PR).
-3. (Done 2026-09-26: `docs-site/benchmark.py` writes `reference/benchmark` from every battery's receipts; CI fails
-   if the page and the receipts disagree. Jev, DeepSeek and a local Ollama model so far.) **The benchmark table,** every battery × every engine, generated from the artifacts, not written by hand.
-4. (Done 2026-09-26: a plugin without `adapter` is keyed by its package and version; the Ollama plugin is its own
-   package in `plugins/`, with native-prompt templates and smoke tests CI runs; MiniCheck natively: AUROC 0.840,
-   from 0.265.) **Engines, only what pays now:** `adapter` defaults to the plugin package's version, so a changed prompt can't
-   serve stale cached answers; the Ollama plugin becomes its own package, the reference implementation with a smoke
-   test, able to use a model's native prompt. (`compile` already names a plugin engine; answers are already checked
-   at fill time.)
-5. **Later, with a trigger:** `hunch add <git url>` (someone asks to install a battery that isn't bundled); a hub
-   (a second author); `hunch engine check` and a contract version (a second engine author); batch `answer_many`
-   (a local engine that is too slow one row at a time); a trace-reader entry point (a third outside format); one
-   dlt source adapter (the data-pipeline side needs it).
+| Status | Extension work | Evidence or trigger |
+|---|---|---|
+| Done, 26 September | Batteries with receipts | `rag-answers` ships all 900 measured rows; `hunch test --receipt` writes `results.json` beside a battery. The agent skill lists available batteries. |
+| Done, 26 September | Versioned artifacts | `results.schema.json` and `manifest.schema.json` are checked in CI against real files. CI catches stale battery receipts; `results_comment.py` shows one consumer. The file contract is in the [file reference](../docs-site/reference/files.mdx). |
+| Done, 26 September | Benchmark from receipts | `docs-site/benchmark.py` generates the benchmark page; CI checks it against the receipts. |
+| Done, 26 September | Engine plugin example | The Ollama engine lives in its own package under `plugins/`, with native prompts and CI smoke tests. A plugin without `adapter` uses its package version in cache keys so a changed prompt does not reuse an old answer. |
+| When requested | Install batteries from git | Add `hunch add <git url>` when someone needs a battery that is not bundled; consider a hub after a second author publishes one. |
+| When needed | Broaden engine and source contracts | Add an engine contract check for a second outside engine author, batch answers for a local engine that is too slow row by row, or a trace-reader entry point for a third outside format. Add a dlt adapter when a data-pipeline user needs it. |
 
 ## What the reviews changed
 

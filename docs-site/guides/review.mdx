@@ -54,7 +54,7 @@ COMMAND
 >
 ```
 
-Each state column appears first, up to 600 characters. Below it are the question and the model's top five answers with their probabilities; a choice with more options adds a line to type any option's name. Any other answer that matters for this row is added and marked, such as `← answer key`.
+Each state column appears first, shortened to 600 characters in the terminal. The question is also shortened if it is long. Below are up to five model answers with their probabilities; a choice with more options lets you type an option's name. An answer key or a comparison spec's answer is marked beside its option.
 
 ## The keys
 
@@ -67,17 +67,17 @@ Each state column appears first, up to 600 characters. Below it are the question
 | `a` | Genuinely ambiguous; left out of scoring |
 | `s` / `q` | Skip / stop. Everything so far is saved |
 
-## Judge only from the text shown
+## Judge from the model's input
 
-The screen shows exactly what the model saw. Judge the row as a stranger would, from that alone, because that is the only fair test of the model.
+Judge as a stranger would, using only the state sent to the model. The terminal previews that state but cuts each column at 600 characters; the browser also limits displayed text. If a decisive passage is hidden, press `s` to skip the row rather than guessing or using outside knowledge. Inspect the source and the spec's `redact` and `clip` rules to diagnose what is missing, then review again only when the relevant model input is visible.
 
-Sometimes you know the answer only because you know more: you were in that session, or you know what happened next. Press `c` for those. The model did not fail; the input was missing something. `hunch test` counts these separately:
+Sometimes the model's input itself is missing what you need: you know the session or what happened next, but the state does not say it. Press `c` for those rows. `hunch test` counts them separately:
 
 ```text
   context: 1 of 30 random spot checks (3%) needed more than the state shows to decide; give the state more (earlier or later turns, what happened next)
 ```
 
-A high share means the spec should show the model more, not that the model is weak.
+A high share suggests the spec should show the model more context.
 
 ## Where verdicts go
 
@@ -101,4 +101,4 @@ reviews: ../command_guard.reviews.csv
 
 `--limit N` keeps sessions short; the queue picks up where you stopped. Other flags are in the [CLI reference](/reference/cli).
 
-Long texts, such as whole agent replies, are easier to read in the browser. The [server](/reference/server) has the same queue at `/review`.
+Long texts, such as whole agent replies, may be easier to read in the browser. The [server](/reference/server) has the same queue at `/review`; its display limit is 1,500 characters per state field.

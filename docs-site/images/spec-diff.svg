@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 305" role="img" aria-labelledby="title desc">
+  <title id="title">Two changed command answers, one fixed and one broken</title>
+  <desc id="desc">The narrower sends_out question changes two answers from yes to no. For an API documentation command the panel said no, so this fixes a mistake. For an adb install command the panel said yes, so this breaks a correct answer. The example comes from the 1,315-command comparison in the guide.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .head { font-size: 16px; font-weight: 700; }
+    .row { font-size: 18px; font-weight: 600; }
+    .small { font-size: 14px; }
+    .card { fill: #FAFAF7; stroke: #B8C9CA; stroke-width: 1.5; }
+    .fix { fill: #E7EFF0; stroke: #405A60; stroke-width: 1.5; }
+    .break { fill: #FFF2EB; stroke: #B7654D; stroke-width: 1.5; }
+    .arrow { stroke: #607C81; stroke-width: 2; marker-end: url(#tip); }
+  </style>
+  <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="900" height="305" fill="#FFFFFF"/>
+  <text x="26" y="29" class="head">Command</text><text x="302" y="29" class="head">Original wording</text><text x="520" y="29" class="head">Narrower wording</text><text x="739" y="29" class="head">Panel verdict</text>
+  <rect x="18" y="50" width="864" height="103" rx="12" class="fix"/>
+  <text x="34" y="89" class="row">implement API.MD</text><text x="34" y="116" class="small">One of 20 answer flips</text>
+  <text x="314" y="94" class="row">yes · 0.60</text><line x1="428" y1="88" x2="492" y2="88" class="arrow"/>
+  <text x="534" y="94" class="row">no · 0.95</text>
+  <text x="749" y="88" class="row">no</text><text x="749" y="117" class="small">fixed</text>
+  <rect x="18" y="169" width="864" height="103" rx="12" class="break"/>
+  <text x="34" y="208" class="row">install via adb</text><text x="34" y="235" class="small">Sends a file to a phone</text>
+  <text x="314" y="213" class="row">yes · 0.89</text><line x1="428" y1="207" x2="492" y2="207" class="arrow"/>
+  <text x="534" y="213" class="row">no · 0.94</text>
+  <text x="749" y="207" class="row">yes</text><text x="749" y="236" class="small">broken</text>
+  <text x="25" y="297" class="small">A flip changes the answer. Gold or review tells you whether that change helped.</text>
+</svg>

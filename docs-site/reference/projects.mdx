@@ -76,6 +76,10 @@ tests:
     min_accuracy: 0.85
 ```
 
+For one illustrative row, suppose `group` answers `card_payments` with probability 0.8. `where` sends that row to `intent_card_payments`; the other specialists do not ask it. Suppose that specialist answers `pending_card_payment` with probability 0.9. With `chain: true`, its path confidence is 0.8 × 0.9 = 0.72: both the routing and the specialist answer must be right. The union then collects that answer with `_branch: intent_card_payments`. These probabilities illustrate the calculation; they are not results from the BANKING77 run.
+
+![An illustrative bank message is routed to one specialist. Its 0.8 routing probability and 0.9 intent probability give a 0.72 path confidence before union collects the answer.](/images/project-path.svg)
+
 ## Keys
 
 | Key | Meaning |

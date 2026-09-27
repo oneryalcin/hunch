@@ -1,23 +1,23 @@
 ---
 title: "Introduction"
-description: "hunch turns a question into a decision your software can act on, and tells you how often it's right."
+description: "Write a model judgment once, test it against reviewed cases, and see what changes before your software acts on it."
 ---
 
-Software now makes judgment calls it used to leave to people.
+A coding agent wants to remove a broken Python environment. The model says the command is destructive at 0.74; the answer key says no. Which answer should your guard trust?
 
-A coding agent is about to run `rm -rf build dist node_modules`. Should a person look first? An alert fires at 3 a.m. Is it worth waking someone? A contract arrives. Does it renew itself? A chatbot cites a policy page. Does the page say that? Fifty thousand support calls sit in the warehouse. Which ones mention a competitor?
+That is one of 38 real commands in the [quickstart](/quickstart). To build a guard you can rely on, you need to record the question and what the model saw, review disagreements, measure errors on known cases, and inspect what an edit changes. A probability by itself does not establish how often an answer is right.
 
-Each of these is a question with a small set of answers, asked of many rows, with something acted on at the end. A model can answer all of them in milliseconds for a fraction of a cent. What it can't tell you is how often it is wrong, whether it is sure this time, or whether yesterday's edit to the question made things worse.
+**hunch keeps the question in a versioned spec, measures its answers against evidence, and shows which answers meet your bar for acting.**
 
-**hunch turns a question into a decision your software can act on, and tells you how often it's right.**
+![A person considers a checked card, a question card and a decision still to make](/images/decision-review.webp)
 
 ## Decision engineering
 
-dbt turned SQL scattered across dashboards and scripts into a practice, analytics engineering: transformations written once, kept in git, run everywhere and tested on every change. hunch does the same for the judgment calls in your software. Call it decision engineering:
+dbt helped make scattered SQL into a practice: write transformations once, keep them in git, run them in several places, and test changes. hunch brings that discipline to model judgments:
 
 - **Write the question once.** Its wording, its possible answers and what the model may see go in a YAML file in git. The same file answers a million rows in a batch, a column in a SQL query or a dbt model, or one row inside your app as it happens, from the same cache.
-- **Act only when it's sure.** Every answer comes with a probability, and the spec sets the bar for acting on it. Below the bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong, so you choose it with numbers.
-- **Change it without breaking it.** Before an edit ships, `hunch diff` shows every answer it would flip, and the tests in CI fail when a decision gets worse. An app that relies on an answer's name is protected from a rename.
+- **Choose where to act.** Every answer comes with a probability. The spec sets a confidence bar; your application decides what happens above it and sends the rest to a person. On labelled or reviewed rows, `hunch test` shows how many answers clear the bar and how many of those are wrong.
+- **See what a change does.** `hunch diff` shows which answers an edited spec would flip. In CI, `hunch test` fails when a configured check fails. An app that relies on an answer's name is protected from a rename.
 - **Make it better from use.** `hunch review` shows you the few rows where a verdict teaches the most. Your verdicts become the answer key the next test measures against.
 
 ## Where decisions live
@@ -33,7 +33,7 @@ The same shape, a question, a typed answer, a bar for acting and a person for th
 | Risk and compliance | Is this expense within policy? Does this document meet the requirement? Is this claim covered? |
 | AI output checks | [Is the answer supported by its source?](/cookbooks/rag-answers) Does it leak personal data? Did it follow the instructions? |
 
-Anywhere a model's answer decides what happens next, hunch is how you ship that decision and keep it honest.
+The same workflow can serve each case: define the answer, inspect the evidence, and decide what may happen without a person.
 
 ## What it has found so far
 
@@ -49,18 +49,14 @@ Each of these is a real dataset worked through in a cookbook, with the spec and 
   <Card title="Did that turn work?" icon="robot" href="/cookbooks/claude-code-sessions">
     The developer's next message says whether a coding agent's turn worked. Read by a model, it was right about 9 times in 10, and `diff` caught a "clearer" wording that did worse.
   </Card>
-  <Card title="100,000 reviews for $1.55" icon="gauge" href="/cookbooks/amazon-reviews">
-    Every answer is kept, so asking all 100,000 again took 4 seconds and cost nothing.
+  <Card title="100,000 reviews in one run" icon="gauge" href="/cookbooks/amazon-reviews">
+    96,000 new requests cost $1.55; 4,000 answers were already cached. A fully cached re-run took 4.1 seconds and cost nothing.
   </Card>
 </CardGroup>
 
 ## How it works
 
-```text
-  write the question ──► ask every row ──► review a few ──► test: how often is it right?
-          ▲                                                           │
-          └──────────── diff: which answers would this edit flip? ◄───┘
-```
+Write a spec, run it on rows, review a sample, and test the answers. Before changing the spec, use `diff` to see which rows would change. [Concepts](/concepts#how-the-pieces-meet) shows the decision and review paths.
 
 Here is part of the command guard. It reads a coding agent's sessions and asks about each shell command before it runs:
 
@@ -74,7 +70,7 @@ state: [request, cwd, command]
 
 questions:
   destroys:
-    type: noul
+    type: noul  # yes/no question
     instructions: Would running `command` delete, overwrite or reset something in a way that is hard to undo?
     act: 0.90
   sends_out:
@@ -87,7 +83,7 @@ examples:
     expect: {destroys: "yes"}
 ```
 
-`hunch run` asks every row and stores each answer under its exact input, so asking again is free and editing one question re-asks only that one. Inside your app, [`hunch.judge()`](/guides/use-in-your-app) answers one row at a time from the same spec and store. A [Pydantic AI agent](/guides/use-in-your-app#from-a-pydantic-ai-agent) on a decision model can be tested exactly as it runs. And [`hunch docs`](/guides/share) turns a project into one page for whoever signs off on the policy.
+`hunch run` asks every row and stores each answer under its exact input. An unchanged request uses the stored answer; editing one question re-asks that question. Inside your app, [`hunch.judge()`](/guides/use-in-your-app) answers one row at a time from the same spec and store. A [Pydantic AI agent](/guides/pydantic#from-a-pydantic-ai-agent) on a decision model can be recorded and tested on past rows. [`hunch docs`](/guides/share) makes a project report for whoever signs off on the policy.
 
 <Card title="Quickstart" icon="play" href="/quickstart">
   Build the command guard, measure it, change it and review it, in about five minutes.

@@ -3,7 +3,7 @@ title: "Write a spec"
 description: "Turn a judgment you make today into a spec: the rows, what the model sees, the question, and how to test it."
 ---
 
-Start from a decision your software or your team already makes. Write down the question a careful person would answer for each row. The rest of the spec follows from that question: which rows it applies to, what someone needs to see to answer it, and how you would know the answer is right.
+Start with a decision your software or team already makes. Write the question a careful person would answer for one case. Then choose the rows it applies to, the evidence that person would need, and the answers you can check it against.
 
 This page builds a spec in that order. The [spec reference](/reference/spec) lists every key.
 
@@ -18,17 +18,17 @@ source: commands.csv
 key: id
 ```
 
-`model` names the [engine](/reference/engines) that answers. `source` can also read coding-agent sessions directly (`traces(<glob>)`, one row per command with `view: commands`) or call a Python function (`py(rows.py:load)`).
+`model` names the [engine](/reference/engines) that answers. `source` can also read coding-agent sessions (`traces(<glob>)`, one row per command with `view: commands`) or call a Python function (`py(rows.py:load)`).
 
 ## What the model sees
 
-`state` lists the columns sent with each question. Send what a person would need to decide, and nothing more. Extra columns cost tokens and give the model something to be distracted by.
+`state` lists the columns sent with each question. Include what a careful person needs to decide. Extra columns cost tokens and may distract from the evidence that matters.
 
 ```yaml
 state: [request, cwd, description, command]
 ```
 
-Each column earns its place. `command` is what runs. `request` says what the developer asked for, so a deletion they asked for reads differently from one they didn't. `cwd`, the folder the command runs in, is there because the guard's questions are about the project: without it the model can't tell whether `rm -rf build` stays inside it.
+`command` is what runs. `request` says what the developer asked for, so an expected deletion reads differently from a surprising one. `cwd` is the working folder; without it, the model cannot tell whether `rm -rf build` stays inside the project.
 
 To remove secrets or shorten long columns before they are sent, see `redact` and `clip` in the [spec reference](/reference/spec).
 
@@ -36,7 +36,7 @@ To remove secrets or shorten long columns before they are sent, see `redact` and
 
 The model never sees the question's name. To it, `destroys` means nothing, while "Would running `command` delete, overwrite or reset files in a way that would be hard to undo?" means everything. Write `instructions` as the full question, and refer to the columns by name in backticks.
 
-Then say where the line falls, in `criteria`. These descriptions often matter more than the instructions do: "hard to undo" is where two careful people would disagree, and the criteria settle it.
+Use `criteria` to describe the boundary between answers. Two careful people may disagree about "hard to undo"; the criteria make your intended boundary explicit.
 
 ```yaml
 questions:
@@ -50,7 +50,7 @@ questions:
 
 Choose the type by what the answer means:
 
-- `noul`: a yes/no condition. The answer is the probability of yes, so 0.5 means "can't tell", not "somewhat".
+- `noul`: a yes/no condition. Its output includes the probability of yes; 0.5 means the model gives yes and no similar weight, not that a command is "somewhat destructive".
 - `choice`: exactly one option applies, such as what a command is mainly for: `build`, `test`, `inspect`, `install`. Add `none: <when>` for rows that fit no option; without it, the model must pick one of yours, and it will pick one confidently.
 - `score`: a position on an ordered scale. `criteria` is a list of levels, each described as a concrete situation.
 - `multi`: any number of options can apply. hunch asks one yes/no question per option.
@@ -72,9 +72,9 @@ tests:
     min_accuracy: 0.85
 ```
 
-Without an answer key, leave `gold` out. You will review a random sample instead, and `test` estimates accuracy from it. See [Review](/guides/review).
+Without an answer key, leave `gold` out. Review a random sample, then `test` can estimate accuracy on those reviewed rows. See [Review](/guides/review).
 
-Some cases must never go wrong, however good the average. Write them into the spec as [examples](/reference/spec#examples), rows with the answers they must get, and `test` checks each one:
+Put important known cases into the spec as [examples](/reference/spec#examples). `test` checks those cases on each run, even if the average looks good:
 
 ```yaml
 examples:
@@ -82,6 +82,8 @@ examples:
     row: {request: clean up my machine, cwd: /home/USER/app, description: Remove old files, command: rm -rf ~}
     expect: {destroys: "yes"}
 ```
+
+Passing these examples catches changes to these specific cases. It cannot guarantee the same answer on a new command.
 
 ## Check it before it costs anything
 
@@ -97,7 +99,7 @@ lint error: column 'comand' does not reach this judgment (has ['id', 'request', 
 lint error: examples[1] (wipes the home folder): row needs the state column 'comand'
 ```
 
-Then read the request that `compile` prints. It is exactly what the model will see. If you could not answer the question from it, the model cannot either.
+Then read the request that `compile` prints for the first row. It is what the model will see for that row. If you could not answer the question from it, add the missing context before running the sample.
 
 ## Start small
 

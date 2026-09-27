@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 870 290" role="img" aria-labelledby="title desc">
+  <title id="title">A distilled model handles confident rows locally and sends other rows to its teacher</title>
+  <desc id="desc">A new row first reaches the local student model. If its confidence meets act 0.9, the local answer is used. Below 0.9, the question reaches Jev and Jev's answer replaces the student's. Test both routes on held-out rows before use.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .name { font-size: 19px; font-weight: 700; }
+    .detail { font-size: 15px; }
+    .box { fill: #F7F8F5; stroke: #B8C9CA; stroke-width: 2; }
+    .local { fill: #E7EFF0; stroke: #405A60; stroke-width: 2; }
+    .remote { fill: #FFF2EB; stroke: #B7654D; stroke-width: 2; }
+    .line { fill: none; stroke: #607C81; stroke-width: 2.2; marker-end: url(#tip); }
+  </style>
+  <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="870" height="290" fill="#FFFFFF"/>
+  <rect x="18" y="103" width="120" height="83" rx="12" class="box"/>
+  <text x="37" y="138" class="name">New row</text><text x="37" y="162" class="detail">same spec</text>
+  <path d="M138 144 H184" class="line"/>
+  <rect x="188" y="103" width="166" height="83" rx="12" class="local"/>
+  <text x="205" y="138" class="name">Local student</text><text x="205" y="162" class="detail">answers first</text>
+  <path d="M354 135 H394 V58 H441" class="line"/>
+  <path d="M354 152 H394 V218 H441" class="line"/>
+  <rect x="445" y="14" width="166" height="83" rx="12" class="local"/>
+  <text x="462" y="49" class="name">Use local</text><text x="462" y="73" class="detail">p ≥ 0.90</text>
+  <rect x="445" y="174" width="166" height="83" rx="12" class="remote"/>
+  <text x="462" y="209" class="name">Ask Jev</text><text x="462" y="233" class="detail">p &lt; 0.90</text>
+  <path d="M611 55 H675 V137 H717" class="line"/>
+  <path d="M611 215 H675 V154 H717" class="line"/>
+  <rect x="721" y="103" width="132" height="83" rx="12" class="box"/>
+  <text x="739" y="138" class="name">Answer</text><text x="739" y="162" class="detail">for the app</text>
+  <text x="19" y="282" class="detail">Test both routes on held-out rows before use. Jev replaces an uncertain student's answer.</text>
+</svg>

@@ -7,7 +7,15 @@ description: "Every function the hunch package exports, with its exact signature
 import hunch
 ```
 
-The CLI wraps these functions; both use the same specs and [store](/reference/store).
+The CLI wraps these functions; both use the same specs and [store](/reference/store). For a single row, start with [`judge`](#judge):
+
+```python
+answer = hunch.judge("urgent.yml", id="m-1", message="The service is down")
+print(answer["urgent"]["label"])  # "yes" or "no"
+print(answer["urgent"]["p"])      # probability of that answer
+```
+
+This uses the [minimal spec](/reference/spec#a-minimal-spec). An uncached call asks the configured engine and may incur a charge; a repeated call with the same state uses the stored answer. The rest of this page lists the exact API for single rows, batches and Python-generated specs.
 
 ## Projects
 

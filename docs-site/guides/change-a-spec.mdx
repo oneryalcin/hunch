@@ -3,7 +3,9 @@ title: "Change a spec safely"
 description: "See which rows an edit flips before you ship it, try a candidate on live traffic, and decide what happens to old answers."
 ---
 
-A git diff of a spec shows the words you changed. It doesn't show what those words do. Narrowing one question by a clause can move dozens of answers, and a wording that reads better can be worse.
+A git diff shows the words you changed. `hunch diff` shows the decisions those words change. One added clause can flip dozens of answers, even when the new wording reads better.
+
+This guide covers three different tasks: compare two wordings on the same rows, protect answer names your app uses, and decide how a running judgment handles an edit. Start with the comparison; use the later sections when you need them.
 
 ## `diff` shows what flipped
 
@@ -28,9 +30,13 @@ sends_out: 20/1315 rows flip (1 within noise band)
   ✗ #da5d32d6#4.10     yes 0.87 → no 0.94     The phone is on usb adb for testing | ~…
 ```
 
-20 commands changed answer. Against the answer key, a review panel's verdicts, 2 were fixed and 18 broken, and a sign test says that balance is not chance. Each flip is listed, `✓` for fixed and `✗` for broken, so you can read the ones that went wrong. A flip marked `~noise` was a near tie that could tip either way on a re-run.
+20 commands changed answer. Against a review panel's verdicts, 2 were fixed and 18 broken. Each flip is listed, `✓` for fixed and `✗` for broken. A flip marked `~noise` was a near tie that could tip either way on a re-run.
 
-Reading them is the point. Most of the broken rows install an app on a phone over `adb`. The panel counted that as sending files to another machine, and it is; the narrower wording says a test phone isn't "where other people can see it". So the diff isn't only saying the new wording is worse. It is saying the new wording is a different policy, and showing exactly which commands the policy changes. Whether `adb install` should wait for a person is your call; the diff makes sure you make it on purpose.
+![Two commands change from yes to no. That fixes the API documentation case but breaks the adb installation case, according to the review panel.](/images/spec-diff.svg)
+
+*The same answer change can fix one row and break another. The panel verdict tells you which.*
+
+Read the flips before accepting the wording. Most broken rows install an app on a phone over `adb`. The panel counted that as sending files to another machine; the narrower wording excludes a test phone that other people cannot see. The edit changes the policy. You decide whether `adb install` should wait for a person.
 
 `--against` takes another spec file, a folder, or `git:REF` for the version committed at that ref:
 

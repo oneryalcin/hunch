@@ -18,6 +18,10 @@ hunch docs prototype/examples/claude_code/
 
 It asks the engine nothing and costs nothing. It reads the specs, the results of the last `hunch test` of the same path, and the store's record of runs. Open the HTML file in a browser, attach it to a pull request, or publish it from CI.
 
+The generated report has two reading levels: find a judgment on the project page, then read its status reason, evidence, question wording and technical details. This is a map of that order, not a screenshot of a particular run:
+
+![A project page leads to a judgment page, where the reading order is status reason, measured evidence, exact question and criteria, then technical reference.](/images/report-reading-map.svg)
+
 ## Every judgment gets one status
 
 The page opens on the project: its README's first paragraph, a bar of statuses, and the judgments with the ones that need a look first. A sidebar lists every judgment by status on every screen, with a search box (press `/`). Select a status in the bar to narrow the list to it; the sidebar keeps listing everything.
