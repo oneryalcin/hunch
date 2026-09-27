@@ -238,7 +238,7 @@ clip: {request: 3000, final_reply: -3000}
 
 ### `where`
 
-Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number (`' 12 '` and `1e3` count); a cell that isn't one (empty, `n/a`, `nan`) matches no numeric condition, `!=` included, so `not year > 2008` keeps it. `lint` rejects a column that does not reach the spec.
+Keep only rows where a condition holds, before asking. Can use source columns and, on a `ref(...)` spec, the upstream's answer columns. Allowed: column names, constants, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`, `and`, `or`, `not`. Compared with a number, text is read as a number (`' 12 '` and `1e3` count); a cell that isn't one (empty, `n/a`, `nan`) matches no numeric condition, `!=` included, so `not year > 2008` keeps it. Compared with `True` or `False`, `true` and `false` (any case) count too, as do `1` and `0`; for `yes` write `flag == 'yes'`. `in` holds when `==` holds for some item of the list, `not in` when `!=` holds for every one, so `year in [2008, 2009]` reads `year` as a number, and an empty cell is in neither. A `where` that keeps none of a run's rows prints a warning. `lint` rejects a column that does not reach the spec.
 
 ```yaml
 where: purpose == 'install' and purpose_p >= 0.5
@@ -276,7 +276,7 @@ A verdict applies while the row's state is unchanged. Keep the file in git; it i
 
 ### `weights`
 
-Corrects for a sample whose mix differs from production. Each row gets `_w` = population share ÷ sample share of its `by` value; `test` weights accuracy, calibration and estimates by it. Every `by` value needs a share; shares sum to 1. Set it on the spec that reads the file; downstream specs carry `_w`.
+Corrects for a sample whose mix differs from production. Each row gets `_w` = population share ÷ sample share of its `by` value; `test` weights accuracy, calibration and estimates by it. Every `by` value needs a share above 0; shares sum to 1. Set it on the spec that reads the file; downstream specs carry `_w`.
 
 ```yaml
 weights:

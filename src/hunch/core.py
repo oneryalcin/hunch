@@ -246,6 +246,13 @@ def _number(text: str) -> float | None:
     return None if x != x else x
 
 
+def _cell(text: str, other: float) -> float | None:
+    """Text compared with a number, read as one; compared with True/False, `true`/`false` (any case) count too."""
+    if isinstance(other, bool) and text.strip().lower() in ("true", "false"):
+        return text.strip().lower() == "true"
+    return _number(text)
+
+
 def compile_where(expr: str):
     """(predicate, columns used). Columns, constants, comparisons, `in`, and/or/not; nothing else runs."""
     tree = ast.parse(expr, mode="eval")
@@ -274,19 +281,23 @@ def compile_where(expr: str):
             left = val(node.left, row)
             for o, c in zip(node.ops, node.comparators):
                 right = val(c, row)
-                a, b = left, right
-                if not isinstance(o, (ast.In, ast.NotIn)):  # CSV values are text: compare as numbers when one side is
-                    if isinstance(b, (int, float)) and isinstance(a, str):
-                        if (a := _number(a)) is None:
-                            return False  # an empty or non-numeric cell matches no numeric condition
-                    elif isinstance(a, (int, float)) and isinstance(b, str):
-                        if (b := _number(b)) is None:
-                            return False
-                if not _CMP[type(o)](a, b):
+                if not cmp(type(o), left, right):
                     return False
                 left = right
             return True
         return bool(val(node, row))
+
+    def cmp(o, a, b) -> bool:
+        if o in (ast.In, ast.NotIn) and isinstance(b, list):  # item by item, as == and != compare
+            return any(cmp(ast.Eq, a, x) for x in b) if o is ast.In else all(cmp(ast.NotEq, a, x) for x in b)
+        if o not in (ast.In, ast.NotIn):  # CSV values are text: compare as numbers when one side is
+            if isinstance(b, (int, float)) and isinstance(a, str):
+                if (a := _cell(a, b)) is None:
+                    return False  # an empty or non-numeric cell matches no numeric condition
+            elif isinstance(a, (int, float)) and isinstance(b, str):
+                if (b := _cell(b, a)) is None:
+                    return False
+        return _CMP[o](a, b)
 
     return (lambda row: ev(tree.body, row)), {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
 
@@ -377,7 +388,9 @@ def source_header(spec: dict) -> list[str]:
     kind, _ = source_kind(spec)
     if kind == "csv":
         with open(source_path(spec), newline="") as f:
-            return next(csv.reader(f))
+            if not (header := next(csv.reader(f), None)):
+                raise EOFError(f"source {spec['source']} is empty: it needs a header row")
+            return header
     if kind == "traces":
         from hunch import traces
         return traces.VIEWS[spec.get("view", "turns")][1]
@@ -865,6 +878,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
             except FileNotFoundError as e:
                 errors += tag([f"source not found: {e.filename or e}"])
                 header = None
+            except EOFError as e:
+                errors += tag([str(e)])
+                header = None
         e, w = lint_node(spec, header)
         errors, warnings = errors + tag(e), warnings + tag(w)
         if "weights" in spec:
@@ -873,6 +889,9 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
                 errors += tag(["weights describe how source rows were sampled; set them on the judgment that reads the file"])
             elif header is not None and wt.get("by") not in header:
                 errors += tag([f"weights.by column {wt.get('by')!r} not in the source"])
+            elif any(not isinstance(v, (int, float)) or not v > 0 for v in wt.get("population", {}).values()):
+                errors += tag([f"weights.population shares must be numbers above 0, got {wt.get('population')} (a row "
+                               "whose share is 0 stands for no one: leave it out of the source)"])
             elif abs(sum(wt.get("population", {}).values()) - 1) > 0.01:
                 errors += tag([f"weights.population shares must sum to 1, got {wt.get('population')}"])
         # an unreadable source makes every column downstream unknown (not missing): no cascade of false errors
@@ -1564,6 +1583,8 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
                     unknown_rows.append(r)
                 if ok:
                     keep.append(r)
+            if inp and not keep and rows_in is None:  # a batch keeping nothing is likely a typo or a type mismatch
+                print(f"{name}: warning: where kept 0 of {len(inp)} rows: {spec['where']}", file=sys.stderr)
         path_ps = [1.0] * len(keep)
         if spec.get("chain"):  # once per hop: P(this hop's where-clause) × the upstream row's own path
             pred, used = compile_where(spec["where"])
@@ -2067,10 +2088,9 @@ def it_spec_chain(its: list[dict]) -> bool:
     return any(it["spec"].get("chain") for it in its)
 
 
-def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
+def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
     """Prints the question's report and returns it as data (results.json)."""
     conf = (spec.get("tests") or {}).get(qid, {})
-    q = its[0]["q"] if its else spec["questions"][qid]
     print(f"\n{qid} ({q['type']}, {len(its)} rows)")
     src = Counter(it["gold_src"] for it in its)
     gold_its = [it for it in its if it["gold"]]
@@ -2385,7 +2405,7 @@ def wrate(fw: list[tuple[bool, float]]) -> tuple[float, float, float, float]:
     """Weighted share of True, its 95% Wilson interval on the effective sample size (Kish), and that size.
     Unit weights give k/n and wilson(k, n) exactly."""
     sw = sum(w for _, w in fw)
-    if not sw:  # every row weighs 0 (a population share of 0): they stand for no one
+    if not sw:  # no rows, or none weighs anything (lint keeps population shares above 0)
         return 0.0, 0.0, 1.0, 0.0
     p, n_eff = sum(w for f, w in fw if f) / sw, sw * sw / sum(w * w for _, w in fw)
     lo, hi = wilson(p * n_eff, n_eff)
@@ -2509,7 +2529,8 @@ def cmd_test(project: dict, args) -> None:
         ungrade(project, n, res["items"])
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
-            rep["questions"][qid] = test_question(spec, qid, its, res["answers"], check, all_stats)
+            q = its[0]["q"] if its else project["nodes"][spec["union"][0] if "union" in spec else n]["questions"][qid]
+            rep["questions"][qid] = test_question(spec, qid, q, its, res["answers"], check, all_stats)
             if its and its[0]["q"].get("none"):
                 k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
                 print(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")

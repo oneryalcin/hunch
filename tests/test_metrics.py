@@ -1,6 +1,8 @@
 """`hunch test` metrics under `weights:` describe the population, not the sample."""
 import json
 
+import pytest
+
 SPEC = """judgment: urgent
 model: fake:big
 source: rows.csv
@@ -22,7 +24,10 @@ def test_the_overall_metric_rate_is_weighted(hunch):
     assert (m["fired"], m["rows"], m["rate"]) == (1, 3, 0.5)  # 1 of 3 sampled rows, half the population
 
 
-def test_rows_that_weigh_nothing_do_not_crash_the_metric(hunch):  # a population share of 0
+def test_a_population_share_of_0_is_a_lint_error_not_a_crash_in_test(hunch, capsys):  # all-0 weights divide by 0
     (hunch.dir / "rows.csv").write_text("id,text,grp\n1,a,x\n2,b,y\n3,c,y\n")
-    (hunch.dir / "spec.yml").write_text(SPEC.replace("x: 0.5, y: 0.5", "x: 0, y: 1") + "where: grp == 'x'\n")
-    hunch("test")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("x: 0.5, y: 0.5", "x: 0, y: 1"))
+    with pytest.raises(SystemExit):
+        hunch("test")
+    assert "shares must be numbers above 0" in capsys.readouterr().err
+

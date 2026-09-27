@@ -1,5 +1,8 @@
-"""`hunch run` on awkward data: rows it can't compare, and filters that keep nothing."""
+"""`hunch run` on awkward data: rows it can't compare, filters that keep nothing, an empty file."""
+import json
 import sqlite3
+
+import pytest
 
 SPEC = """judgment: recent
 model: fake:big
@@ -32,3 +35,29 @@ def test_a_filter_that_keeps_nothing_writes_an_empty_table_downstream_reads(hunc
     hunch("run")
     cols = [r[1] for r in sqlite3.connect(hunch.dir / ".hunch" / "store.sqlite").execute("pragma table_info(down)")]
     assert output(hunch, "down") == [] and {"year", "recent", "old", "old_key"} <= set(cols)
+
+
+def test_in_reads_a_cell_as_a_number_when_the_list_holds_numbers(hunch):  # else it keeps nothing, silently
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2008\n2,b,2010\n3,c,2009.0\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("year > 2008", "year in [2008, 2009]"))
+    hunch("run")
+    assert output(hunch, "recent") == [("1",), ("3",)]
+
+
+def test_an_empty_csv_is_a_lint_error_not_a_traceback(hunch, capsys):
+    (hunch.dir / "rows.csv").write_text("")
+    (hunch.dir / "spec.yml").write_text(SPEC)
+    with pytest.raises(SystemExit):
+        hunch("lint")
+    assert "rows.csv is empty" in capsys.readouterr().err
+
+
+def test_a_union_whose_branches_keep_nothing_is_tested_with_0_rows(hunch):
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2001\n")
+    hunch.project = hunch.dir
+    for b in ("recent", "later"):
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: recent", f"judgment: {b}"))
+    (hunch.dir / "tree.yml").write_text("judgment: tree\nunion: [recent, later]\nquestion: recent\n")
+    hunch("test")
+    report = json.loads(next((hunch.dir / ".hunch" / "target").glob("*.json")).read_text())
+    assert report["judgments"]["tree"]["questions"]["recent"]["rows"] == 0
