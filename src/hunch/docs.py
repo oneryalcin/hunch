@@ -31,7 +31,8 @@ SHARE_CHECKS = {"min_accuracy", "min_act_accuracy", "order_stability", "min_rate
 
 def manifest(project: dict) -> dict:
     """The project as data: each judgment's spec as written (a multi question stays one question), plus its file,
-    its spec hash (what `test` records) and the judgments it reads. Nothing here comes from answers."""
+    its spec hash (what `test` records) and the judgments it reads. Nothing here comes from answers. Under --target,
+    `target` names it and each `model` is the engine that target runs."""
     nodes, root = project["nodes"], Path(project["path"])
     base = root if root.is_dir() else root.parent
     out = {}
@@ -44,7 +45,7 @@ def manifest(project: dict) -> dict:
         out[n] = {"file": str(f.relative_to(base)) if f and f.is_relative_to(base) else (str(f) if f else None),
                   "spec_hash": core.spec_hash(s), "upstream": core.upstream(s), **spec}
     first = nodes[project["order"][0]]
-    return {"version": MANIFEST_VERSION, "git_sha": core.git_sha(first["_dir"]) or None,
+    return {"version": MANIFEST_VERSION, "git_sha": core.git_sha(first["_dir"]) or None, "target": core.TARGET,
             "project": root.stem if root.is_file() else root.name, "judgments": out}
 
 
@@ -456,6 +457,7 @@ def home(man: dict, res: dict, st: dict, run: dict, sample: int | None, about: s
             + f'<div class="why"></div></td><td>{acc_cell(r, sample)}</td>'
             f'<td class="hide-sm">{e(", ".join(x["name"] for x in m.get("exposures") or [])) or "<span class=muted>–</span>"}</td></tr>')
     tested = f"last test {e(local(at))}" + (f" · sample of {sample} rows" if sample else "") if at else "no test results for this path yet"
+    tested += f" · target {e(man['target'])}" if man.get("target") else ""
     return f"""<section id="home" class="home">
 <p class="eyebrow">Project</p><h1>{e(man['project'])}</h1>
 {f'<p class="lede">{e(about)}</p>' if about else ''}

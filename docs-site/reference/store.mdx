@@ -9,9 +9,10 @@ One SQLite file holds every answer, each judgment's latest table, the run histor
 
 In order:
 
-1. `HUNCH_STORE`, if set.
-2. The nearest `.hunch/store.sqlite` in the spec's folder or any folder above it.
-3. Otherwise a new `.hunch/store.sqlite` at the root of the git repository, or in the spec's folder outside a repository.
+1. The `store` of the [target](/reference/spec#targets) named by `--target`, if it sets one.
+2. `HUNCH_STORE`, if set.
+3. The nearest `.hunch/store.sqlite` in the spec's folder or any folder above it.
+4. Otherwise a new `.hunch/store.sqlite` at the root of the git repository, or in the spec's folder outside a repository.
 
 A new store is announced on stderr:
 
@@ -61,7 +62,7 @@ Answer shapes:
 | `<question>_key` | The answer's `key` in `answers`. |
 | `_hunch_run_id` | The run that wrote the row. |
 
-Under `--model`, the table name gets the engine as a suffix (`intent__deepseek_deepseek_flash`), leaving the spec's own table untouched.
+Under `--model`, the table name gets the engine as a suffix (`intent__deepseek_deepseek_flash`), leaving the spec's own table untouched. Under a `--target` that changes an engine, every table of the run gets the target's name instead (`intent@dev`).
 
 ## Runs and lineage
 

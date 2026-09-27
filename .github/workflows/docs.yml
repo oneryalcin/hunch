@@ -25,6 +25,8 @@ jobs:
         run: |
           uv venv -q /tmp/plugin-venv && uv pip install -q --python /tmp/plugin-venv -e . -e plugins/hunch-engine-ollama pytest
           cd plugins/hunch-engine-ollama && /tmp/plugin-venv/bin/python -m pytest -q -p no:cacheprovider
+      - name: hunch's own tests (tests/)
+        run: /tmp/plugin-venv/bin/python -m pytest -q -p no:cacheprovider tests
       - name: The quickstart's recipe is a valid spec
         run: uv run hunch lint src/hunch/recipes/agent_commands && uv run hunch lint src/hunch/recipes/tickets && uv run hunch lint src/hunch/recipes/rag_answers
       - name: The files hunch writes match their published schemas (batteries' results.json; a manifest from hunch docs)

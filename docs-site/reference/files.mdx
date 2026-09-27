@@ -8,7 +8,7 @@ dbt's ecosystem grew as much from the files it writes as from its plugins: tools
 | File | Written by | Where | Schema |
 | --- | --- | --- | --- |
 | The spec | you | anywhere, in git | [`spec.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json) |
-| Results | `hunch test` | `.hunch/target/<tested path>.json` | [`results.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/results.schema.json) |
+| Results | `hunch test` | `.hunch/target/<tested path>.json`; with `--target`, `<tested path>@<target>.json` | [`results.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/results.schema.json) |
 | A receipt | `hunch test --receipt` | beside what was tested: `<spec>.results.json`, or `results.json` in a folder; with `--model`, the engine's suffix (`results__deepseek_deepseek_flash.json`) | the same |
 | The manifest | `hunch docs` | `.hunch/target/<name>.manifest.json` | [`manifest.schema.json`](https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/manifest.schema.json) |
 | Verdicts | `hunch review`, the server's review page | `<judgment>.reviews.csv` beside the spec | the columns below |

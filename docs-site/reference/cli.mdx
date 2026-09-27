@@ -106,6 +106,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 | --- | --- |
 | `version` | Format version (1). Field names are stable within a version. |
 | `git_sha`, `project` | The commit, and the spec or folder name. No timestamp, so an unchanged project writes an identical file. |
+| `target` | The `--target` it ran with, else `null`. Under a target, each judgment's `model` is the engine that target uses. |
 | `judgments.<name>` | The spec as written, every key it sets (a `multi` question stays one question), plus `file` (the spec's path), `spec_hash` (the hash `test` records; the page marks a judgment stale when they differ) and `upstream` (the judgments it reads). |
 
 ## Flags
@@ -121,6 +122,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 | `--max-cost USD` | all | `$HUNCH_MAX_COST`, else no cap | The most one set of asks may be charged: a judgment's missing answers, and separately its escalations and `test`'s order check. Above the estimate, nothing is asked; while asking, a request is sent only if its worst case still fits, so the charge stays under it |
 | `--receipt` | `test` | off | Also write the numbers beside what was tested: `<spec>.results.json`, or `results.json` in a folder (with the engine's suffix under `--model`). Only what the answers decide, no time or cost, so a re-run on cached answers changes nothing: commit it with a battery |
 | `--sample N` | `compile`, `run`, `test`, `diff` | all rows | Judge only N rows of each root source, the same N every time |
+| `--target NAME` | all | the spec as written | Run as the specs' [`targets`](/reference/spec#targets) entry of that name says: its engine, sample, store and cost cap. A flag given here wins over the target. `diff` and `review --against` run the old side on it too, if the old specs define it; otherwise the old side runs as written |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
 | `--list` | `review` | off | Print the queue instead of prompting |
 | `--limit N` | `review` | no limit | At most N rows this session |
@@ -231,14 +233,15 @@ answers: 685 cached, 0 asked in 0 requests, 0 input tokens, $0.00000
 
 #### The results file
 
-When `test` finishes, it also writes what it printed as JSON, for CI, dashboards and agents (its schema and what may change between versions: [Files hunch writes](/reference/files)): `.hunch/target/<tested path>.json`, beside the store, with the path of the tested spec or folder relative to the store's folder (`hunch test examples/tickets/triage.yml` writes `.hunch/target/examples/tickets/triage.json`). With `--model`, the engine's suffix is added, as for its tables (`triage__deepseek_deepseek_flash.json`), so another engine's results never replace the spec's own. `test` removes the file when it starts, so a run stopped by `--max-cost` leaves none rather than an old one.
+When `test` finishes, it also writes what it printed as JSON, for CI, dashboards and agents (its schema and what may change between versions: [Files hunch writes](/reference/files)): `.hunch/target/<tested path>.json`, beside the store, with the path of the tested spec or folder relative to the store's folder (`hunch test examples/tickets/triage.yml` writes `.hunch/target/examples/tickets/triage.json`). With `--model`, the engine's suffix is added, as for its tables (`triage__deepseek_deepseek_flash.json`), so another engine's results never replace the spec's own. With `--target`, its name is added (`triage@dev.json`), and the file goes in `target/` beside the target's store. `test` removes the file when it starts, so a run stopped by `--max-cost` leaves none rather than an old one.
 
 | Field | Meaning |
 | --- | --- |
 | `version` | Format version (1). Field names are stable within a version. |
 | `command`, `at`, `git_sha` | `test`, when it ran (UTC), the commit it ran on. |
 | `passed` | Every check passed, or failed only with `severity: warn` (the exit code was 0). |
-| `sample` | N if `test` ran with `--sample N`, else `null`. |
+| `sample` | N if `test` ran with `--sample N` or a target's `sample`, else `null`. |
+| `target` | The `--target` it ran with, else `null`. |
 | `cost` | Spent by this run, in USD. |
 | `judgments.<name>` | `spec_hash`, `model`, `rows`, and `questions` (and `multi`, for `type: multi`). |
 | `questions.<q>.gold` | Rows with gold: `rows`, and by origin `source`, `review`, `excluded`. |

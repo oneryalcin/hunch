@@ -15,7 +15,8 @@ from hunch import core  # noqa: E402
 code = (SRC / "core.py").read_text()
 env_code = "\n".join(p.read_text() for p in [*SRC.glob("*.py"), *(HERE.parent / "server" / "hunch_server").glob("*.py")])
 checks = {
-    "reference/spec.mdx": sorted(core.SPEC_KEYS | core.QUESTION_KEYS - {"_multi"} | core.TEST_KEYS | core.METRIC_TEST_KEYS | set(core.ON_CHANGE)),
+    "reference/spec.mdx": sorted(core.SPEC_KEYS | core.QUESTION_KEYS - {"_multi"} | core.TEST_KEYS | core.METRIC_TEST_KEYS | set(core.ON_CHANGE)
+                                 | core.TARGET_KEYS),
     "reference/cli.mdx": sorted(set(re.findall(r'"(\w+)": cmd_\w+', code))
                                 | set(re.findall(r'sys\.argv\[1\] == "(\w+)"', (SRC / "cli.py").read_text()))
                                 | set(re.findall(r'add_argument\("(--[\w-]+)"', code))),
@@ -45,6 +46,7 @@ pairs = {
     "view": (set(schema["properties"].get("view", {}).get("enum", [])), set(traces.VIEWS)),
     "severity": (set(d.get("severity", {}).get("enum", [])), set(core.SEVERITIES)),
     "exposure keys": (set(schema["properties"]["exposures"]["items"]["properties"]), core.EXPOSURE_KEYS),
+    "target keys": (set(schema["properties"]["targets"]["additionalProperties"]["properties"]), core.TARGET_KEYS),
     "exposure kinds": (set(schema["properties"]["exposures"]["items"]["properties"]["kind"]["enum"]), set(core.EXPOSURE_KINDS)),
 }
 drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}

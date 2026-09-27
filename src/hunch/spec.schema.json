@@ -115,6 +115,37 @@
       ],
       "description": "What happens to past answers when the spec changes (default reask)."
     },
+    "targets": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Named ways to run this spec, picked with --target NAME: a cheaper engine, a sample, another store. Without --target the spec runs as written.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The engine this target answers with. Every table of the run then gets @<target> as a suffix."
+          },
+          "sample": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Judge only this many root rows, as --sample N."
+          },
+          "store": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The SQLite store to use, relative to the spec's folder. Replaces HUNCH_STORE."
+          },
+          "max_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "US dollars, as --max-cost."
+          }
+        }
+      }
+    },
     "questions": {
       "type": "object",
       "description": "The questions, by name. The name is not sent to the model.",
