@@ -1,4 +1,4 @@
-"""Build .cache/<review>.csv: every paper four systematic reviews screened, with the reviewers' decisions.
+"""Build .cache/<review>.csv: every paper three systematic reviews screened, with the reviewers' decisions.
 
     uv run --with synergy-dataset python -m synergy_dataset get     # once: downloads SYNERGY and shows its legal note
     uv run python prototype/examples/screening/fetch.py [SOURCE]    # SOURCE: the downloaded synergy-dataset-plus folder
@@ -6,11 +6,13 @@
 SYNERGY (De Bruin et al. 2023, CC0; see NOTICE.md) stores each paper as an OpenAlex work, with the abstract as an
 inverted index because abstracts can't be republished as plain text. This rebuilds the text locally, into the
 gitignored .cache/ only. OpenAlex no longer has many abstracts; where a paper has a PubMed id, the abstract comes
-from PubMed instead (NCBI E-utilities, cached in .cache/pubmed/). Each row: the paper's title and abstract (empty when
-neither source has one), `gold` = the reviewers' title-and-abstract screening decision, `included` = whether the
+from PubMed instead (NCBI E-utilities, cached in .cache/pubmed/). Each row: the paper's title, its type as OpenAlex
+records it (article, review, letter, editorial, ...), its journal, and its abstract (empty when neither source has
+one), `gold` = the reviewers' title-and-abstract screening decision, `included` = whether the
 paper ended up in the review after reading the full text.
 """
 import csv
+import hashlib
 import json
 import sys
 import time
@@ -39,13 +41,14 @@ def pubmed(pmids: list[str]) -> dict[str, str]:
     cache.mkdir(exist_ok=True)
     for i in range(0, len(pmids), 200):
         batch = pmids[i:i + 200]
-        f = cache / f"{batch[0]}-{len(batch)}.xml"
+        f = cache / f"{hashlib.sha256(','.join(batch).encode()).hexdigest()[:16]}.xml"
         if not f.exists():
             f.write_bytes(urllib.request.urlopen(EFETCH + ",".join(batch), timeout=60).read())
             time.sleep(0.34)
         for art in ET.parse(f).getroot().iter("PubmedArticle"):
             pmid = art.findtext(".//PMID")
-            parts = ["".join(a.itertext()).strip() for a in art.iter("AbstractText")]
+            parts = [(f"{a.get('Label')}: " if a.get("Label") else "") + "".join(a.itertext()).strip()
+                     for a in art.findall(".//Abstract/AbstractText")]  # not OtherAbstract (translations)
             if pmid and any(parts):
                 out[pmid] = " ".join(p for p in parts if p)
     return out
@@ -66,14 +69,16 @@ def main(source: Path) -> None:
         pm = pubmed(sorted({pmid[i] for i, a in own.items() if not a and pmid[i]}))
         rows = []
         for lab, w in labels:
-            rows.append([w["id"].rsplit("/", 1)[-1], (w.get("title") or "").strip(), own[w["id"]] or pm.get(pmid[w["id"]], ""),
+            venue = ((w.get("primary_location") or {}).get("source") or {}).get("display_name") or ""
+            rows.append([w["id"].rsplit("/", 1)[-1], (w.get("title") or "").strip(), w.get("type") or "", venue,
+                         own[w["id"]] or pm.get(pmid[w["id"]], ""),
                          w.get("publication_year") or "", "yes" if lab["label_abstract_included"] == "1" else "no",
                          "yes" if lab["label_included"] == "1" else "no"])
         with open(HERE / ".cache" / f"{review}.csv", "w", newline="") as f:
-            csv.writer(f).writerows([["id", "title", "abstract", "year", "gold", "included"]] + rows)
-        no_abstract = sum(not r[2] for r in rows)
-        print(f"{review}: {len(rows)} papers, {sum(r[4] == 'yes' for r in rows)} kept at screening, "
-              f"{sum(r[5] == 'yes' for r in rows)} included, {no_abstract} without an abstract", file=sys.stderr)
+            csv.writer(f).writerows([["id", "title", "type", "venue", "abstract", "year", "gold", "included"]] + rows)
+        no_abstract = sum(not r[4] for r in rows)
+        print(f"{review}: {len(rows)} papers, {sum(r[6] == 'yes' for r in rows)} kept at screening, "
+              f"{sum(r[7] == 'yes' for r in rows)} included, {no_abstract} without an abstract", file=sys.stderr)
 
 
 if __name__ == "__main__":

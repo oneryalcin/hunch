@@ -1,6 +1,6 @@
 ---
-title: "Screen a literature search without missing a paper"
-description: "Thousands of papers, a review's written criteria, and a reading order in which every paper that belongs comes early."
+title: "Screen a literature search in the right order"
+description: "Thousands of papers, a review's written criteria, and a reading order in which the papers that belong come early."
 ---
 
 import { FoundCurve, PaperPuzzle } from "/snippets/screening.jsx";
@@ -18,7 +18,7 @@ A review of Wilson disease, a rare disorder in which copper builds up in the bod
 
 <PaperPuzzle papers={SCREEN_PUZZLE} />
 
-Titles hide what matters. Whether a hospital's twelve years of patients compared the drugs is in the full text, not the title. Screening doesn't decide what goes in the review; it decides what gets read.
+What decides a paper is often not in its title. Whether a hospital's twelve years of patients compared the drugs is in the full text; that a paper is a letter is in its metadata. Screening doesn't decide what goes in the review; it decides what gets read.
 
 ## 1. Get the papers
 
@@ -29,7 +29,7 @@ D=prototype/examples/screening
 uv run python $D/fetch.py
 ```
 
-[SYNERGY](https://github.com/asreview/synergy-dataset) is an open collection of real systematic reviews: every paper each search found, whether the screeners kept it after reading its title and abstract, and whether it ended up in the review. Abstracts can't be republished, so the first command shows a legal note and `fetch.py` rebuilds them on your machine only, with PubMed filling gaps. Some papers still have only a title.
+[SYNERGY](https://github.com/asreview/synergy-dataset) is an open collection of real systematic reviews: every paper each search found, whether the screeners kept it after reading its title and abstract, and whether it ended up in the review. `fetch.py` adds what a screening tool shows: each paper's type (article, review, letter, ...) and journal. Abstracts can't be republished, so the first command shows a legal note and `fetch.py` rebuilds them on your machine only, with PubMed filling gaps. Some papers still have only a title.
 
 ## 2. Paste the review's criteria into a question
 
@@ -37,14 +37,16 @@ uv run python $D/fetch.py
 judgment: anxiety
 source: .cache/van_Dis_2019.csv
 key: id
-state: [title, abstract]
+state: [title, type, venue, abstract]
 questions:
   anxiety:
     type: noul      # yes or no, with how sure
     instructions: >-
-      `title` and `abstract` describe a
-      paper found by the literature search
-      for a systematic review ... The
+      `title`, `type` (article, review,
+      letter, ...), `venue` and `abstract`
+      describe a paper found by the
+      literature search for a systematic
+      review ... The
       review's eligibility criteria, as its
       authors published them: "Randomized
       clinical trials were included that
@@ -52,8 +54,8 @@ questions:
       title-and-abstract screening: could
       this paper meet those criteria, so
       that someone should read the full
-      text? ... when the title and abstract
-      leave it open, "yes".
+      text? ... when what you can see leaves
+      it open, "yes".
     gold: gold      # the screeners' decision
 ```
 
@@ -61,7 +63,7 @@ questions:
 hunch run $D/anxiety.yml --max-cost 0.5
 ```
 
-It reads all 9,883 papers in under a minute and a half, for $0.38. Nobody screened a single paper first: the question is the criteria, word for word.
+It reads all 9,883 papers in under three minutes, for $0.41. Nobody screened a single paper first: the question is the criteria, word for word.
 
 ## 3. Read in hunch's order
 
@@ -69,7 +71,7 @@ Sort the pile by how sure hunch is that a paper could qualify, and read from the
 
 <FoundCurve data={SCREEN_CURVES} />
 
-In the anxiety review, all 72 are in the first third of the pile. Two thirds of the reading, 6,600 papers, could have been skipped without losing one of them.
+In the anxiety review, all 72 are in the first 30% of the pile. The other 6,900 papers could have gone unread without losing one of them.
 
 ## 4. Decide when to stop
 
@@ -82,21 +84,21 @@ tests:
 ```
 
 ```text
-PASS recall of yes 95.1%
-  (95% CI 93.2%–96.4%)
+PASS recall of yes 96.1%
+  (95% CI 94.4%–97.3%)
   of 689 gold-yes rows at act 0.96:
-  a person reads 39% of rows, the
+  a person reads 41% of rows, the
   confident "no" answers are set aside
   (min 92% on the interval's lower bound)
 ```
 
-The bar of 0.96 was chosen on half the papers and tested on the other half, where it kept 95% of what the screeners kept and set aside none of the papers that ended up in the review.
+The bar of 0.96 was chosen on half the papers and tested on the other half, where it kept 95% of what the screeners kept and set aside none of the papers that ended up in the review. Choosing it needs screening decisions; ranking the pile did not.
 
 ## The lesson
 
-The tool this field already uses is active learning: a model that watches each screening decision and moves papers like the ones kept up the pile. On the anxiety review it is a little faster than hunch, finding every paper in the review by 29% of the pile against hunch's 33%. On the other two it needs 71% and 72%; hunch needs 41% and 37%.
+The tool this field already uses is active learning: a model that watches each screening decision and moves papers like the ones kept up the pile. It is a strong baseline. On the anxiety review it beats hunch everywhere: 95% of the papers in the review after 17% of the pile, against hunch's 28%. On the diet review hunch wins everywhere: 30% against 52%. On Wilson disease it's split. Active learning finds what the screeners kept sooner (95% after 44–51% of the pile, against hunch's 77%); hunch finds the papers that ended up in the review sooner (95% after 28%, against 37%).
 
-The difference is what each one learns from. Active learning copies the screeners, including the papers they keep just in case, like a whole poster session the Wilson disease criteria rule out. hunch reads the criteria. A written rule can be run before anyone reads a paper, and when it and the screeners disagree, the disagreement is something to look at, not noise.
+The difference is what each one learns from. Active learning copies the screeners, including the papers they keep just in case. hunch reads the criteria, before anyone has screened a paper. When the two disagree, as on Wilson disease, the disagreement is worth reading: it is where the screeners' habits and the written rule part.
 
 ## Use it on your data
 
@@ -106,32 +108,35 @@ Export your search results with titles and abstracts, paste your criteria into `
 
 <AccordionGroup>
   <Accordion title="The data">
-    Three reviews from [SYNERGY](https://doi.org/10.34894/HE6NAQ) (De Bruin et al. 2023, CC0): van Dis et al. 2020 on cognitive behavioural therapy for anxiety (9,883 papers, 689 kept at screening, 72 in the review); Moran et al. 2020 on whether poor nutrition makes animals take more risks (5,244; 619; 142); Appenzeller-Herzog et al. 2019 on drugs for Wilson disease (2,896; 146; 26). `gold` is the screeners' title-and-abstract decision; `included` whether the paper ended up in the review, which every such paper had passed at screening. OpenAlex no longer has most abstracts; `fetch.py` fills gaps from PubMed, leaving 90%, 71% and 63% of the papers with one. Each spec quotes the review's criteria as SYNERGY records them. This page shows paper titles (OpenAlex metadata, CC0) and quotes no abstract. A fourth review, on class size in schools, was dropped because PubMed covers almost none of its papers.
+    Three reviews from [SYNERGY](https://doi.org/10.34894/HE6NAQ) (De Bruin et al. 2023, CC0): van Dis et al. 2020 on cognitive behavioural therapy for anxiety (9,883 papers, 689 kept at screening, 72 in the review); Moran et al. 2020 on whether poor nutrition makes animals take more risks (5,244; 619; 142); Appenzeller-Herzog et al. 2019 on drugs for Wilson disease (2,896; 146; 26). `gold` is the screeners' title-and-abstract decision; `included` whether the paper ended up in the review, which every such paper had passed at screening. Each paper also carries its type and journal from OpenAlex, which hunch sees and active learning doesn't (it reads title and abstract). OpenAlex no longer has most abstracts; `fetch.py` fills gaps from PubMed, leaving 90%, 71% and 63% of the papers with one. Each spec quotes the review's criteria as SYNERGY records them. This page shows paper titles (OpenAlex metadata, CC0) and quotes no abstract. A first run without type and journal cost $0.73; it said yes to letters and reviews the criteria exclude, which an adversarial review caught. A fourth review, on class size in schools, was dropped because PubMed covers almost none of its papers.
   </Accordion>
   <Accordion title="The results, in full">
     From `measure.py`; the share of the pile read, in order of hunch's p(yes), with 95% intervals from 1,000 bootstrap resamples.
 
-    | Review | To find 95% of the screeners' papers | Work saved (WSS@95) | To find every paper in the review | Active learning, every paper in the review |
-    | --- | --- | --- | --- | --- |
-    | Anxiety | 38.9% (35.0–42.5) | 56.1% | 32.8% | 28.3–29.4% |
-    | Diet and risk | 47.5% (44.6–51.0) | 47.5% | 41.4% | 70.7–70.8% |
-    | Wilson disease | 83.1% (55.5–95.9) | 11.9% | 37.2% | 71.7–72.0% |
+    | Review | Reader | 95% of the screeners' papers | Papers in the review: 95% | all but one | all |
+    | --- | --- | --- | --- | --- | --- |
+    | Anxiety | hunch | 37.3% (34.0–41.4) | 27.8% | 28.0% | 30.4% |
+    | | active learning | 31.7–32.3% | 16.7–17.2% | 18.9–24.8% | 26.7–29.2% |
+    | Diet and risk | hunch | 44.9% (42.0–46.9) | 29.5% | 36.8% | 41.9% |
+    | | active learning | 52.6–52.7% | 51.9–52.2% | 64.9–65.3% | 70.7–70.9% |
+    | Wilson disease | hunch | 77.3% (46.3–97.3) | 27.6% | 27.6% | 38.9% |
+    | | active learning | 44.2–50.9% | 36.8–37.3% | 36.8–37.3% | 72.4–72.7% |
 
-    Active learning reaches 95% of the screeners' papers after 31.5–32.2%, 53.1–54.2% and 44.2–51.0%: faster than hunch on anxiety and Wilson disease, slower on diet and risk. Papers with only a title are harder: in hunch's order, 95% of the screeners' title-only papers take 65%, 75% and 65% of the title-only pile, against 36%, 39% and 90% for papers with an abstract (on Wilson disease the screeners kept many papers whose abstracts the criteria rule out).
+    Active learning's ranges span its three runs. With few papers in each review (72, 142, 26), the last one or two decide the "all" column: active learning's last paper on Wilson disease and on diet has no abstract, so read the "95%" and "all but one" columns as the steadier comparison. Work saved at 95% of the screeners' papers (WSS@95) in hunch's order: 57.7%, 50.1%, 17.7%. Papers with only a title are harder: in hunch's order, 95% of the screeners' title-only papers take 63%, 76% and 72% of the title-only pile, against 36%, 32% and 93% with an abstract (on Wilson disease the screeners kept many papers whose abstracts the criteria rule out).
   </Accordion>
   <Accordion title="How active learning was run">
-    ASReview 3.0.8's simulator (`baseline.py`), its default model (elas_u4), starting from one kept and one rejected paper, three times from different starting papers per review; it learns from the screeners' decisions, hunch from none. Starting it instead from hunch's ten most likely papers (8 or 9 of them kept) changed almost nothing: 29.5%, 70.7% and 71.7% to reach every paper in the review. The runs are local and free.
+    ASReview 3.0.8's simulator (`baseline.py`), its default model (elas_u4), starting from one kept and one rejected paper, three times from different starting papers per review; it learns from the screeners' decisions, hunch from none, and it stops once it has found every paper the screeners kept. Starting it instead from hunch's ten likeliest papers, as a reviewer who screens those first would (8, 10 and 8 of them kept), changed almost nothing: 95% of the papers in the review after 16.4%, 52.2% and 36.0% of the pile, all of them after 28.5%, 70.8% and 72.3%. The runs are local and free.
   </Accordion>
   <Accordion title="Wilson disease: where hunch and the screeners part">
-    Reading in hunch's order, 95% of what the Wilson disease screeners kept takes 83% of the pile, and a recall bar for them would mean reading almost everything, so that spec has none. Among the papers they kept are whole conference poster sessions, which the criteria exclude, and cohorts of patients followed over time, which might compare the drugs and can only be told apart by the full text. hunch says no to both kinds; the papers in the review it was least sure of are mostly those cohorts (p(yes) 0.09 to 0.12). All 26 are still in the first 37% of the pile.
+    Reading in hunch's order, 95% of what the Wilson disease screeners kept takes 77% of the pile, and a recall bar for them would mean reading almost everything, so that spec has none. Among the papers they kept are records of conference poster sessions and cohorts of patients followed over time, which might compare the drugs and can only be told apart by the full text. hunch mostly says no to both; among the papers in the review, the ones it was least sure of (p(yes) 0.06 to 0.11) are such cohorts and one OpenAlex types as a review. Still, 25 of the 26 are in the first 28% of the pile, and all of them in the first 39%.
   </Accordion>
   <Accordion title="The recall bars were chosen on half the papers">
-    `act` for "no" is the lowest bar that keeps 95% of the screeners' papers on one half of each review (split by a hash of the paper's id), then checked on the other half: anxiety 0.96 (95.0% kept, 38.6% read, none of the 38 papers in the review set aside), diet and risk 0.97 (98.9%, 56.2%, none of 58). The `min_recall` checks in the specs run on all papers, so they are regression bars; the half-split numbers are the honest ones.
+    `act` for "no" is the lowest bar that keeps 95% of the screeners' papers on one half of each review (split by a hash of the paper's id), then checked on the other half: anxiety 0.96 (95.3% kept, 40.2% read, none of the 38 papers in the review set aside), diet and risk 0.96 (96.1%, 45.8%, none of 58). The `min_recall` checks in the specs run on all papers, so they are regression bars; the half-split numbers are the honest ones.
   </Accordion>
   <Accordion title="Limits">
     Three reviews, all from one collection. The criteria are those the reviews published, which can be sharper than the protocol the screeners worked from. The papers and reviews are published online, and the model may have seen some of them. Screening decisions are only as good as the screeners: a paper they wrongly skipped counts against nobody.
   </Accordion>
   <Accordion title="Cost">
-    All three reviews, 18,023 papers: $0.69, plus $0.04 for a 300-paper trial of each. The answers are kept, so `measure.py` and the widgets rebuild for $0.
+    All three reviews, 18,023 papers, with type and journal: $0.76 (anxiety $0.41 in 165 seconds). Before that, $0.69 for the run without them and $0.04 for a 300-paper trial of each: $1.49 in all. The answers are kept, so `measure.py` and the widgets rebuild for $0.
   </Accordion>
 </AccordionGroup>

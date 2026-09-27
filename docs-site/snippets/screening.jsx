@@ -9,7 +9,7 @@ export const PaperPuzzle = ({ papers }) => {
   );
   return (
     <div className="not-prose hunch-widget" style={{ border: `1px solid ${grey}`, borderRadius: 12, padding: 16, margin: "16px 0" }}>
-      <div style={{ fontSize: 13, opacity: 0.7 }}>From the title alone: would you read the full paper?</div>
+      <div style={{ fontSize: 13, opacity: 0.7 }}>Would you read the full paper? You see the title; hunch also read the abstract, where there was one, and the publication type.</div>
       {papers.map((it, k) => {
         const shown = picks[k] !== undefined;
         return (
@@ -47,7 +47,7 @@ export const FoundCurve = ({ data }) => {
   const x = (i) => L + (i / maxStep) * (W - L - 4), yv = (v) => H - B - (v / 100) * (H - B - 6);
   const path = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${yv(v).toFixed(1)}`).join("");
   const read = step / 2, n = Math.round((d.papers * read) / 100);
-  const all = (arr) => arr.findIndex((v) => v >= 100) / 2;
+  const by = (arr, pct) => arr.findIndex((v) => v >= pct) / 2;
   return (
     <div className="not-prose hunch-widget" style={{ border: `1px solid ${grey}`, borderRadius: 12, padding: 16, margin: "16px 0" }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
@@ -72,8 +72,8 @@ export const FoundCurve = ({ data }) => {
       </svg>
       <div style={{ fontSize: 12, opacity: 0.7, display: "flex", justifyContent: "space-between" }}><span>read 0%</span><span>dashed line: all {d.inReview} found</span><span>100%</span></div>
       <div style={{ fontSize: 14, marginTop: 10, lineHeight: 1.7 }}>
-        <div><span style={{ color: teal }}>━</span> In hunch's order: <b>{d.hunch[step]}%</b> of the {d.inReview} papers in the review found; all of them by {all(d.hunch)}%</div>
-        <div><span style={{ opacity: 0.6 }}>━</span> Active learning: <b>{d.active[step]}%</b>; all of them by {all(d.active)}%</div>
+        <div><span style={{ color: teal }}>━</span> In hunch's order: <b>{d.hunch[step]}%</b> of the {d.inReview} papers in the review found; 95% of them by {by(d.hunch, 95)}%, all by {by(d.hunch, 100)}%</div>
+        <div><span style={{ opacity: 0.6 }}>━</span> Active learning: <b>{d.active[step]}%</b>; 95% by {by(d.active, 95)}%, all by {by(d.active, 100)}%</div>
       </div>
     </div>
   );

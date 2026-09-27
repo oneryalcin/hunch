@@ -3,7 +3,7 @@
     uv run python docs-site/make_screening_data.py     # from the repo root, after fetch.py and baseline.py; asks nothing
 
 It writes:
-- SCREEN_PUZZLE: six papers the Wilson disease review screened, by title only (titles are OpenAlex metadata, CC0;
+- SCREEN_PUZZLE: six papers the Wilson disease review screened, shown by title (titles are OpenAlex metadata, CC0;
   no abstract is published), each with the screeners' decision, whether it ended up in the review, and hunch's p(yes);
 - SCREEN_CURVES: per review, the share of the papers that ended up in the review found after reading each half
   percent of the pile, in hunch's order and in active learning's (the run of baseline.py's three whose last find is
@@ -23,10 +23,10 @@ import measure  # noqa: E402  (sets HUNCH_MAX_COST=0 before importing hunch)
 csv.field_size_limit(10**8)
 PUZZLE = [  # Wilson disease review: why each paper is here
     ("W2090882839", "A head-to-head trial of two of the four drugs: in the review, and hunch was sure."),
-    ("W4292361613", "A whole conference's poster abstracts. The criteria exclude abstract-only publications; the screeners kept it anyway, and it did not make the review."),
-    ("W2906450930", "A single hospital's patients over 12 years. It made the review, so it compared treatments, which the title doesn't say. Of all the papers in the review, this is the one hunch was least sure of."),
+    ("W4292361613", "Listed as a conference's poster session. The record hunch read holds one poster abstract, about another disorder, so it said no. The screeners kept it; it did not make the review."),
+    ("W2906450930", "A single hospital's patients over 12 years. It made the review, so it compared treatments, which neither title nor abstract makes plain. hunch was nearly sure it wouldn't."),
     ("W2025321071", "Another group of patients followed over time. The screeners kept it too; after reading the full text, the reviewers left it out."),
-    ("W2421531636", "Zinc against penicillamine sounds exactly right, and hunch said yes. The screeners dropped it; with no abstract to read, hunch had only the title."),
+    ("W2421531636", "Zinc against penicillamine sounds exactly right. It is a letter to a journal, and the criteria exclude letters. Asked without the publication type, hunch said yes (0.84); with it, no."),
     ("W2193363560", "A genetics study of schizophrenia that the literature search swept in. Nobody's yes."),
 ]
 TITLES = {"anxiety": "Anxiety therapy", "diet_risk": "Diet and risk", "wilson": "Wilson disease"}
@@ -35,7 +35,7 @@ TITLES = {"anxiety": "Anxiety therapy", "diet_risk": "Diet and risk", "wilson": 
 def found(inc, order, grid):
     """Share of the review's papers found after reading each share of the pile, in this order."""
     c = np.cumsum(inc[order]) / inc.sum()
-    return [round(float(c[min(int(g * len(order)), len(order)) - 1]) * 100, 1) if g > 0 else 0.0 for g in grid]
+    return [round(float(c[max(1, min(int(g * len(order)), len(order))) - 1]) * 100, 1) if g > 0 else 0.0 for g in grid]
 
 
 grid = [i / 200 for i in range(201)]

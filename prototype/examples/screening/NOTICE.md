@@ -10,7 +10,8 @@ are OpenAlex works (CC0). The reviews used here:
 - Appenzeller-Herzog et al., "Comparative effectiveness of common therapies for Wilson disease: A systematic review
   and meta-analysis of controlled studies", Liver International, 2019 (https://doi.org/10.1111/liv.14179).
 
-Each spec quotes the review's eligibility criteria as SYNERGY records them.
+Each spec quotes the review's eligibility criteria as SYNERGY records them; the text is the review authors', quoted
+from the published articles above (SYNERGY's CC0 covers its own data, not these quotations).
 
 Abstracts can't be republished as plain text, so nothing from them is committed: `fetch.py` rebuilds them from
 SYNERGY's inverted index into the gitignored `.cache/`, after `synergy_dataset get` has shown its legal note. Where

@@ -44,6 +44,12 @@ def read_for(y, s, recall=RECALL):
     return (k + 1) / len(y), o[: k + 1]
 
 
+def reach(inc_in_order):
+    """Share of the pile read, in this order, to find 95%, all but one, and all of the papers in the review."""
+    n, rank = inc_in_order.sum(), -np.arange(len(inc_in_order))
+    return tuple(read_for(inc_in_order, rank, r)[0] for r in (0.95, (n - 1) / n, 1.0))
+
+
 def recall_below(y, pno, m, bar):
     """Share of the kept papers in m that a person still reads when a "no" at least this sure is set aside."""
     return (y[m] * (pno[m] < bar)).sum() / y[m].sum()
@@ -65,20 +71,32 @@ def main() -> None:
         print(f"\n{name} ({review}): {len(y):,} papers, {int(y.sum())} kept at screening, {int(inc.sum())} in the review")
         print(f"  to find 95% of the kept papers, read {read:.1%} ({lo:.1%}–{hi:.1%}): work saved {1 - read - (1 - RECALL):.1%}; "
               f"{missed_inc} of {int(inc.sum())} papers in the review are among those not read")
-        print(f"  to reach every paper in the review, read {read_for(inc, s, 1.0)[0]:.1%}")
-        al = sorted((HERE / ".cache" / "asreview").glob(f"{review}_s*.json"))
+        h = reach(inc[np.argsort(-s, kind="stable")])
+        print(f"  papers in the review: 95% after {h[0]:.1%}, all but one after {h[1]:.1%}, all after {h[2]:.1%}")
+        (HERE / ".cache" / "asreview").mkdir(parents=True, exist_ok=True)
+        (HERE / ".cache" / "asreview" / f"{review}_hunch_top10.json").write_text(
+            json.dumps([rows[i]["id"] for i in np.argsort(-s, kind="stable")[:10]]))
+        al = sorted((HERE / ".cache" / "asreview").glob(f"{review}_s[0-9].json"))
+        pos = {r["id"]: i for i, r in enumerate(rows)}
         if al:
-            pos = {r["id"]: i for i, r in enumerate(rows)}
             runs = []
             for f in al:  # papers it never reached come last
                 seen = [pos[i] for i in json.load(open(f))]
                 done = set(seen)
                 rest = [i for i in range(len(rows)) if i not in done]
                 o = np.array(seen + rest)
-                runs.append([read_for(y[o], -np.arange(len(o)))[0], read_for(inc[o], -np.arange(len(o)), 1.0)[0]])
+                runs.append([read_for(y[o], -np.arange(len(o)))[0], *reach(inc[o])])
             a = np.array(runs)
-            print(f"  active learning ({len(al)} runs): 95% of the kept papers after {a[:, 0].min():.1%}–{a[:, 0].max():.1%}, "
-                  f"every paper in the review after {a[:, 1].min():.1%}–{a[:, 1].max():.1%}")
+            span = [f"{a[:, k].min():.1%}–{a[:, k].max():.1%}" for k in range(4)]
+            print(f"  active learning ({len(al)} runs): 95% of the kept papers after {span[0]}; papers in the review: "
+                  f"95% after {span[1]}, all but one after {span[2]}, all after {span[3]}")
+        fused = HERE / ".cache" / "asreview" / f"{review}_hunch.json"
+        if fused.exists():
+            seen = [pos[i] for i in json.load(open(fused))]
+            o = np.array(seen + [i for i in range(len(rows)) if i not in set(seen)])
+            f = reach(inc[o])
+            print(f"  active learning started from hunch's top ten: 95% of the kept papers after "
+                  f"{read_for(y[o], -np.arange(len(o)))[0]:.1%}; papers in the review: 95% after {f[0]:.1%}, all after {f[2]:.1%}")
         for label, m in (("with an abstract", has), ("title only", ~has)):
             if y[m].sum():
                 print(f"  {label:17} {m.sum():>6,} papers, {int(y[m].sum()):>4} kept: to find 95% read {read_for(y[m], s[m])[0]:.1%}")

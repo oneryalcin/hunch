@@ -1,23 +1,25 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
-# Title-and-abstract screening for Appenzeller-Herzog et al., Liver International 2019: drug treatments for Wilson disease. SYNERGY (Appenzeller-Herzog_2019, CC0; see NOTICE.md); `gold` is the reviewers' own
-# screening decision, `included` whether the paper made it into the review.
+# Title-and-abstract screening for Appenzeller-Herzog et al., Liver International 2019: drug treatments for Wilson
+# disease. SYNERGY (Appenzeller-Herzog_2019; see NOTICE.md); `gold` is the reviewers' own screening decision,
+# `included` whether the paper made it into the review.
 judgment: wilson
 model: jev-1.13.0
 source: .cache/Appenzeller-Herzog_2019.csv     # built by fetch.py
 key: id
-state: [title, abstract]
+state: [title, type, venue, abstract]
 clip: {abstract: 4000}
 questions:
   wilson:
     type: noul
     instructions: >-
-      `title` and `abstract` describe a paper found by the literature search for a systematic review
-      (`abstract` is empty when none is available; then judge from the title). The review's eligibility
-      criteria, as its authors published them: "We included WD patients of any age or stage. The study drug
-      had to be one of four established therapies, namely DPen, trientine, TTM or Zn. The control could be
-      placebo, no treatment or any other treatment that does not include the respective study drug (eg Zn vs
-      trientine was allowed, Zn 50 mg vs Zn 100 mg was not allowed). Concomitant therapies had to be
-      identical in the compared treatment arms (eg trientine plus Zn vs TTM plus Zn). Comparisons between
+      `title`, `type` (the kind of publication: article, review, letter, editorial, ...), `venue` (the
+      journal or source) and `abstract` describe a paper found by the literature search for a systematic
+      review (`abstract` is empty when none is available; then judge from the rest). The review's
+      eligibility criteria, as its authors published them: "We included WD patients of any age or stage. The
+      study drug had to be one of four established therapies, namely DPen, trientine, TTM or Zn. The control
+      could be placebo, no treatment or any other treatment that does not include the respective study drug
+      (eg Zn vs trientine was allowed, Zn 50 mg vs Zn 100 mg was not allowed). Concomitant therapies had to
+      be identical in the compared treatment arms (eg trientine plus Zn vs TTM plus Zn). Comparisons between
       monotherapy and combination therapy regimens that included the respective monotherapy drug (eg DPen
       plus Zn vs Zn) have been analysed elsewhere and were not considered any further here. We included
       studies that reported all‐cause mortality, orthotopic liver transplantation (OLT), neurological
@@ -35,11 +37,11 @@ questions:
       editorials, diagnostic or other testing studies and non‐controlled studies were excluded. No
       publication date restrictions were applied." This is title-and-abstract screening: could this paper
       meet those criteria, so that someone should read the full text? A paper that clearly fails a criterion
-      is "no"; when the title and abstract leave it open, "yes".
+      is "no"; when what you can see leaves it open, "yes".
     gold: gold
 
 # No recall bar: keeping 95% of what the screeners kept means reading nearly every paper, because they also kept
-# conference poster sessions and observational studies of Wilson disease patients, which the criteria rule out.
-# Every paper that made it into the review is in the first 37% by p(yes) (measure.py).
-tests:   # a regression bar, set below what was measured (AUROC 0.715)
-  wilson: {min_auroc: 0.69}
+# papers the criteria rule out, such as conference poster sessions. measure.py reports how early the papers that
+# made the review come.
+tests:   # a regression bar, set below what was measured (AUROC 0.770)
+  wilson: {min_auroc: 0.74}

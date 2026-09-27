@@ -1,41 +1,44 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
-# Title-and-abstract screening for Moran et al., Biological Reviews 2020: does poor nutrition make animals take more risks? SYNERGY (Moran_2020, CC0; see NOTICE.md); `gold` is the reviewers' own
-# screening decision, `included` whether the paper made it into the review.
+# Title-and-abstract screening for Moran et al., Biological Reviews 2020: does poor nutrition make animals take more
+# risks?. SYNERGY (Moran_2020; see NOTICE.md); `gold` is the reviewers' own screening decision, `included` whether the
+# paper made it into the review.
 judgment: diet_risk
 model: jev-1.13.0
 source: .cache/Moran_2020.csv     # built by fetch.py
 key: id
-state: [title, abstract]
+state: [title, type, venue, abstract]
 clip: {abstract: 4000}
 questions:
   diet_risk:
     type: noul
     instructions: >-
-      `title` and `abstract` describe a paper found by the literature search for a systematic review
-      (`abstract` is empty when none is available; then judge from the title). The review's eligibility
-      criteria, as its authors published them: "We screened records to find original experimental studies
-      that manipulated the condition of animals in independent treatment groups through their diet, via both
-      dietary quantity (i.e. partial restriction, complete deprivation or enrichment) or quality treatments
-      (e.g. protein restriction or enrichment), and including both short-term and longer-term manipulations
-      up to extended periods of weeks to months. We screened for studies that then subjected those animals
-      to behavioural observations in contexts relating to risk (e.g. novel environments, novel object, risk-
-      sensitive foraging, predator response) in independent trials (for inclusion and exclusion decision
-      trees see Appendix S1). we excluded studies using species with compromised genetic diversity and/or
-      evolved adaptive responses (e.g. domesticated animals, laboratory breeds, genetically modified
-      organisms; as per Kelly et al., 2018) as well as studies on humans. Studies manipulating the
-      micronutrient content of diets, or subjecting animals to high-fat diets were also excluded as the
-      relationship between these diet manipulations and body condition is not clear and was considered
-      beyond the scope of this review. Dietary treatments were excluded as ‘non-independent’: (i) where the
-      behaviour was measured in the presence of high and low food availability, or dietary treatments such
-      as periods of deprivation were applied within the novel environment (i.e. non-independence of
-      treatments from the behavioural assay); (ii) where the dietary treatments were coupled with additional
-      non-dietary factors (e.g. temperature; i.e. non-independence of the diet factor within treatments);
-      or, (iii) the dietary treatments were applied longitudinally (within individuals) rather than
-      crosssectionally (i.e. non-independence between high and low treatments)." This is title-and-abstract
-      screening: could this paper meet those criteria, so that someone should read the full text? A paper
-      that clearly fails a criterion is "no"; when the title and abstract leave it open, "yes".
+      `title`, `type` (the kind of publication: article, review, letter, editorial, ...), `venue` (the
+      journal or source) and `abstract` describe a paper found by the literature search for a systematic
+      review (`abstract` is empty when none is available; then judge from the rest). The review's
+      eligibility criteria, as its authors published them: "We screened records to find original
+      experimental studies that manipulated the condition of animals in independent treatment groups through
+      their diet, via both dietary quantity (i.e. partial restriction, complete deprivation or enrichment)
+      or quality treatments (e.g. protein restriction or enrichment), and including both short-term and
+      longer-term manipulations up to extended periods of weeks to months. We screened for studies that then
+      subjected those animals to behavioural observations in contexts relating to risk (e.g. novel
+      environments, novel object, risk-sensitive foraging, predator response) in independent trials (for
+      inclusion and exclusion decision trees see Appendix S1). we excluded studies using species with
+      compromised genetic diversity and/or evolved adaptive responses (e.g. domesticated animals, laboratory
+      breeds, genetically modified organisms; as per Kelly et al., 2018) as well as studies on humans.
+      Studies manipulating the micronutrient content of diets, or subjecting animals to high-fat diets were
+      also excluded as the relationship between these diet manipulations and body condition is not clear and
+      was considered beyond the scope of this review. Dietary treatments were excluded as ‘non-independent’:
+      (i) where the behaviour was measured in the presence of high and low food availability, or dietary
+      treatments such as periods of deprivation were applied within the novel environment (i.e.
+      non-independence of treatments from the behavioural assay); (ii) where the dietary treatments were
+      coupled with additional non-dietary factors (e.g. temperature; i.e. non-independence of the diet
+      factor within treatments); or, (iii) the dietary treatments were applied longitudinally (within
+      individuals) rather than crosssectionally (i.e. non-independence between high and low treatments)."
+      This is title-and-abstract screening: could this paper meet those criteria, so that someone should
+      read the full text? A paper that clearly fails a criterion is "no"; when what you can see leaves it
+      open, "yes".
     gold: gold
-    act: {yes: 1.0, no: 0.97}     # chosen on half the papers (measure.py); a person reads every other paper
+    act: {yes: 1.0, no: 0.96}     # chosen on half the papers (measure.py); a person reads every other paper
 
-tests:   # regression bars: AUROC below what was measured (0.857); recall at act, on its 95% lower bound
-  diet_risk: {min_auroc: 0.83, min_recall: 0.92}
+tests:   # regression bars: AUROC below what was measured (0.868); recall at act, on its 95% lower bound
+  diet_risk: {min_auroc: 0.84, min_recall: 0.92}

@@ -5,7 +5,9 @@
 ASReview's simulator plays a reviewer who screens the papers one by one in the order its model suggests, learning
 from every decision (the default model, elas_u4), starting from one kept and one rejected paper. It is run three
 times per review, from different starting papers, and each reading order is saved as .cache/asreview/<review>_s<seed>.json
-for measure.py. The model learns from the screeners' decisions (`gold`); hunch sees none of them.
+for measure.py. The model learns from the screeners' decisions (`gold`); hunch sees none of them. When measure.py has
+saved hunch's ten likeliest papers (.cache/asreview/<review>_hunch_top10.json), it also runs once starting from
+those, as a reviewer who screens hunch's top ten first would: .cache/asreview/<review>_hunch.json.
 """
 import csv
 import json
@@ -32,21 +34,26 @@ def main() -> None:
             w = csv.writer(f)
             w.writerow(["record_id", "title", "abstract", "label_included"])
             w.writerows([i, r["title"], r["abstract"], int(r["gold"] == "yes")] for i, r in enumerate(rows))
-        for seed in SEEDS:
-            order = OUT / f"{review}_s{seed}.json"
+        pos = {r["id"]: i for i, r in enumerate(rows)}
+        top = OUT / f"{review}_hunch_top10.json"
+        runs = [(f"s{seed}", ["--n-prior-included", "1", "--n-prior-excluded", "1", "--prior-seed", str(seed),
+                              "--seed", str(seed)]) for seed in SEEDS]
+        if top.exists():
+            runs.append(("hunch", ["--prior-idx", *[str(pos[i]) for i in json.load(open(top))], "--seed", "1"]))
+        for tag, args in runs:
+            order = OUT / f"{review}_{tag}.json"
             if order.exists():
                 continue
-            project = OUT / f"{review}_s{seed}.asreview"
+            project = OUT / f"{review}_{tag}.asreview"
             if not project.exists():
-                subprocess.run([sys.executable, "-m", "asreview", "simulate", str(data), "--n-prior-included", "1",
-                                "--n-prior-excluded", "1", "--prior-seed", str(seed), "--seed", str(seed),
-                                "-o", str(project)], check=True)
+                subprocess.run([sys.executable, "-m", "asreview", "simulate", str(data), *args, "-o", str(project)],
+                               check=True)
             with tempfile.TemporaryDirectory() as d:
                 zipfile.ZipFile(project).extract("results.db", d)
                 ids = [r[0] for r in sqlite3.connect(Path(d) / "results.db").execute(
                     "select record_id from results order by rowid")]
             order.write_text(json.dumps([rows[i]["id"] for i in ids]))
-            print(f"{review} seed {seed}: {len(ids)} of {len(rows)} papers in the order it read them", file=sys.stderr)
+            print(f"{review} {tag}: {len(ids)} of {len(rows)} papers in the order it read them", file=sys.stderr)
 
 
 if __name__ == "__main__":
