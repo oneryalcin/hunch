@@ -1,15 +1,17 @@
 # hunch
 
-**hunch turns a question into a decision your software can act on, and tells you how often it's right.**
+**When a model's answer becomes a rule in your software, hunch helps you run it, test it against reviewed cases, and see which answers a change would flip.**
 
-Software now makes judgment calls it used to leave to people. Is this command safe to run? Is this alert worth waking someone? Does this contract renew itself? Is the chatbot's answer supported by its source? Which of 50,000 calls mention a competitor? A model answers each in milliseconds for a fraction of a cent. It can't tell you how often it is wrong, or whether yesterday's edit to the question made things worse.
+Software now makes judgment calls it used to leave to people. Is this command safe to run? Is this alert worth waking someone? Does this contract renew itself? Is the chatbot's answer supported by its source? Which of 50,000 calls mention a competitor? A model can answer with a typed result and a probability. That does not tell you how often the rule is wrong on reviewed cases, or whether yesterday's edit to the question changed the decisions your software will make.
 
-dbt made SQL a practice, analytics engineering. hunch does the same for these decisions: **decision engineering**.
+Jev is the right tool for a one-off model question. It already gives typed answers, probabilities and several questions per call. hunch earns its place when that question has a lifecycle: the prompt and inputs live in a spec, runs are cached, people review disputed cases, tests measure error rates, and `diff` shows what a change would flip.
 
-- **Write the question once**, as a short YAML spec in git. The same spec answers a million rows in a batch (`hunch run`), a column in SQL or a dbt model (`hunch.sql`), or one row inside your app (`hunch.judge()`), from one cache.
-- **Act only when it's sure.** Every answer carries a probability; below the spec's bar, a person decides. `hunch test` shows how many rows a bar automates and how many of those are wrong.
-- **Change it without breaking it.** `hunch diff` shows every answer an edit would flip before it ships; tests fail CI when a decision gets worse.
-- **Make it better from use.** `hunch review` shows the rows where your verdict teaches the most, and your verdicts become the answer key.
+If you know dbt, hunch is a similar discipline for model judgments: keep the rule in git, run it in several places, test it, document it and change it with evidence.
+
+- **Write the question once**, as a short YAML spec in git. The same spec can answer a 100,000-row batch (`hunch run`), a column in DuckDB or a dbt-duckdb model (`hunch.sql`), or one row inside your app (`hunch.judge()`), using the same local answer store.
+- **Choose where to act.** Every answer carries a probability. The spec's bar returns `act` or `review`; your application handles the review route. With labelled or reviewed rows, `hunch test` shows the errors at that bar.
+- **See what a change does.** `hunch diff` shows the answers an edit would flip. In CI, configured `hunch test` checks can fail when measured results fall below your bar.
+- **Make it better from use.** `hunch review` presents disagreements and audit samples for a person to judge. Their verdicts become the answer key for the next test.
 - **Share it.** `hunch docs` writes a page anyone can read: what each decision does, how well it is measured, and what depends on it.
 
 Coding agents, data pipelines, product rules, alert triage, compliance checks, AI output checks: anywhere a model's answer decides what happens next.
@@ -23,6 +25,8 @@ uv tool install hunch-ai     # or: pip install hunch-ai
 The package is `hunch-ai`; the command and the import are `hunch`. Python 3.12 or later.
 
 ## Try it
+
+Start with the [one-question Enron email lesson](https://fuguai.mintlify.site/quickstart) to run, test and revise a judgment. The bundled agent-command example shows the fuller workflow:
 
 ```sh
 export TYPESAFE_API_KEY=...        # the recipe's engine is TypeSafe's Jev

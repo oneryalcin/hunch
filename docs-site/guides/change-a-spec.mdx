@@ -108,7 +108,7 @@ affects agent-eval-dashboard (dashboard, reads every answer): 19 rows
 
 ## Trying a candidate on live traffic
 
-Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the [quickstart](/quickstart)'s command guard and the candidate folder the same guard with the narrower `sends_out`, both under one project folder so they share its store. Each command the agent is about to run goes through:
+Sometimes the rows that matter are the ones arriving in production, not a CSV. You can run a candidate spec next to the live one, unseen by users. Here the live folder holds the [command guard](/guides/guard-your-agent) and the candidate folder the same guard with the narrower `sends_out`, both under one project folder so they share its store. Each command the agent is about to run goes through:
 
 ```python app.py
 answers = hunch.judge("live", shadow="candidate", id=c["id"], request=c["request"], cwd=c["cwd"],

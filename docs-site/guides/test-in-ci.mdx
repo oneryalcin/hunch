@@ -108,7 +108,7 @@ To see what a pull request does to the answers, add a step with `hunch diff eval
 | 1 | A check failed, or `test` stopped before asking |
 | 2 | A spec has a lint error |
 
-Exit 1 has two causes, and the last line of the log tells them apart. Here is the [quickstart](/quickstart)'s guard tested with `--max-cost 0` on a fresh store, before any answers exist:
+Exit 1 has two causes, and the last line of the log tells them apart. Here is the [command guard](/guides/guard-your-agent) tested with `--max-cost 0` on a fresh store, before any answers exist:
 
 ```text
 command_guard: would ask 114 answers in 38 requests (~$0.0012), above --max-cost $0; nothing asked
