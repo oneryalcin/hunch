@@ -1,4 +1,5 @@
 """`hunch run` on awkward data: rows it can't compare, filters that keep nothing, an empty file."""
+import json
 import sqlite3
 
 import pytest
@@ -49,3 +50,14 @@ def test_an_empty_csv_is_a_lint_error_not_a_traceback(hunch, capsys):
     with pytest.raises(SystemExit):
         hunch("lint")
     assert "rows.csv is empty" in capsys.readouterr().err
+
+
+def test_a_union_whose_branches_keep_nothing_is_tested_with_0_rows(hunch):
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2001\n")
+    hunch.project = hunch.dir
+    for b in ("recent", "later"):
+        (hunch.dir / f"{b}.yml").write_text(SPEC.replace("judgment: recent", f"judgment: {b}"))
+    (hunch.dir / "tree.yml").write_text("judgment: tree\nunion: [recent, later]\nquestion: recent\n")
+    hunch("test")
+    report = json.loads(next((hunch.dir / ".hunch" / "target").glob("*.json")).read_text())
+    assert report["judgments"]["tree"]["questions"]["recent"]["rows"] == 0

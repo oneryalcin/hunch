@@ -2088,10 +2088,9 @@ def it_spec_chain(its: list[dict]) -> bool:
     return any(it["spec"].get("chain") for it in its)
 
 
-def test_question(spec: dict, qid: str, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
+def test_question(spec: dict, qid: str, q: dict, its: list[dict], answers: dict, check: "Checks", all_stats: list) -> dict:
     """Prints the question's report and returns it as data (results.json)."""
     conf = (spec.get("tests") or {}).get(qid, {})
-    q = its[0]["q"] if its else spec["questions"][qid]
     print(f"\n{qid} ({q['type']}, {len(its)} rows)")
     src = Counter(it["gold_src"] for it in its)
     gold_its = [it for it in its if it["gold"]]
@@ -2530,7 +2529,8 @@ def cmd_test(project: dict, args) -> None:
         ungrade(project, n, res["items"])
         for qid in question_of(spec):
             its = [it for it in res["items"] if it["qid"] == qid]
-            rep["questions"][qid] = test_question(spec, qid, its, res["answers"], check, all_stats)
+            q = its[0]["q"] if its else project["nodes"][spec["union"][0] if "union" in spec else n]["questions"][qid]
+            rep["questions"][qid] = test_question(spec, qid, q, its, res["answers"], check, all_stats)
             if its and its[0]["q"].get("none"):
                 k = sum(decide(res["answers"][it["key"]])[0] == NONE for it in its)
                 print(f"  declined ({NONE}): {k}/{len(its)} rows ({k / len(its):.1%})")
