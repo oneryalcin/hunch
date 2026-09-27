@@ -1,13 +1,44 @@
 ---
 title: "Predict whether a patch passes"
-description: "Judge a coding agent's patch without running its tests, and learn that a confident no is worth more than a confident yes."
+description: "A coding agent says it fixed the bug; learn to tell, before the tests run, which of those patches will fail."
 ---
 
-A coding agent reads a GitHub issue, edits the code, and hands back a patch. Does the patch fix the issue? The honest answer is to run the project's tests, but those may be slow, hidden, or not written yet. Could a model reading the issue and the patch tell you in advance?
+import { PatchGuess, PassByP } from "/snippets/swe-patches.jsx";
+import { PATCH_PUZZLES, PASS_BY_P } from "/snippets/swe-patches-data.jsx";
 
-The SWE-agent trajectories dataset ([Nebius](https://huggingface.co/datasets/nebius/SWE-agent-trajectories), CC BY 4.0) records real agent runs and whether each patch passed the issue's tests. The example in `prototype/examples/swe_agent/` samples 200 runs, 100 that passed and 100 that did not.
+A GitHub issue says `humps.decamelize("sizeX")` should give `size_x`. A coding agent edits the code, runs a check, and writes:
 
-## The spec
+> The output indicates that the `sizeX` string is now correctly decamelized as `size`. This confirms that the issue has been fixed.
+
+It is not fixed, and the project's tests say so. In 200 real runs, the agent said it had fixed the issue 160 times, and 66 of those patches failed. Before you run any tests, how would your code tell which ones?
+
+<Info>
+Anyone running coding agents meets this: a pull request bot, a batch of agent attempts, a queue of fixes waiting for CI. Tests are the final word, but they can be slow, hidden or not written yet. Reading the patch and guessing whether it passes is a judgment, and that's the part hunch is for.
+</Info>
+
+## Try it first
+
+Each run below is real. Read the issue, the agent's last words and its patch, then guess. After you guess, you'll see what the tests said, and how likely hunch thought a pass was.
+
+<PatchGuess puzzles={PATCH_PUZZLES} />
+
+The agent says "fixed" in all five, so its words tell you nothing. The patch tells you something. When it clearly misses the issue, hunch is sure and right. When the patch looks plausible, hunch hesitates, and it can be fooled.
+
+## 1. Keep what a reviewer would read
+
+Each run becomes one row of [`traces.csv`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/swe_agent/traces.csv): the `issue`, the agent's last three messages as `final_messages`, its `patch`, and `resolved`, whether the project's tests passed.
+
+Long messages have to be cut to fit. The claim of success is at the end, so [`prepare.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/swe_agent/prepare.py) keeps the end:
+
+```python
+def clip_tail(text: str, n: int) -> str:
+    """Keep the end: an agent's claim of success is in its last words."""
+    return text if len(text) <= n else f"[{len(text) - n} chars cut]…\n" + text[-n:]
+```
+
+## 2. Write the question
+
+The sample is half passing runs, but in the whole dataset only one run in six passes. `weights` tells hunch that, so every rate it reports describes the real mix, not the sample:
 
 ```yaml patch_eval.yml
 judgment: patch_eval
@@ -15,59 +46,135 @@ model: jev-1.13.0
 source: traces.csv
 key: id
 state: [issue, final_messages, patch]
-weights:   # traces.csv is 50/50 on `resolved`; across all 80,036 runs 13,389 pass (16.7%)
+weights:   # across all 80,036 runs 13,389 pass (16.7%)
   by: resolved
   population: {yes: 0.167, no: 0.833}
 
 questions:
   passes_tests:
-    type: noul
+    type: noul          # yes or no, with how sure
     instructions: >-
-      Would this patch make the project's own tests for this issue pass, fully resolving
-      the `issue` as described? Judge the `patch` itself, not what the agent says about it.
-    act: {yes: 0.90, no: 0.80}
-    gold: resolved
+      Would this patch make the project's own tests for
+      this issue pass, fully resolving the `issue` as
+      described? Judge the `patch` itself, not what the
+      agent says about it.
+    act: {yes: 0.90, no: 0.80}   # a bar for each answer
+    gold: resolved      # the known answer: did the tests pass
 
   claims_fixed:
     type: noul
-    instructions: In its `final_messages`, does the agent claim that it has fixed the issue?
+    instructions: >-
+      In its `final_messages`, does the agent claim that
+      it has fixed the issue?
+
+tests:
+  passes_tests:
+    min_auroc: 0.70
+    max_calibration_error: 0.10
 ```
 
-`weights` matters here. The sample is half passing patches, but in the full dataset only 16.7% pass. Without the weights, every rate `test` reports would describe a world where agents succeed half the time.
+`act` is the bar for acting without a person, or here, without running the tests. A yes/no question can have a different bar for each answer, and this one needs it.
 
-## The model ranks patches well
-
-AUROC answers one question: pick a passing patch and a failing one at random; how often does the passing one get the higher probability? 0.5 is a coin toss. Here it was 0.831.
-
-That is good ranking, not good prediction, and the dial shows the difference:
+## 3. Run it
 
 ```sh
-hunch test prototype/examples/swe_agent/patch_eval.yml --max-cost 0
+hunch run prototype/examples/swe_agent/patch_eval.yml \
+  --max-cost 0.05
 ```
 
+200 runs and two questions are 400 answers, estimated at about a cent. Every answer is kept, so running it again is free.
+
+## 4. Test it against the real tests
+
+```sh
+hunch test prototype/examples/swe_agent/patch_eval.yml \
+  --max-cost 0
 ```
-       dial   act on yes: automated  wrong   │  act on no: automated  wrong
-       0.50                  27.8%  59.8%   │                72.2%   7.6%
-       0.70                   9.3%  53.5%   │                57.0%   3.5%
-       0.80                   1.5%  55.5%   │                44.2%   1.9%  ← act no
-       0.90                   0.0%   0.0%   │                26.8%   0.6%  ← act yes
+
+```text
+PASS AUROC 0.831 (100 yes / 100 no; 0.5 = coin toss; unaffected by base rate) (min 0.7)
+     dial   act on yes: automated  wrong   │  act on no: automated  wrong
+     0.50                  27.8%  59.8%   │                72.2%   7.6%
+     0.70                   9.3%  53.5%   │                57.0%   3.5%
+     0.80                   1.5%  55.5%   │                44.2%   1.9%  ← act no
+     0.90                   0.0%   0.0%   │                26.8%   0.6%  ← act yes
 ```
 
-Acting on "no" at 0.80 would settle 44% of all runs with 1.9% of them wrong. Acting on "yes" is never safe: even the model's most confident "passes" were wrong more than half the time. Of the 55 patches given a pass probability below 0.2, 52 did fail.
+AUROC asks: take one passing patch and one failing patch at random, how often does the passing one get the higher probability? A coin toss scores 0.5, and this scores 0.83. So hunch ranks patches well.
 
-So a yes/no question can take two thresholds, `act: {yes: …, no: …}`. Here the useful product is a filter: set aside the patches that will almost surely fail, and run the tests on the rest.
+The dial shows what that ranking is worth. Each line is a bar: how many runs hunch would settle at that confidence, and how many of those it gets wrong. Acting on "fails" at 0.80 settles 44% of all runs, and 1.9% of those are wrong. Acting on "passes" is never safe: even its most confident "passes" were wrong more than half the time.
 
-## Agents overclaim
+## The result
 
-The second question reads only the agent's last messages: does it say it fixed the issue? The agent claimed a fix in 160 of 200 runs, and 66 of those, 41%, failed the tests. A panel of three AI reviewers checked `claims_fixed` on 40 random runs and matched the model on 29 of the 30 they could decide.
+<PassByP bars={PASS_BY_P} />
 
-Which raises a worry. The patch spec also sees those messages. If the agent says "I fixed it", does the judge believe it?
+When hunch is sure a patch will fail, it fails. When it leans towards a pass, that's closer to a coin toss.
 
-`patch_only.yml` is the same question with `final_messages` removed from the state. AUROC barely moved: 0.828 without the messages against 0.831 with them. A claim of success did not raise the probability of passing. The messages did matter when the agent admitted it could not finish: those pushed the probability down, correctly, since 34 of 40 such patches failed.
+## Does the judge believe the agent?
 
-## What did not work
+The question reads the agent's last messages as well as the patch. That was a worry. If the agent writes "I fixed it", perhaps the judge takes its word, and a confident agent buys a higher score.
 
-- Calibration fails the spec's own test: 0.147 against a maximum of 0.10, weighted to the real pass rate. The model is overconfident about "yes".
-- The first version of `prepare.py` kept the start of long final messages and cut the end, where the claim is. The review panel found it; 17 of 200 rows changed after the fix, and all numbers above are after it.
-- A second engine, DeepSeek V4.1 Flash, reached AUROC 0.866, but the difference was not significant (p = 0.52). See [Engines](/reference/engines).
-- This is one dataset and one agent. The numbers say nothing yet about others.
+So we asked the same question again with `final_messages` removed, in [`patch_only.yml`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/swe_agent/patch_only.yml). If the claims had been doing the work, ranking would have dropped. It barely moved, from an AUROC of 0.831 to 0.828.
+
+The messages mattered only when the agent admitted it hadn't finished. Those admissions pulled the probability down, and rightly: 34 of the 40 runs without a claim failed.
+
+To learn what an input is doing to a judgment, take it away and compare. `hunch diff` does the comparing, row by row.
+
+## Use it on your data
+
+Point `source` at a CSV of your agent's runs with the same columns, long messages cut from the front as `clip_tail` does, and a test outcome where you have one. Set `weights` to your real pass rate if your sample isn't a fair one, and `hunch test` tells you where your bar for "fails" should sit.
+
+## How it was measured
+
+<AccordionGroup>
+  <Accordion title="The data">
+    The [SWE-agent trajectories](https://huggingface.co/datasets/nebius/SWE-agent-trajectories) dataset by Nebius (CC BY 4.0) records real agent runs on GitHub issues and whether each patch passed the issue's tests (its `target`, here `resolved`). Across all 80,036 runs, 13,389 pass (16.7%). `prepare.py` samples 200 runs from parquet shards 0 and 6 with seed 2026: 100 that passed and 100 that did not, one attempt per issue, no empty patches. Fields are trimmed to fit: the issue to 4,000 characters, the last three messages to 2,500 (keeping the end), the patch to 6,000. The agents are SWE-agent on three Llama models: 180 runs by the 70B, 15 by the 8B and 5 by the 405B. Asking all 400 answers is estimated at $0.011 on an empty store.
+  </Accordion>
+  <Accordion title="The runs in Try it first">
+    The five runs were chosen by hand to show each case, not at random: a confident and right "fails", one of the two passes hunch rated highest, a failure hunch leaned yes on, a patch that adds only a script imitating the bug, and a pass hunch doubted. Each shows the issue's title, the one of the agent's last three messages where it says it is done (its code blocks removed), and its patch with the `diff --git`, `index` and `---` lines dropped and cut at 12 lines. hunch read the whole trimmed row. The widget's data is generated from the cached answers by [`make_swe_patches_data.py`](https://github.com/oneryalcin/hunch/blob/main/docs-site/make_swe_patches_data.py).
+  </Accordion>
+  <Accordion title="The results, in full">
+    `hunch test` on `passes_tests`, weighted to the real pass rate:
+
+    ```text
+      PASS accuracy 77.8% [weighted to the population] (min 0%)
+      FAIL calibration error 0.147 [weighted to the population] (max 0.1)
+             stated p(yes)     n   avg stated   observed
+           0.0–0.1          30        0.048      0.007
+           0.1–0.2          25        0.145      0.017
+           0.2–0.3          23        0.251      0.114
+           0.3–0.4          17        0.357      0.325
+           0.4–0.5          18        0.449      0.167
+           0.5–0.6          28        0.541      0.297
+           0.6–0.7          27        0.643      0.469
+           0.7–0.8          27        0.743      0.469
+           0.8–0.9           5        0.832      0.445
+      PASS AUROC 0.831 (100 yes / 100 no; 0.5 = coin toss; unaffected by base rate) (min 0.7)
+           dial   act on yes: automated  wrong   │  act on no: automated  wrong
+           0.50                  27.8%  59.8%   │                72.2%   7.6%
+           0.60                  17.2%  53.3%   │                64.0%   6.3%
+           0.70                   9.3%  53.5%   │                57.0%   3.5%
+           0.80                   1.5%  55.5%   │                44.2%   1.9%  ← act no
+           0.90                   0.0%   0.0%   │                26.8%   0.6%  ← act yes
+           0.95                   0.0%   0.0%   │                16.7%   0.0%
+           0.99                   0.0%   0.0%   │                 0.8%   0.0%
+    ```
+
+    AUROC is measured on the 200 rows as sampled, 100 of each, and does not depend on the base rate; the other figures are weighted to it. Of the 55 patches given a pass probability below 0.2, 52 failed. The highest p(passes) given to any patch was 0.85, so `act: {yes: 0.90}` never acts: a "yes" always goes to the tests. The picture groups the same answers into four ranges of p(passes), with 55, 40, 46 and 59 runs. The share that passed, weighted, is 1%, 18%, 24% and 47%, against hunch's average p of 0.09, 0.28, 0.50 and 0.71.
+  </Accordion>
+  <Accordion title="How many runs overclaim">
+    `claims_fixed` says the agent claimed a fix in 160 of 200 runs, and 66 of those, 41%, failed the tests. That count rests on `claims_fixed`, which has no answer key of its own. So a panel of three AI reviewers (Claude Opus and two Claude Sonnet, one reading the rows in a different order) read the final messages of 40 random runs, blind to the model's answers, and said yes, no or unclear. They were unanimous on 28 of 40 and marked 10 unclear. On the 30 they decided, the model matched their majority on 29; the one miss was `tobymao__sqlglot-2591`, a yes at p = 0.70 that all three called no. On those 40 runs overclaiming is 26% by the model's labels and 22% (5 of 23) by the reviewers'. The gap to 41% on all 200 is small-sample noise: 8 of 31 has a 95% interval of roughly 14–43%. The reviewers are Claude models, not people. Packets, answers and `score.py` are in `prototype/review_panel/`.
+  </Accordion>
+  <Accordion title="The run without the messages">
+    `patch_only.yml` is `patch_eval.yml` with `final_messages` removed from the state. AUROC is 0.828 against 0.831, and 35 of 200 answers flip, 19 of them within the noise band (`hunch diff patch_only.yml --against patch_eval.yml`). Adding the messages moved p(passes) down by 0.02 on average for the 160 runs that claim a fix, and by 0.07 for the 40 that don't, of which 34 failed. Without the messages, calibration is worse (0.185), and acting on "fails" at 0.80 settles 32.2% of runs at 1.6% wrong.
+  </Accordion>
+  <Accordion title="What did not work">
+    Calibration fails the spec's own test: 0.147 against a maximum of 0.10, weighted to the real pass rate. The model is overconfident about "yes".
+
+    The first version of `prepare.py` kept the start of long final messages and cut the end, where the claim is. The review panel found it: the reviewers marked 10 of 40 runs "unclear", and the model, which has to answer yes or no, called 7 of those yes (5 with p ≥ 0.9). 17 of 200 rows changed after the fix. The panel had read the text from before it; every other number on this page is from after.
+
+    A second engine, DeepSeek V4.1 Flash, reached AUROC 0.866 with calibration error 0.117. Against the test results it fixed 22 answers and broke 17, and the difference was not significant (paired sign test, p = 0.52). See [Engines](/reference/engines).
+
+    This is one dataset and one kind of agent, SWE-agent on Llama models. The numbers say nothing yet about others.
+  </Accordion>
+</AccordionGroup>

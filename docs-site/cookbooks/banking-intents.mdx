@@ -1,75 +1,189 @@
 ---
 title: "Route banking intents"
-description: "Sort bank customers' messages into 77 intents, and find out that the answer key is wrong more often than the model."
+description: "When a model and a published answer key disagreed about bank customers' messages, the answer key was the one more often wrong."
 ---
 
-A bank's support inbox receives messages like "my card still hasn't arrived" and "why was I charged a fee for this transfer?". Each should go to the right place, and there are 77 places. The public BANKING77 dataset ([PolyAI](https://github.com/PolyAI-LDN/task-specific-datasets), CC BY 4.0) has messages like these with an intent label on each, which makes it a good place to ask how well a model routes them.
+import { IntentPuzzle, DisputeSplit } from "/snippets/banking-intents.jsx";
+import { INTENT_PUZZLES, DISPUTE_SPLIT } from "/snippets/banking-intents-data.jsx";
 
-The example is in `prototype/examples/banking77/`: 770 messages for developing the spec, and 385 held back to measure it.
+A bank customer writes: "what is required documents for new card process ?"
 
-## Names are not enough
+A public dataset of bank messages comes with an answer key, and for this message the key says `contactless_not_working`. A model reading the same message says `verify_my_identity`.
 
-The first spec listed the 77 intent names and nothing else. It scored 82.3% on the holdout against the dataset's labels.
+When a model and its answer key disagree, which one do you believe?
 
-Reading the mistakes showed why. Some names mislead: `get_physical_card` is about PINs, not about getting a card. A model that sees only the name has no way to know. So the second step was to describe every option in one line:
+<Info>
+Sorting messages into a fixed list of categories is everywhere: support inboxes, complaints, reviews. The answer keys used to grade it were written by people, and people slip. hunch is for asking the question, and for finding out how often the answer is right, even where the key is not.
+</Info>
+
+## Try it first
+
+Here are nine real messages where the model and the answer key disagree. You aren't told which label is whose. Pick the right one, or say both fit. Then see what a panel of three reviewers decided, who weren't told either.
+
+<IntentPuzzle puzzles={INTENT_PUZZLES} />
+
+The panel read every one of the 45 messages where the two disagreed. The answer key was wrong 20 times, the model 5 times, and on the other 20 both labels were fair answers. A disagreement is not a model mistake until someone looks.
+
+## 1. Describe every option
+
+The dataset has 77 intents, each with a name like `card_arrival`. The model's job is a choice: pick one intent, with a probability for each. Names alone mislead. `get_physical_card` is about PINs, not about getting a card, and a model that sees only the name can't know that. So each option gets one line of description:
 
 ```yaml intent.yml
+judgment: intent
+model: jev-1.13.0
+source: banking77_sample.csv
+key: id
+state: [text]           # what the model may read
 questions:
   intent:
-    type: choice
+    type: choice        # one of the options below
     instructions: What is this bank customer asking about?
-    criteria:
-      activate_my_card: How to activate a card, or problems activating it
-      card_arrival: A card that was sent to them has not arrived yet, or tracking it
-      card_delivery_estimate: How long card delivery takes in general
+    criteria:           # wrapped here; one line each in the file
+      activate_my_card: How to activate a card, or problems
+        activating it
+      card_arrival: A card that was sent to them has not
+        arrived yet, or tracking it
+      card_delivery_estimate: How long card delivery takes
+        in general
       # … 74 more
+    act: 0.90           # below this, a person decides
+    gold: gold_intent   # the answer key's column
 ```
 
-With every option described, the holdout score rose to 88.3%: 28 rows fixed, 5 broken, p < 0.001. Describing only 29 of the 77 did not help significantly (22 fixed, 14 broken, p = 0.24). The described options pulled in rows that belonged to their bare neighbours. Describe all the options or none.
+## 2. Run it on messages held back
 
-To reproduce it from the repository root, at no cost:
+The descriptions were written while looking at 770 messages. To measure them fairly, run the question on 385 others that played no part:
 
 ```sh
-hunch diff prototype/examples/banking77/intent.yml --against prototype/examples/banking77/intent_bare.yml \
-  --source prototype/examples/banking77/banking77_holdout.csv --max-cost 0
+hunch run prototype/examples/banking77/intent.yml \
+  --source prototype/examples/banking77/banking77_holdout.csv \
+  --max-cost 0.10
 ```
 
-`diff` scores against today's gold, which includes the reviews described next, so its percentages are higher than the raw-label ones above.
+Every answer is kept, so the steps below cost nothing.
 
-## The answer key was wrong more often than the model
+## 3. Check where it disagrees with the key
 
-At 88.3%, the model disagreed with the dataset's label on 45 of the 385 holdout messages. The natural reading is 45 model mistakes. It was not.
+`hunch test` compares each answer with the answer key. Taken at its word, the key says the model is right on 88.3% of messages, and wrong on the 45 where they differ.
 
-A panel of three AI reviewers checked every one of the 45. Each reviewer first chose the right intent from the message alone, then rated the two candidate labels without being told which was the key's and which the model's. The label was wrong 20 times. The model was wrong 5 times. For the other 20, both intents were reasonable answers to the message.
+`hunch review` then shows those 45 one at a time, and adds a random sample of messages where the model and the key agree. Each verdict is saved next to the spec as gold, the answer the test trusts. Here the verdicts came from the panel, so the queue is now empty:
 
-If some labels are wrong where the model disagrees, some are probably wrong where it agrees too, and the model would be wrong along with them. So the panel also checked a random 60 of the 340 agreeing rows. With both sets of verdicts, `hunch test` estimates accuracy over all 385:
-
+```text
+intent: nothing to review (every disagreement and spot check has a verdict, and no answer is below act)
 ```
+
+A verdict can accept both labels. BANKING77's intents overlap, so gold can be a set, and an answer in the set counts as right.
+
+## 4. Test again
+
+With the verdicts in, `hunch test` gives an estimate for all 385 messages, and says how sure that estimate is:
+
+```sh
+hunch test prototype/examples/banking77/intent.yml \
+  --source prototype/examples/banking77/banking77_holdout.csv
+```
+
+```text
 intent (choice, 385 rows)
-  gold: 385 rows (243 from source, 142 from review, 25 with two acceptable labels)
-  PASS estimated accuracy 95.8% (95% CI 88.7%–97.9%) from reviews of 60/340 agreeing rows, 45/45 disagreeing rows (min 85%)
-       not the headline: on current gold 97.9% (trusts unreviewed rows), on the raw answer key 88.3%
+  PASS estimated accuracy 95.8% (95% CI 88.7%–97.9%)
+       from reviews of 60/340 agreeing rows, 45/45 disagreeing rows
 ```
 
-The model was right on an estimated 95.8% of messages, against 91.9% for the answer key itself. Two lessons followed and became part of hunch. Gold can be a set: where two intents are both acceptable, both count as right. And a review queue needs random spot checks as well as disagreements, or it can only move accuracy up.
+The interval is wide because only 60 of the agreeing messages were read. Four in five answers cleared `act: 0.90`, and none of those was wrong.
 
-## When to trust an answer
+## The result
 
-The spec sets `act: 0.90`: below that confidence, a message goes to a person. On the holdout, 81% of messages were at or above it, and none of those were wrong on current gold. Calibration error was 0.043, so the model's confidence is close to how often it is right.
+<DisputeSplit split={DISPUTE_SPLIT} />
 
-## A tree that lost
+Over all 385 messages, the model is right on an estimated 95.8%, and the answer key on 91.9%.
 
-77 options make a long request. A tree seemed cheaper: first route each message to one of ten groups, then choose among that group's intents. `prototype/examples/banking77_tree/` builds it from the same descriptions. It was 48% cheaper. `diff` against the flat spec:
+## Reviews that can only move up
 
-```
-intent: 47/385 rows flip (7 within noise band)
-  gold accuracy on the 385 shared rows with gold 97.9% → 89.6%  (✓ 3 fixed, ✗ 35 broken, 9 wrong both times, 0 without gold)
-  paired sign test p=0.000 → significant
-```
+Checking only the disagreements feels like enough. It isn't. Each verdict there can only turn a model "mistake" into a right answer, or leave it alone, so the estimate can only go up. Nothing looks at the messages where the model and the key are wrong together.
 
-33 messages were sent to a group that did not contain their answer. Once in the wrong group, the second question had no right option left. After the panel reviewed the tree's own disagreements, its estimated accuracy was 87.5%, against 95.8% for the flat question.
+So the panel also read a random 60 of the 340 messages where they agreed, and found 2 where the shared label was wrong. Those two stand for the others hiding among the 280 nobody read, and they pull the estimate down to a fair one.
 
-## Also tried
+It happened again anyway. Later, the panel reviewed 24 messages because a different spec had failed on them. Those reviews sat among this question's agreeing messages and quietly lifted its estimate, though nobody had picked them at random. Now every review records why it was made, a disagreement or a spot check, and only spot checks stand in for messages nobody read.
 
-- `hunch suggest` rewrote the bare-label question automatically. It gained 2.4 points on the holdout, not significant; the hand-written descriptions gained 6.0. See [Change a spec](/guides/change-a-spec).
-- A second engine, DeepSeek V4.1 Flash, scored 92.3% on the same spec: fixed 4, broke 22, p = 0.001. See [Engines](/reference/engines).
+An accuracy number is only as fair as the rows chosen to check it. That's why `hunch review` adds random spot checks to every queue.
+
+## Use it on your data
+
+Point `source` at a CSV of your messages with a label column, list your categories under `criteria` with one line each, then `hunch run`, `hunch review` and `hunch test`. [Review](/guides/review) explains how the queue is chosen.
+
+## How it was measured
+
+<AccordionGroup>
+  <Accordion title="The data">
+    BANKING77 by [PolyAI](https://github.com/PolyAI-LDN/task-specific-datasets), licensed CC BY 4.0 (Casanueva et al., "Efficient Intent Detection with Dual Sentence Encoders", NLP4ConvAI 2020): online-banking customer messages, each labelled with one of 77 intents. The example in `prototype/examples/banking77/` samples its test split: `banking77_sample.csv`, 770 messages for developing the spec (10 per intent, seed 77), and `banking77_holdout.csv`, 385 more held back to measure it (5 per intent, seed 7777). Every number on this page is on the holdout.
+  </Accordion>
+  <Accordion title="Names are not enough">
+    The first spec, `intent_bare.yml`, listed the 77 intent names and nothing else. Against the raw answer key it scored 82.3% on the holdout. With every option described it rose to 88.3%: 28 rows fixed, 5 broken, p < 0.001. Describing only 29 of the 77 did not help significantly (22 fixed, 14 broken, p = 0.24): the described options pulled in rows that belonged to their bare neighbours. Describe all the options or none.
+
+    To reproduce it from the repository root, at no cost:
+
+    ```sh
+    hunch diff prototype/examples/banking77/intent.yml \
+      --against prototype/examples/banking77/intent_bare.yml \
+      --source prototype/examples/banking77/banking77_holdout.csv \
+      --max-cost 0
+    ```
+
+    `diff` scores against today's gold, which includes the panel's verdicts, so its numbers are higher than the raw-key ones above:
+
+    ```text
+    intent: 41/385 rows flip (11 within noise band)
+      gold accuracy on the 385 shared rows with gold 89.9% → 97.9%  (✓ 32 fixed, ✗ 1 broken, 8 wrong both times, 0 without gold)
+      paired sign test p=0.000 → significant
+    ```
+  </Accordion>
+  <Accordion title="The review panel">
+    Three AI reviewers with no shared context: one Claude Opus and two Claude Sonnet, the second given the rows in a different order. Majority vote. Each saw only the message and all 77 intents, each defined by three examples from the dataset's train split, not by this spec's descriptions. A reviewer first chose the best intent and every acceptable one, then rated two candidate labels in random order without being told which was the key's and which the model's. Where the two agreed, the second candidate was the model's runner-up, so agreement was hidden too.
+
+    They read all 45 holdout disagreements and a random 60 of the 340 agreeing rows. On the 45: model right and key wrong 20, key right and model wrong 5, both acceptable 20, neither 0. Unanimous on 29 of 45; Fleiss kappa 0.76. On the random 60, the shared label was unacceptable in 2 (3.3%, 95% CI 0.9–11.4%). "Acceptable" is more lenient than exact match, because the intents overlap.
+
+    Before the panel, Claude had reviewed some disagreements itself, unblinded. Only 6 of its 13 verdicts matched the panel's, and in all 7 mismatches it had been harsher on the model. The panel is not people: its reviewers are the same family of models as the one that ran the analysis. Packets, answers and the scoring script are in `prototype/review_panel/` (`python3 score.py`); the verdicts are in `intent.reviews.csv`, each marked `disputed` or `audit`.
+  </Accordion>
+  <Accordion title="Accuracy, with its interval">
+    `hunch test` on the holdout, trimmed:
+
+    ```text
+    intent (choice, 385 rows)
+      gold: 385 rows (243 from source, 142 from review, 25 with two acceptable labels)
+      PASS estimated accuracy 95.8% (95% CI 88.7%–97.9%) from reviews of 60/340 agreeing rows, 45/45 disagreeing rows (min 85%)
+           not the headline: on current gold 97.9% (trusts unreviewed rows), on the raw answer key 88.3%
+      PASS calibration error 0.043 (raw source gold: 0.053) (max 0.05)
+           dial   automated   wrong among automated
+           0.80       87.5%                    0.6%
+           0.90       80.8%                    0.0%  ← act
+           0.95       76.4%                    0.0%
+      PASS accuracy among auto-acted 100.0% on 81% of rows at act=0.9 (min 97%)
+      PASS order stability: 11/300 answers flip (3.7%, 8 within noise band), mean |Δp| of original answer 0.032 (max flip rate 5%)
+    ```
+
+    The same panel's verdicts put the answer key at 91.9% (95% CI 84.8–94.0%). A calibration error of 0.043 means the model's confidence is close to how often it is right. Answers at or above `act: 0.90` are 81% of messages, none wrong on current gold. 60 random reviews are few, so the interval is wide.
+  </Accordion>
+  <Accordion title="A tree that lost">
+    77 options make a long request. A tree seemed cheaper: first route each message to one of ten groups, then choose among that group's intents. `prototype/examples/banking77_tree/` builds it from the same descriptions, word for word, so only the shape differs. It was 48% cheaper ($0.019 against $0.036 on the holdout) and needs two calls in a row. `diff` against the flat spec:
+
+    ```sh
+    hunch diff prototype/examples/banking77_tree --node intent_tree \
+      --against prototype/examples/banking77/intent.yml \
+      --source prototype/examples/banking77/banking77_holdout.csv \
+      --max-cost 0
+    ```
+
+    ```text
+    intent: 47/385 rows flip (7 within noise band)
+      gold accuracy on the 385 shared rows with gold 97.9% → 89.6%  (✓ 3 fixed, ✗ 35 broken, 9 wrong both times, 0 without gold)
+      paired sign test p=0.000 → significant
+    ```
+
+    33 messages were sent to a group that did not contain their answer, and once in the wrong group the second question had no right option left. The tree also disagreed with the key on 24 rows no one had reviewed; the panel, with the same protocol, found the key right on 19 and both acceptable on 5 (unanimous on 19). With all 69 of its disagreements reviewed, the tree's estimated accuracy is 87.5% (95% CI 80.0–89.8%), against 95.8% for the flat question. It was first reported as 89.1%, from reviews made for the flat question.
+  </Accordion>
+  <Accordion title="Also tried">
+    `hunch suggest` rewrote the bare-label question automatically. The kept rewrite gained 2.4 points on the holdout, not significant; the hand-written descriptions gained 6.0. See [Change a spec](/guides/change-a-spec).
+
+    A second engine, DeepSeek V4.1 Flash (`--model deepseek:deepseek-flash`), on the same spec: estimated accuracy 92.3% (95% CI 85.8–93.5%), after the panel judged its own 13 unreviewed disagreements (key right 12, DeepSeek right 1). Row by row against the model above: 4 fixed, 22 broken, p = 0.001. See [Engines](/reference/engines).
+  </Accordion>
+</AccordionGroup>

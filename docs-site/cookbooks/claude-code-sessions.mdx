@@ -1,49 +1,73 @@
 ---
 title: "Grade Claude Code sessions"
-description: "Read coding-agent sessions as rows, judge how each turn went, and check the judge against reviews."
+description: "Find out whether a coding agent's turn worked by reading what the developer wrote next."
 ---
 
-You ask a coding agent for something, it works for a while, and it says it is done. Was it? Across hundreds of turns a week, nobody labels them. Yet every session already holds a clue: the next thing the developer wrote. "Thanks, now do X" means the turn worked. "Still broken" means it did not.
+import { TurnPuzzle, GradedTurns } from "/snippets/claude-code-sessions.jsx";
+import { TURNS, REVIEWED } from "/snippets/claude-code-sessions-data.jsx";
 
-That next message is the closest thing to free gold a conversation has. This cookbook turns sessions into rows, asks a model to read that message, and then checks how often the model reads it right.
+A developer asks a coding agent to make the background a darker purple blue in dark mode. The agent works for a while and ends its turn:
 
-## Sessions become rows
+> Light mode keeps the existing blue gradient, dark mode switches to a deep purple-to-dark-navy (`#1a0533` → `#0d1b4b`).
 
-A spec can read agent sessions directly:
+It sounds done. Then the developer writes: **"background did not change"**.
+
+Nobody labelled that turn, and nobody had to. The next message said how it went. How would your code read it, across hundreds of turns a week?
+
+<Info>
+Anyone running coding agents wants to know how often a turn works, and nobody has time to label turns. The label is already in the session, written in plain words by the developer. Reading those words is a judgment, and that's the part hunch is for.
+</Info>
+
+## Try it first
+
+These are real turns from public Claude Code sessions. Read what the developer wrote next and say how the turn went. Then see what hunch said, how sure it was, and what three reviewers decided.
+
+<TurnPuzzle turns={TURNS} act={REVIEWED.act} />
+
+Some turns read themselves. Others take judgment, and the reviewers and hunch can disagree. What matters is that hunch says how sure it is, so the hard turns can go to a person.
+
+## 1. Read sessions as rows
+
+A spec can read agent session files directly. Claude Code, Codex, Cursor, OpenCode and OpenTelemetry GenAI files are recognised by their contents:
 
 ```yaml
-source: traces(sessions/*/*.jsonl)    # a glob, relative to the spec; ~ works
-view: turns                           # or runs: one row per session
+# a glob, relative to the spec; ~ works
+source: traces(sessions/*/*.jsonl)
+view: turns   # a row per message typed
 ```
 
-Claude Code, Codex, Cursor, OpenCode and OpenTelemetry GenAI files are recognised by their contents. The `turns` view gives one row per message a person typed, with `request` (what they asked), `final_reply` (the agent's last message for that turn) and `next_message` (what they wrote next), plus counts of tool calls and edits. Text the harness injects, such as IDE context and system reminders, is removed. The full list of views and columns is in the [spec reference](/reference/spec#view).
+A turn is one message a person typed and everything the agent did until the next one. Each row has `request` (what they asked), `final_reply` (the agent's last message for that turn) and `next_message` (what they wrote next), plus counts of tool calls and edits. Text the harness injects, such as IDE context and system reminders, is removed. The other views and columns are in the [spec reference](/reference/spec#view).
 
-Look at the rows before writing a spec:
+Look at the rows before writing anything:
 
 ```sh
-uvx --from hunch-ai python -m hunch.traces 'sessions/*/*.jsonl' turns
+uvx --from hunch-ai python -m hunch.traces \
+  'sessions/*/*.jsonl' turns
 ```
 
-## Keep private things private
+## 2. Keep private things private
 
-Sessions contain paths, emails, keys and whatever else was pasted into them. `redact` removes these from every `state` column before a row is hashed, sent or logged. `clip` keeps long fields to a size.
+Sessions hold paths, emails, keys and whatever else was pasted into them. `redact` removes these from every `state` column before a row is hashed, sent or logged. `clip` keeps long fields to a size:
 
 ```yaml
-redact: [secrets, emails, home, "[0-9]{1,3}([.][0-9]{1,3}){3}"]   # built-ins, plus IPv4 addresses
-clip: {request: 3000, final_reply: -3000, next_message: 1500}   # -N keeps the last N characters
+redact: [secrets, emails, home,
+         "[0-9]{1,3}([.][0-9]{1,3}){3}"]
+clip: {request: 3000, final_reply: -3000,
+       next_message: 1500}
 ```
 
-`hunch compile` prints the exact request for the first row: that is what will leave your machine. The judgment's results table in `.hunch/store.sqlite` keeps rows as they were read, unredacted, so keep `.hunch/` out of git.
+`secrets`, `emails` and `home` are built in, and the quoted pattern catches IPv4 addresses. A negative number keeps the end of a field: the last 3,000 characters of the reply, where an agent says what it did. `hunch compile` prints the exact request for the first row, which is what will leave your machine.
 
-## Two questions about each turn
+## 3. Ask how the turn went
 
-`outcome` reads the next message. `claims` reads only the agent's final reply, so it can run the moment a turn ends. Together they answer a sharper question: when the agent says it is done, is it?
+The `state` list is what the model may read. The question is a `choice`: one of four answers, each with its meaning written out, and how sure it is:
 
 ```yaml outcome.yml
+# the example's file, without its exposures
 judgment: outcome
 model: jev-1.13.0
-source: traces(sessions/*/*.jsonl)
-redact: [secrets, emails, home]
+source: traces(.cache/trace-commons/sessions/claude_code/*.jsonl)
+redact: [secrets, emails]
 clip: {request: 3000, final_reply: -3000, next_message: 1500}
 key: id
 state: [request, final_reply, next_message]
@@ -51,22 +75,40 @@ questions:
   outcome:
     type: choice
     instructions: >-
-      A developer asked a coding agent for something (`request`). `final_reply` is the agent's last message
-      for that turn and `next_message` is what the developer wrote next. Judging mainly from `next_message`,
+      A developer asked a coding agent for
+      something (`request`). `final_reply` is the
+      agent's last message for that turn and
+      `next_message` is what the developer wrote
+      next. Judging mainly from `next_message`,
       how did the agent's turn go?
     criteria:
-      worked: The developer accepts the result or moves on (thanks, approval, a next step that builds on it, a new unrelated task)
-      failed: The developer reports it did not work (the same or a new error, a bug, wrong output, "still broken", or pastes an error log)
-      redirected: The developer says the agent misunderstood, took the wrong approach, or should stop or undo; an interruption counts
-      unclear: The next message does not show whether the turn worked
-    act: 0.80
+      worked: The developer accepts the result or
+        moves on (thanks, approval, a next step
+        that builds on it, a new unrelated task)
+      failed: The developer reports it did not
+        work (the same or a new error, a bug,
+        wrong output, "still broken", or pastes
+        an error log)
+      redirected: The developer says the agent
+        misunderstood, took the wrong approach,
+        or should stop or undo; an interruption
+        counts
+      unclear: The next message does not show
+        whether the turn worked
+    act: 0.80   # below this, a person decides
 ```
+
+`act` is the bar. An answer at least 0.80 sure is used as it is; below that, the turn waits in a queue for a person.
+
+## 4. Ask whether the agent said it was done
+
+A second judgment reads only the agent's final reply, so it can run the moment a turn ends. `noul` is a yes or no, with how sure:
 
 ```yaml claims.yml
 judgment: claims
 model: jev-1.13.0
-source: traces(sessions/*/*.jsonl)
-redact: [secrets, emails, home]
+source: traces(.cache/trace-commons/sessions/claude_code/*.jsonl)
+redact: [secrets, emails]
 clip: {request: 3000, final_reply: -3000}
 key: id
 state: [request, final_reply]
@@ -74,62 +116,119 @@ questions:
   claims_done:
     type: noul
     instructions: >-
-      In `final_reply`, does the agent state or clearly imply that what the developer asked for in `request`
-      is done and working? A plan, a question back, a partial result, or a report that it could not do it is "no".
+      In `final_reply`, does the agent state or
+      clearly imply that what the developer asked
+      for in `request` is done and working? A
+      plan, a question back, a partial result, or
+      a report that it could not do it is "no".
+    act: 0.80
 ```
 
-Run both, then join their tables in the store:
+Together the two answer a sharper question: when the agent says it is done, is it?
+
+## 5. Run both and join them
+
+Each run writes a table to the store, `.hunch/store.sqlite`, and every answer is kept, so running again is free:
 
 ```sh
-hunch run . --max-cost 1
-sqlite3 -header -column .hunch/store.sqlite \
-  "select c.claims_done, o.outcome, count(*) n from claims c join outcome o using(id) group by 1, 2"
+cd prototype/examples/claude_code
+hunch run outcome.yml --max-cost 1
+hunch run claims.yml --max-cost 1
+sqlite3 -header -column \
+  ../../.hunch/store.sqlite \
+  "select c.claims_done, o.outcome, count(*) n
+   from claims c join outcome o using(id)
+   group by 1, 2"
 ```
 
-## Public sessions: about 90% right
-
-The first test used 28 public Claude Code sessions from [Trace Commons](https://huggingface.co/datasets/trace-commons/agent-traces) (CC BY 4.0), which split into 309 turns. The specs are in `prototype/examples/claude_code/`, as shown above with `act: 0.80`. Both judgments cost $0.02.
-
-A panel of three AI reviewers graded 60 random turns without seeing the model's answers. Against their verdicts:
-
+```text
+claims_done  outcome     n
+-----------  ----------  ---
+no           failed       30
+no           redirected   19
+no           unclear      10
+no           worked       50
+yes          failed       45
+yes          redirected   13
+yes          unclear       3
+yes          worked      139
 ```
-outcome (choice, 309 rows)
-  gold: 60 rows (0 from source, 60 from review)
-  PASS estimated accuracy 90.0% (95% CI 79.9%–95.3%) from reviews of 60/309 random rows
+
+Of the 200 turns where the agent said it was done, the developer's next message reported a failure or a redirect in 58.
+
+## The result
+
+A panel of three AI reviewers graded 60 random turns without seeing hunch's answers. hunch agreed with them on 54:
+
+<GradedTurns data={REVIEWED} />
+
+Of the 46 turns it was sure enough to label on its own, one was wrong: the taskbar icon in the wrong place, from the puzzle above.
+
+## A clearer wording that did worse
+
+The maintainer ran the same question on their own sessions, and its remaining mistakes had a pattern. The developer's next message was a follow-up question, and the model read it as `failed` or `worked` when it should have said `unclear`.
+
+The fix looked obvious. `failed` gained "A follow-up question (asking to explain, compare or recommend) is not a failure", and `unclear` gained "such as a follow-up question about the answer". It reads better. It is in the example as `candidates/outcome.yml`.
+
+Before shipping it, `hunch diff` asked the new wording about every turn and compared. On the maintainer's sessions it changed the answer on more than a fifth of them, fixed none of the graded turns and broke five. On the public turns you can run the same check for free, from the same folder, since every answer is cached:
+
+```sh
+hunch diff candidates/outcome.yml \
+  --against outcome.yml
 ```
 
-`claims_done` scored 88% the same way. The model's `outcome` mistakes leaned one way: 5 of 6 said "worked" where the panel saw a failure or a redirect.
+```text
+outcome: 19/309 rows flip (9 within noise band)
+  gold accuracy on the 60 shared rows
+    with gold 90.0% → 86.7%
+    (✓ 0 fixed, ✗ 2 broken,
+    1 wrong both times, 16 without gold)
+  ✗ #d4c4d47d#15
+      redirected 0.69 → unclear 0.60
+      2nd component that looks bad on mobile …
+```
 
-The join raised a question of its own. Among turns where the agent edited files and said it was done, the developer reported a problem in 33% of the 142 turns where it ran nothing after its last edit, against 16% of the 31 where it ran a command. Turns cluster within sessions, though. Resampling by session puts the gap between −1 and +30 points, so it is suggestive, not proven.
+One of the two it broke is the mobile layout turn from the puzzle. "Wouldn't it just make sense to make it vertical" is a change of approach, and the new wording had taught the model that a question means unclear.
 
-## The maintainer's own sessions
+The old wording stayed. A sentence meant for a handful of rows moved many more, and only asking it about every row showed that.
 
-The next test was the maintainer's own Claude Code sessions: personal and scratch projects, with work repositories left out. Only aggregate numbers are recorded; no text from those sessions appears here.
+## Use it on your data
 
-The first run read 533 turns for $0.04. A later fix to the trace reader stopped it from taking another agent session's message for the developer's, which left 475 turns. The spec was the one above with `act` lowered to 0.60. The developer who wrote the sessions graded random turns from the text on screen:
+Point `source` at your own session files, run `outcome.yml`, [review](/guides/review) a few dozen turns, and `hunch test` tells you how often it reads your developers right. When the sessions are yours, grade from the text on screen, not from what you remember happened next: press `c` (needs more context) when only your memory decides a turn.
 
-- `outcome` was right on an estimated **91.7%** of turns (95% CI 74.2–97.7%), from 24 random turns.
-- At `act: 0.60` (not the example's 0.80), 58.3% of the graded turns would be labelled automatically, and none of those were wrong.
-- 1 of 30 random turns needed more of the session than the request, reply and next message.
-- When the agent said it was done, the next message reported a failure or a redirect in 3% of turns (7 of 227). When it did not, 8% (26 of 306). These rates rest on `claims` answers nobody has reviewed yet.
+## How it was measured
 
-## A better wording that was worse
+<AccordionGroup>
+  <Accordion title="The data">
+    28 public Claude Code sessions from [Trace Commons agent traces](https://huggingface.co/datasets/trace-commons/agent-traces) (CC BY 4.0): real developers working with coding agents on public repositories, anonymized and reviewed by each contributor. They split into 309 turns. `prototype/examples/claude_code/NOTICE.md` has the download command; nothing from the sessions is committed except the excerpts of 60 turns the reviewers saw, in `prototype/review_panel/claude_code/packets/`. Both judgments together cost $0.02. `outcome` answered 189 worked, 75 failed, 32 redirected and 13 unclear. The results table in `.hunch/store.sqlite` keeps rows as they were read, unredacted, so keep `.hunch/` out of git.
+  </Accordion>
+  <Accordion title="The review panel">
+    Three AI reviewers (one Claude Opus, two Claude Sonnet, one of them reading in reverse order) graded 60 turns chosen by hash, with the same definitions and the same redacted, clipped text as the model, and none of the model's answers. Every turn had a majority. They agreed with each other at Fleiss kappa 0.88 on `outcome` (53 of 60 unanimous) and 0.86 on `claims_done` (54 of 60). The majority labels are `outcome.reviews.csv` and `claims.reviews.csv`; `prototype/review_panel/claude_code/` has the packets, the answers and the scripts.
+  </Accordion>
+  <Accordion title="Accuracy, with its interval">
+    From `hunch test`, against the panel:
 
-The remaining mistakes had a pattern: the developer's next message was a follow-up question, and the model read it as `failed` or `worked` rather than `unclear`, with confidence between 0.43 and 0.57.
+    ```text
+    outcome (choice, 309 rows)
+      gold: 60 rows
+        (0 from source, 60 from review)
+      PASS estimated accuracy 90.0%
+        (95% CI 79.9%–95.3%)
+        from reviews of 60/309 random rows
+    ```
 
-The obvious fix was to say so in the spec. `failed` gained "A follow-up question (asking to explain, compare or recommend) is not a failure", and `unclear` gained "such as a follow-up question about the answer". Before shipping it, `hunch diff` compared the new wording with the old on the same 475 turns:
-
-- 108 of 475 turns changed answer. Most moved from `worked` to `unclear`.
-- On the 21 graded turns both versions shared, accuracy fell from 95.2% to 71.4%: 0 fixed, 5 broken.
-
-A line meant to rescue a handful of rows had moved more than a fifth of them. The old wording stayed. This is what `diff` is for: the change read well, and only the rows showed it was wrong.
-
-## Grade from the text, not from memory
-
-When you review your own sessions, you remember what happened next and the model does not. Press `c` (needs more context) when only your memory decides a row; see [Review](/guides/review).
-
-## What is still open
-
-- `claims` has not been reviewed on the maintainer's sessions.
-- The own-session grades came from the person who wrote the sessions. The review screen shows the model's answer, so the grades are not blind.
-- 24 random grades give a wide interval. About 30 more are needed before judging the next wording change.
+    `claims_done` scored 88.3% (95% CI 77.8–94.2%); of its seven mistakes, five said no where the panel said yes. At `act: 0.80`, `outcome` labels 76.7% of the graded turns on its own with 2.2% of those wrong, and sends 75 of the 309 turns to the review queue (`claims_done`: 81). Its mistakes lean one way: 5 of its 6 said "worked", and in 4 of those the panel saw a failure or a redirect. So failure rates read from these answers are, if anything, low.
+  </Accordion>
+  <Accordion title="Does running something after the last edit matter?">
+    Each turn also records whether the agent ran a command after its last edit (`ran_after_edit`). An earlier reading of these sessions found that, among turns where the agent edited files and said it was done, the developer reported a problem in 33% of the 142 turns where it ran nothing after its last edit, against 16% of the 31 where it ran a command; resampling by session put the gap between −1 and +30 points. That reader did not count PowerShell as running a command. The current one does, and the gap is gone: 30% of 115 turns against 28% of 61, and resampling the 23 sessions puts the gap between −14 and +16 points. With PowerShell left out again, it comes back (32% of 145 against 16% of 31). On these sessions, the finding does not hold.
+  </Accordion>
+  <Accordion title="The maintainer's own sessions">
+    The next test was the maintainer's own Claude Code sessions: personal and scratch projects, with work repositories left out. Only aggregate numbers are recorded; no text from those sessions appears here. The first run read 533 turns for $0.04. A later fix to the trace reader stopped it from taking another agent session's message for the developer's, which left 475 turns. The spec was the one above with `act` lowered to 0.60. The developer who wrote the sessions graded random turns from the text on screen. `outcome` was right on an estimated 91.7% of turns (95% CI 74.2–97.7%), from 24 random turns. At `act: 0.60`, 58.3% of the graded turns would be labelled automatically, and none of those were wrong. 1 of 30 random turns needed more of the session than the request, reply and next message. When the agent said it was done, the next message reported a failure or a redirect in 3% of turns (7 of 227); when it did not, 8% (26 of 306). These rates rest on `claims` answers nobody has reviewed yet.
+  </Accordion>
+  <Accordion title="The wording change, in full">
+    On the maintainer's sessions, the remaining mistakes were follow-up questions read as `failed` or `worked` rather than `unclear`, with confidence between 0.43 and 0.57. The candidate wording changed the answer on 108 of 475 turns, most from `worked` to `unclear`. On the 21 graded turns both versions shared, accuracy fell from 95.2% to 71.4%: 0 fixed, 5 broken. On the public turns it flipped 19 of 309 (9 within the noise band) and moved accuracy on the 60 graded turns from 90.0% to 86.7%. With 0 fixed and 2 broken, the paired sign test gives p = 0.500: on the public turns alone, the drop could be noise. The other broken public turn is a pasted build error, which the old wording read as `failed` (0.55) and the new one as `worked` (0.50).
+  </Accordion>
+  <Accordion title="What is still open">
+    `claims` has not been reviewed on the maintainer's sessions. The own-session grades came from the person who wrote the sessions, and the review screen shows the model's answer, so they are not blind. 24 random grades give a wide interval; about 30 more are needed before judging the next wording change. The review panel is not people: it is three AI reviewers reading the same excerpts as the model.
+  </Accordion>
+</AccordionGroup>

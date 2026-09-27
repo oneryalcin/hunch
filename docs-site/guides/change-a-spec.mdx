@@ -85,7 +85,7 @@ lint error: exposures.retry-failed-turns relies on outcome = 'failed', but outco
 
 The rename is still possible. It now takes a second edit to `uses`, made by someone who has changed the job, and the owner is right there in the spec.
 
-The same list makes `diff` precise. The [Claude Code cookbook](/cookbooks/claude-code-sessions#a-better-wording-that-was-worse) tried telling the model that a follow-up question is not a failure. On the 309 public turns, `diff` ends with the rows each exposure would see change:
+The same list makes `diff` precise. The [Claude Code cookbook](/cookbooks/claude-code-sessions#a-clearer-wording-that-did-worse) tried telling the model that a follow-up question is not a failure. On the 309 public turns, `diff` ends with the rows each exposure would see change:
 
 ```bash
 hunch diff candidates/outcome.yml --against outcome.yml --max-cost 0.02

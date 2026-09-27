@@ -1,64 +1,143 @@
 ---
 title: "100,000 product reviews"
-description: "What a 100,000-row run costs, how long it takes, and what sets its speed."
+description: "Asking one question of 100,000 rows took 28 minutes and $1.55, and asking it again took 4 seconds and nothing."
 ---
 
-Every other cookbook runs on hundreds of rows. Does anything change at that size: the cost, the speed, the store, the time to re-run?
+import { RunBars } from "/snippets/amazon-reviews.jsx";
 
-To find out, hunch asked one yes/no question of 100,000 Amazon product reviews, sampled from the `amazon_polarity` dataset (Apache 2.0). Its label says whether a review gave 4–5 stars or 1–2, which makes it the answer key. The example is in `prototype/examples/scale/`.
+hunch asked one yes-or-no question of 100,000 Amazon product reviews. It took 28 minutes and cost $1.55.
 
-## The spec
+Then it ran the same thing again. That took 4 seconds and cost nothing. Why is the second run so different, and what set the pace of the first?
+
+<Info>
+The other cookbooks run on hundreds of rows. A nightly job over a real table has many more, and the questions become practical ones: what it costs, how long it takes, and what happens when you run it again tomorrow.
+</Info>
+
+## 1. Ask one question of every review
+
+The reviews come from `amazon_polarity`, where each review is marked as 4–5 stars or 1–2 stars. That mark is the answer key. The question is a `noul`, a yes or no with how sure:
 
 ```yaml reviews.yml
 judgment: reviews
 model: jev-1.13.0
 source: .cache/reviews_100k.csv
 key: id
-state: [title, content]
+state: [title, content]   # all the model reads
 questions:
   is_positive:
     type: noul
-    instructions: Is this product review positive overall?
-    act: 0.9
-    gold: positive
+    instructions: >-
+      Is this product review positive overall?
+    act: 0.9   # below this, a person decides
+    gold: positive   # the known answer
 tests:
   is_positive:
     min_accuracy: 0.9
     min_auroc: 0.95
 ```
 
-## What the run measured
+## 2. Check the price before you pay it
 
-| | |
-|---|---|
-| Throughput | 96,000 requests in 27.8 minutes: 57.5 per second with 32 in flight |
-| Failures | 32 network retries (0.03%), all recovered; nothing lost |
-| Cost | $1.55; `compile` had estimated $1.72 |
-| Store | +80 MB, about 840 bytes per answer plus the results table; peak memory 566 MB |
-| Re-run, all cached | `run` 4.1 s, `compile` 2.5 s |
-| `test` | 4.8 s |
-| Result | 97.0% accurate, AUROC 0.993; acting at 0.9 automates 76% of rows at about 0.5% error |
+`hunch compile` counts what a run would ask and prices it, without asking anything. Before the first run it estimated $1.72. Today, with every answer stored, it says there is nothing left to ask:
 
-At that rate, a million rows would take about five hours and cost about $16 with Jev.
+```sh
+cd prototype/examples/scale
+hunch compile reviews.yml
+```
 
-## The estimate ran high
+```text
+# reviews: 100000 rows in;
+#   100000 answers planned, 100000 cached,
+#   0 to ask, ~0 input tokens,
+#   ~$0.00000 (jev-1.13.0)
+```
 
-`compile` estimated $1.72; the run billed $1.55. The estimate counts characters and the engine bills tokens, so it errs high, which is the safe side for a `--max-cost` ceiling. Answers are saved as each request returns, so a run stopped partway keeps what it got.
+The estimate counts characters and the bill counts tokens, so it errs high. That is the safe side for `--max-cost`, the ceiling a run refuses to go past.
 
-## Speed is concurrency, not a rate limit
+## 3. Run it
 
-The first guess was that the API's rate limit would set the pace. It did not: no request was rate-limited at any setting. Throughput is simply how many requests are in flight divided by how long each one takes.
+`HUNCH_CONCURRENCY` is how many requests are in flight at once. The default is 16; this run used 32:
 
-`HUNCH_CONCURRENCY` sets the number in flight; the default is 16. On a 2,000-row probe, 16 gave 63 requests per second and 48 gave 84. The full run used 32 and averaged 57.5. Rate limits, server errors and network failures are retried with backoff.
+```sh
+HUNCH_CONCURRENCY=32 \
+  hunch run reviews.yml --max-cost 2
+```
 
-## Re-runs are cheap enough to skip incremental mode
+Each answer is saved to the store as its request returns, so a run stopped halfway keeps what it got. Run it again and every row is looked up instead of asked:
 
-Every run hashes every row and looks each one up in the store. With everything cached, that took 4 seconds for 100,000 rows. So there is no incremental mode to configure: change the source, and only new or changed rows are asked. `on_change: new_rows_only` goes further and keeps answers for unchanged rows even after the spec changes; see [Change a spec](/guides/change-a-spec).
+```text
+reviews: 100000 rows in;
+  answers: 100000 cached, 0 asked
+  in 0 requests, 0 input tokens, $0.00000
+  is_positive: 24051 rows below act=0.9
+    → review queue
+```
 
-## Cost is input tokens
+## 4. Test it against the key
 
-Jev bills input tokens at $0.042 per million, and output is free. Three settings keep input small: send only the columns the question needs (`state`), cut long text with `clip`, and ask all of a row's questions in one spec, since with Jev they share one request.
+```sh
+hunch test reviews.yml
+```
 
-## What did not work
+```text
+is_positive (noul, 100000 rows)
+  gold: 100000 rows
+    (100000 from source, 0 from review)
+  PASS accuracy 97.0% (min 90%)
+  …
+  PASS AUROC 0.993 (min 0.95)
+```
 
-`test` first took 156 seconds on this run. Computing AUROC compared every positive review with every negative one, 2.5 billion pairs. It now ranks the answers instead and takes 4.8 seconds, with identical results.
+## The result
+
+<RunBars groups={[
+  ["Time", [["First run", 1668, "27.8 min"], ["Run again, all cached", 4.1, "4.1 s"]]],
+  ["Cost", [["First run", 1.55, "$1.55"], ["Run again, all cached", 0, "$0"]]],
+]} />
+
+The second run hashes every row and finds its answer in the store, so a re-run costs only as much as what changed.
+
+## Speed is how many are in flight
+
+The guess was that the API's rate limit would set the pace. A small test on 2,000 reviews tried 16 requests in flight, then 48.
+
+More in flight was faster, and not one request was turned away for going too fast, at any setting. The pace was never a limit. It was arithmetic: requests in flight, divided by how long each one takes.
+
+So there is one dial for speed, and it is `HUNCH_CONCURRENCY`. At the full run's pace, a million rows would take about five hours and cost about $16.
+
+## Use it on your data
+
+Point `source` at your table, run `hunch compile` to see the price, and run with `--max-cost` a little above it. Tomorrow's run asks only the rows that are new or changed.
+
+## How it was measured
+
+<AccordionGroup>
+  <Accordion title="The data">
+    100,000 reviews sampled at random (seed 2026) from the test split of [`amazon_polarity`](https://huggingface.co/datasets/fancyzhx/amazon_polarity) (Apache 2.0) by `prototype/examples/scale/prepare.py`, which has the download command. `positive` is yes for 4–5 stars and no for 1–2: 50,177 yes and 49,823 no.
+  </Accordion>
+  <Accordion title="The run, in full">
+    | | |
+    |---|---|
+    | Throughput | 96,000 requests in 27.8 minutes: 57.5 per second with 32 in flight |
+    | Failures | 32 network retries (0.03%), all recovered; nothing lost |
+    | Cost | \$1.55; `compile` had estimated \$1.72 |
+    | Store | +80 MB, about 840 bytes per answer plus the results table; peak memory 566 MB |
+    | Re-run, all cached | `run` 4.1 s, `compile` 2.5 s |
+    | `test` | 4.8 s |
+    | Result | 97.0% accurate, AUROC 0.993, calibration error 0.053; acting at 0.9 automates 76% of rows at about 0.5% error |
+
+    The 2,000-row probe did 63 requests per second at 16 in flight and 84 at 48. The run asked 96,000 of the 100,000 rows; the store already held the other 4,000 answers, as two probes of 2,000 would leave. Rate limits, server errors and network failures are retried with backoff. These figures are from the run on 2026-09-24, recorded in `docs/04-design.md`. Re-run on 2026-09-27, `hunch run` took 6.7 seconds and `hunch test` 6.2 of wall-clock time, each counting Python's start-up.
+  </Accordion>
+  <Accordion title="Cost is input tokens">
+    Jev bills input tokens at $0.042 per million, and output is free. The 100,000 stored answers read 38.5 million input tokens between them, about 385 per review. Three settings keep input small: send only the columns the question needs (`state`), cut long text with `clip`, and ask all of a row's questions in one spec, since with Jev they share one request.
+  </Accordion>
+  <Accordion title="Re-runs, and why there is no incremental mode">
+    Every run hashes every row and looks each one up in the store. With everything cached, that took 4 seconds for 100,000 rows. So there is no incremental mode to configure: change the source, and only new or changed rows are asked. `on_change: new_rows_only` goes further and keeps answers for unchanged rows even after the spec changes; see [Change a spec](/guides/change-a-spec).
+  </Accordion>
+  <Accordion title="Accuracy, and the key's own mistakes">
+    The answer key is the star rating, so accuracy here is agreement with the stars: 97.0%, with AUROC 0.993 (how well the answers separate positive from negative reviews, where 0.5 is a coin toss). 24,051 rows fall below `act: 0.9` and would go to a person. Of the 3,049 disagreements, some of the most confident look like mistakes in the key rather than the model: a review titled "Awful!!" that says "Don't buy this controller" is marked 4–5 stars, and so is "The shooting mechanism of the guns broke after 10 uses". So 97.0% is, if anything, low.
+  </Accordion>
+  <Accordion title="What did not work">
+    `test` first took 156 seconds on this run. Computing AUROC compared every positive review with every negative one, 2.5 billion pairs. It now ranks the answers instead and takes 4.8 seconds, with identical results.
+  </Accordion>
+</AccordionGroup>

@@ -1,83 +1,199 @@
 ---
 title: "Check RAG answers against their sources"
-description: "Before an answer is shown, ask whether it says anything its passages don't support; pass what is clearly grounded and send the rest to a person, with the miss rate measured on 900 annotated answers."
+description: "An assistant can state things its own sources never said, and this check catches them before a user reads the answer."
 ---
 
-A search assistant is asked how automotive technicians get paid. It retrieves three passages and writes a fluent answer: pay varies by state, highest in Alaska at $23.70 an hour, "and the lowest average pay in Mississippi ($18.60 per hour or $38,900 per year)". Alaska is in the passages. Mississippi is not. The model made it up, and nothing in the answer's tone says so.
+import { AnswerCheck, ModelRanking } from "/snippets/rag-answers.jsx";
+import { RAG_MODELS, RAG_PUZZLES } from "/snippets/rag-answers-data.jsx";
 
-A decision model can read the passages and the answer and say whether anything in the answer goes beyond them. This cookbook builds that check and measures it on answers people have already marked.
+A search assistant is asked how automotive technicians get paid. It finds three passages and writes, among other things:
 
-## The rows
+> The specific amount of pay varies by location, with the highest average pay in Alaska (\$23.70 per hour or \$49,400 per year) and the lowest average pay in Mississippi (\$18.60 per hour or \$38,900 per year).
 
-[RAGTruth](https://github.com/ParticleMedia/RAGTruth) (MIT) holds answers that six models wrote to real search questions from the passages they were given, with every unsupported span marked by human annotators. Its QA test split has 900 answers; 160 contain something the passages don't support.
+Alaska is in the passages, with exactly those figures. Mississippi is not in them at all. The model made up a state and two numbers, in the same calm voice as the true ones.
+
+How would your code tell?
+
+<Info>
+This happens wherever a model answers from text it retrieved: search, support bots, assistants over internal documents. Retrieval and writing are yours. hunch is for the last step, deciding whether the answer stays inside its sources.
+</Info>
+
+## Try it first
+
+Read the passages, then the answer. Is everything it says somewhere in the passages? Then see what hunch said, and what the people who annotated the answer marked.
+
+<AnswerCheck puzzles={RAG_PUZZLES} />
+
+Some are easy once you look: a line number or a peppermint oil tip appears from nowhere. Others are a matter of taste. Is turning 79°F into 26°C adding a fact? That question comes back at the end.
+
+## 1. One row per answer
+
+A row holds what the assistant saw and what it said. The example uses 900 answers from RAGTruth, a public dataset in which people marked every part of an answer the passages don't support. Here is the Mississippi answer as a row:
+
+| Column | For the Mississippi answer |
+| --- | --- |
+| `question` | how do automotive technicians get paid |
+| `passages` | three passages, starting “passage 1:In short, whether mechanics and technicians are entitled to overtime…” |
+| `answer` | “Based on the provided passages, automotive technicians can get paid in different ways…” |
+| `gold_unsupported` | `yes`: the annotators marked something in it |
+
+`gold_unsupported` is the known answer. The check never reads it; it is what the check is tested against.
+
+## 2. Write the question
+
+One file says what to ask about each answer, and what the model may read:
 
 ```yaml answer_support.yml
+# simplified: the file also has a test and two pinned examples
 judgment: answer_support
 model: jev-1.13.0
 source: ragtruth_qa.csv
 key: id
 state: [question, passages, answer]
+clip: {passages: 12000}   # characters, at most
 questions:
   unsupported:
-    type: noul
+    type: noul            # yes or no, with how sure
     instructions: >-
-      `answer` was written to answer `question` using only `passages`. Does `answer` state anything that `passages`
-      do not support: a fact, number, name, date or detail that is missing from the passages, or that contradicts
-      them? Saying the passages don't contain the answer is supported. General wording and restating the question
-      are supported.
+      `answer` was written to answer `question` using
+      only `passages`. Does `answer` state anything that
+      `passages` do not support: a fact, number, name,
+      date or detail that is missing from the passages,
+      or that contradicts them? Saying the passages don't
+      contain the answer is supported. General wording
+      and restating the question are supported.
     gold: gold_unsupported
     act: {yes: 1.0, no: 0.7}
 ```
 
-Checking all 900 took 15 seconds and cost $0.03. The Mississippi answer: `unsupported` yes, at 0.93.
+`state` is all the model sees: the question, the passages and the answer, never the annotators' mark. `act` is the rule for what happens next, and step 4 is about it.
 
-## How good is it
+## 3. Run it
 
-```text
-unsupported (noul, 900 rows)
-  PASS accuracy 83.8% (min 80%)
-  PASS AUROC 0.941 (160 yes / 740 no; 0.5 = coin toss; unaffected by base rate) (min 0)
-       dial   act on yes: automated  wrong   │  act on no: automated  wrong
-       0.50                  30.0%  47.4%   │                70.0%   2.9%
-       0.60                  25.6%  39.6%   │                63.8%   1.9%
-       0.70                  21.1%  32.6%   │                54.3%   0.8%  ← act no
-       0.80                  16.0%  20.8%   │                37.7%   0.6%
-       0.90                  10.3%  14.0%   │                13.7%   0.0%
+```sh
+hunch run prototype/examples/rag_answers/answer_support.yml \
+  --max-cost 0.05
 ```
 
-The two sides of the dial say different things. When the check is sure an answer is supported, it is right: at 0.7 it passes 489 of the 900 answers, and 4 of those had something the annotators marked. When it says unsupported, it is often stricter than the annotators: of the 270 answers it leans yes on, 142 were marked. So the spec never rejects on its own (`yes: 1.0`): a person sees every answer the check isn't sure is supported, 46% of them here, and 156 of the 160 marked answers are among them.
+All 900 answers took 15 seconds and about three cents. Every answer is kept, so running it again is free. For the Mississippi answer the check says `yes`, something is unsupported, and it is 0.93 sure.
 
-Some of that strictness is the question working. Its most confident disagreement, at 0.96, is an answer on how the body's systems work together that adds "the skeletal system provides support and structure" and more, none of it in the passages. The annotators let textbook knowledge pass; the question asks about the passages only. Which rule you want is a product decision, and `hunch review` records it as gold either way.
+## 4. Pass only what it's sure is supported
+
+`act` has two sides. On the `no` side, 0.7 means an answer the check is at least 0.7 sure is supported goes straight to the user. On the `yes` side, 1.0 is a bar no answer reaches, so the check never blocks an answer by itself. Everything it isn't sure about goes to a person.
+
+On these 900, a little over half go straight through, and 4 of them hold something the annotators marked. The rest wait for a person, and they include 156 of the 160 marked answers.
 
 ## Which model to ship
 
-The same check, grouped by the model that wrote the answer:
+Group the same answers by the model that wrote them:
 
-| Model | Marked by annotators | Flagged by the check | Passed at 0.7 |
-| --- | --- | --- | --- |
-| Llama 2 7B chat | 35% | 55% | 23% |
-| Llama 2 13B chat | 24% | 41% | 35% |
-| Llama 2 70B chat | 23% | 41% | 46% |
-| Mistral 7B instruct | 21% | 32% | 54% |
-| GPT-3.5 turbo | 3% | 7% | 82% |
-| GPT-4 | 1% | 3% | 85% |
+<ModelRanking models={RAG_MODELS} />
 
-It orders the six models as the annotators do, without their labels. That makes it a cheap way to compare a new model or a new retrieval setup on your own questions before switching.
+Without seeing a single mark, the check puts the six models in the annotators' order (the two middle Llamas are one answer apart either way), so it can compare a new model or retrieval setup on your own questions before you switch.
 
-## Use it
+## Stricter than the annotators
+
+Look again at the bars: the teal one is longer for every model. When the check says an answer is unsupported, the annotators agree only about half the time.
+
+Its most confident disagreement, at 0.96, is an answer about how the body's systems work together. It summarises the three passages faithfully, then adds a list of its own: "The skeletal system provides support and structure for the body", the digestive system breaks food down into nutrients, the nervous system coordinates movement and thought. All of it is textbook biology. None of it is in the passages.
+
+The annotators let textbook knowledge pass. The question, which asks about the passages only, does not. Neither is wrong; they answer different questions, and whether your assistant may add what everyone knows is a product decision.
+
+That is why the dial is lopsided. When the check is sure an answer is supported, it is almost always right. When it says unsupported, it is often only being strict. So pass what it's sure of and show the rest to a person. Their verdicts, saved by [`hunch review`](/guides/review), become the known answers, and the next `hunch test` measures the check against your rule instead of RAGTruth's.
+
+## Use it on your data
 
 ```sh
-hunch init rag-answers    # all 900 answers, the spec, two pinned examples and results.json; about $0.03 to run
+hunch init rag-answers
 ```
 
-In an app, before an answer is shown:
+This copies the spec, the 900 answers, two pinned examples and the measured results into `rag_answers/`. Replace the rows with your own questions, retrieved passages and answers, [review](/guides/review) a few dozen, and `hunch test` tells you how the check does on your data. In an app, ask before an answer is shown:
 
 ```python
-a = hunch.judge("answer_support.yml", question=q, passages=passages, answer=answer)["unsupported"]
-if a["label"] == "no" and a["route"] == "act":   # sure it is supported
+a = hunch.judge("answer_support.yml", question=q,
+                passages=passages, answer=answer)["unsupported"]
+if a["label"] == "no" and a["route"] == "act":  # sure it's supported
     show(answer)
 else:
     hold_for_review(answer, a["p"])
 ```
 
-Replace the rows with your own questions, retrieved passages and answers, [review](/guides/review) a few dozen, and `hunch test` measures the check on your data instead of RAGTruth's.
+## How it was measured
+
+<AccordionGroup>
+  <Accordion title="The data">
+    [RAGTruth](https://github.com/ParticleMedia/RAGTruth) (MIT licence, Copyright (c) 2023 ParticleMedia), its QA test split: 900 answers that six models wrote to MS MARCO search questions from the passages they were given, 150 per model, with every unsupported span marked by human annotators. `ragtruth_qa.csv` is built from `dataset/response.jsonl` and `dataset/source_info.jsonl` (split `test`, task `QA`); `gold_unsupported` is `yes` when any span was marked, which is 160 of the 900. The CSV keeps only whether something was marked, not which span. The longest passages are 2,405 characters, so `clip` cuts none of them. Seven rows repeat another row's question, passages and answer, so the 900 rows are 893 distinct requests.
+  </Accordion>
+  <Accordion title="The test, in full">
+    `hunch test prototype/examples/rag_answers/answer_support.yml`, trimmed:
+
+    ```text
+    unsupported (noul, 900 rows)
+      gold: 900 rows (900 from source, 0 from review)
+      PASS accuracy 83.8% (min 80%)
+      PASS calibration error 0.208 (max 1)
+             stated p(yes)     n   avg stated   observed
+           0.0–0.1          93        0.079      0.000
+           0.1–0.2         226        0.139      0.009
+           0.2–0.3         161        0.244      0.012
+           0.3–0.4          83        0.338      0.060
+           0.4–0.5          67        0.439      0.134
+           0.5–0.6          40        0.542      0.075
+           0.6–0.7          40        0.645      0.275
+           0.7–0.8          46        0.748      0.304
+           0.8–0.9          51        0.858      0.667
+           0.9–1.0          93        0.930      0.860
+      PASS AUROC 0.941 (160 yes / 740 no; 0.5 = coin toss; unaffected by base rate) (min 0)
+           dial   act on yes: automated  wrong   │  act on no: automated  wrong
+           0.50                  30.0%  47.4%   │                70.0%   2.9%
+           0.60                  25.6%  39.6%   │                63.8%   1.9%
+           0.70                  21.1%  32.6%   │                54.3%   0.8%  ← act no
+           0.80                  16.0%  20.8%   │                37.7%   0.6%
+           0.90                  10.3%  14.0%   │                13.7%   0.0%
+           0.95                   2.9%   7.7%   │                 0.3%   0.0%
+           0.99                   0.0%   0.0%   │                 0.0%   0.0%
+           most confused (gold → got):
+             128  no → yes
+              18  yes → no
+
+    examples (2)
+      PASS adds a number the passage doesn't have: unsupported yes 0.96
+      PASS says only what the passage says: unsupported no 0.95
+    ```
+
+    AUROC is the chance that a marked answer gets a higher p(unsupported) than an unmarked one. The calibration table shows the strictness: of the answers it gives 0.7–0.8, about 30% were marked.
+  </Accordion>
+  <Accordion title="What the dial does on these 900">
+    At `act: {yes: 1.0, no: 0.7}` the check passes 489 answers (54.3%) as supported, and 4 of them (0.8%) had something the annotators marked. The other 411 (46%) go to a person; they hold 156 of the 160 marked answers. The check leans `yes` on 270 answers, and 142 of those were marked. At the 0.5 line it disagrees with the annotators on 146 answers (754 of 900 agree, 83.8%): 128 it calls unsupported that they left unmarked, and 18 the other way.
+  </Accordion>
+  <Accordion title="By the model that wrote the answer">
+    150 answers per model. Flagged means the check leans `yes`; passed means it clears `act` on `no`.
+
+    | Model | Marked by annotators | Flagged by the check | Passed at 0.7 |
+    | --- | --- | --- | --- |
+    | Llama 2 7B chat | 52 (35%) | 83 (55%) | 35 (23%) |
+    | Llama 2 13B chat | 36 (24%) | 61 (41%) | 53 (35%) |
+    | Llama 2 70B chat | 35 (23%) | 62 (41%) | 69 (46%) |
+    | Mistral 7B instruct | 31 (21%) | 48 (32%) | 81 (54%) |
+    | GPT-3.5 turbo | 5 (3%) | 11 (7%) | 123 (82%) |
+    | GPT-4 | 1 (1%) | 5 (3%) | 128 (85%) |
+
+    By the share passed, the order matches the annotators' exactly. By the count flagged, Llama 2 13B and 70B swap places, one answer apart, as they are one answer apart the other way in the annotators' marks.
+  </Accordion>
+  <Accordion title="Where the check and the annotators disagree">
+    All twelve of its most confident disagreements, at 0.90 to 0.96, are answers it calls unsupported that the annotators left unmarked. They answer how the body's systems work together (twice; the first is the one above), how to make ribs, how a transistor works, the benefits of clove tea (twice), cooking a frozen pork loin, what children learn from water play, cooking pollock, how the colonists responded to the Stamp Act (twice), and elements, compounds and mixtures. These were not reviewed, so how many are strictness and how many are marks the annotators missed is not measured.
+  </Accordion>
+  <Accordion title="Other engines">
+    The same battery (`src/hunch/recipes/rag_answers/`, results in its `results*.json`), from [the benchmark](/reference/benchmark):
+
+    | Engine | Accuracy | AUROC | Calibration error | Battery's tests |
+    | --- | --- | --- | --- | --- |
+    | `jev-1.13.0` | 83.8% | 0.941 | 0.208 | pass |
+    | `deepseek:deepseek-flash` | 77.3% | 0.907 | 0.201 | fail: min_accuracy |
+    | `ollama:bespoke-minicheck#rag-unsupported` | 67.4% | 0.840 | 0.298 | fail: min_accuracy |
+    | `ollama:qwen2.5:0.5b` | 21.2% | 0.434 | 0.609 | fail: min_accuracy |
+  </Accordion>
+  <Accordion title="Cost and time">
+    `hunch compile` on an empty store estimates 808,794 input tokens and $0.034 for the 900 rows. The 893 answers in the store were written between 16:44:44 and 16:44:59 on 26 September 2026: 15 seconds. The numbers for `jev-1.13.0` on this page come from those cached answers; `make_rag_answers_data.py` rebuilds the widgets from them with `HUNCH_MAX_COST=0`, asking nothing.
+  </Accordion>
+</AccordionGroup>
