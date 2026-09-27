@@ -32,3 +32,10 @@ def test_a_filter_that_keeps_nothing_writes_an_empty_table_downstream_reads(hunc
     hunch("run")
     cols = [r[1] for r in sqlite3.connect(hunch.dir / ".hunch" / "store.sqlite").execute("pragma table_info(down)")]
     assert output(hunch, "down") == [] and {"year", "recent", "old", "old_key"} <= set(cols)
+
+
+def test_in_reads_a_cell_as_a_number_when_the_list_holds_numbers(hunch):  # else it keeps nothing, silently
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2008\n2,b,2010\n3,c,2009.0\n")
+    (hunch.dir / "spec.yml").write_text(SPEC.replace("year > 2008", "year in [2008, 2009]"))
+    hunch("run")
+    assert output(hunch, "recent") == [("1",), ("3",)]

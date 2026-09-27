@@ -246,6 +246,13 @@ def _number(text: str) -> float | None:
     return None if x != x else x
 
 
+def _cell(text: str, other: float) -> float | None:
+    """Text compared with a number, read as one; compared with True/False, `true`/`false` (any case) count too."""
+    if isinstance(other, bool) and text.strip().lower() in ("true", "false"):
+        return text.strip().lower() == "true"
+    return _number(text)
+
+
 def compile_where(expr: str):
     """(predicate, columns used). Columns, constants, comparisons, `in`, and/or/not; nothing else runs."""
     tree = ast.parse(expr, mode="eval")
@@ -274,19 +281,23 @@ def compile_where(expr: str):
             left = val(node.left, row)
             for o, c in zip(node.ops, node.comparators):
                 right = val(c, row)
-                a, b = left, right
-                if not isinstance(o, (ast.In, ast.NotIn)):  # CSV values are text: compare as numbers when one side is
-                    if isinstance(b, (int, float)) and isinstance(a, str):
-                        if (a := _number(a)) is None:
-                            return False  # an empty or non-numeric cell matches no numeric condition
-                    elif isinstance(a, (int, float)) and isinstance(b, str):
-                        if (b := _number(b)) is None:
-                            return False
-                if not _CMP[type(o)](a, b):
+                if not cmp(type(o), left, right):
                     return False
                 left = right
             return True
         return bool(val(node, row))
+
+    def cmp(o, a, b) -> bool:
+        if o in (ast.In, ast.NotIn) and isinstance(b, list):  # item by item, as == and != compare
+            return any(cmp(ast.Eq, a, x) for x in b) if o is ast.In else all(cmp(ast.NotEq, a, x) for x in b)
+        if o not in (ast.In, ast.NotIn):  # CSV values are text: compare as numbers when one side is
+            if isinstance(b, (int, float)) and isinstance(a, str):
+                if (a := _cell(a, b)) is None:
+                    return False  # an empty or non-numeric cell matches no numeric condition
+            elif isinstance(a, (int, float)) and isinstance(b, str):
+                if (b := _cell(b, a)) is None:
+                    return False
+        return _CMP[o](a, b)
 
     return (lambda row: ev(tree.body, row)), {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
 
@@ -1564,6 +1575,8 @@ async def aexecute(project: dict, rows_in: list[dict] | None = None, dry: bool =
                     unknown_rows.append(r)
                 if ok:
                     keep.append(r)
+            if inp and not keep and rows_in is None:  # a batch keeping nothing is likely a typo or a type mismatch
+                print(f"{name}: warning: where kept 0 of {len(inp)} rows: {spec['where']}", file=sys.stderr)
         path_ps = [1.0] * len(keep)
         if spec.get("chain"):  # once per hop: P(this hop's where-clause) × the upstream row's own path
             pred, used = compile_where(spec["where"])
