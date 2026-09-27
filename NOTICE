@@ -25,3 +25,7 @@ This product includes third-party data:
   of Panthaplackel et al., AAAI 2021 (https://github.com/panthap2/deep-jit-inconsistency-detection), MIT licence;
   Java methods and comments from open-source projects, each under its own project's licence.
   See prototype/examples/stale_comments/NOTICE.md.
+- prototype/examples/discovery/*.yml: quote the TREC 2010 Legal Track's requests for production (Complaint K) and
+  condense its Topic-Specific Guidelines (NIST, https://trec.nist.gov/data/legal10.html); fetch.py downloads the EDRM
+  Enron Email Data Set v2 (ZL Technologies, CC BY 3.0 US) and the track's judgments, and nothing from them is committed.
+  See prototype/examples/discovery/NOTICE.md.

@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# TREC 2010 Legal Track, topic 301: the request as written and the senior lawyer's reading of it, condensed from the track's guidelines (see NOTICE.md).
+judgment: drilling
+model: jev-1.13.0
+source: .cache/drilling.csv     # built by fetch.py
+key: id
+weights:     # the judged emails are a stratified sample of 455,449; each stratum's share of them
+  by: stratum
+  population: {'0.007372474': 0.91587174, '0.06343453': 0.04358156, '0.06748573': 0.02537964, '0.07894737': 8.344e-05, '0.08333334': 0.00013175, '0.08450704': 0.00015591, '0.08474576': 0.00012956, '0.08571429': 7.685e-05, '0.0882353': 0.00037329, '0.089701': 0.00066095, '0.09137056': 0.00043258, '0.09154929': 0.00031181, '0.09160306': 0.00028766, '0.09219858': 0.00030961, '0.0927835': 0.000213, '0.0952381': 9.223e-05, '0.1': 0.00010979, '0.1060862': 0.00519538, '0.1076923': 0.00464893, '0.1095066': 0.00182475, '0.1111111': 3.953e-05, '0.1176471': 3.733e-05, '0.25': 1.757e-05, '0.3333333': 1.318e-05, '0.4': 1.098e-05, '1': 1.098e-05}
+state: [email, attachments]
+clip: {email: 6000, attachments: 2000}
+questions:
+  drilling:
+    type: noul
+    instructions: >-
+      `email` is an email from Enron's files and `attachments` the text of its attachments, if any. In a
+      lawsuit, the other side asked Enron to produce "All documents or communications that describe,
+      discuss, refer to, report on, or relate to onshore or offshore oil and gas drilling or extraction
+      activities, whether past, present or future, actual, anticipated, possible or potential, including,
+      but not limited to, all business and other plans relating thereto, all anticipated revenues therefrom,
+      and all risk calculations or risk management analyses in connection therewith." The senior lawyer on
+      the case reads the request broadly. It covers the company's own oil and gas drilling or extraction
+      business (Enron's, its subsidiaries' or companies it partly owns), onshore or offshore, anywhere in
+      the world, actual, planned or only possible, and this includes moving oil or gas through pipelines. It
+      also covers revenue from that business, even inside company-wide financial documents (SEC filings,
+      annual reports, business plans, gas trading reports, natural gas prices), agreements that earn it (gas
+      purchase, sale, gathering, field services and similar agreements, drafts included), and risk analyses
+      of it. The email itself must carry substantive information about the company's own activity. Not
+      responsive: news or third-party reports about the industry in general, unless an employee forwards
+      them with comments tying them to the company; regulations, government testimony and policy talks with
+      politicians; a meeting notice with nothing but time, place and people; lists of companies or lawyers
+      with no context; staffing and headcount; wind energy. Does this email, with its attachments, fall
+      under that request?
+    gold: gold
+    act: {yes: 1.0, no: 0.82}     # a person reads every yes and every unsure no; a no this sure is set aside
+
+tests:   # regression bars: AUROC below what was measured (0.897); recall at act, on its 95% lower bound
+         # (hunch test prints the lowest act for no that keeps it)
+  drilling: {min_auroc: 0.87, min_recall: 0.8}

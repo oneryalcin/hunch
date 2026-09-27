@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+# TREC 2010 Legal Track, topic 303: the request as written, and nothing else (see NOTICE.md).
+judgment: lobbying
+model: jev-1.13.0
+source: ../.cache/lobbying.csv     # built by fetch.py
+key: id
+weights:     # the judged emails are a stratified sample of 455,449; each stratum's share of them
+  by: stratum
+  population: {'0.006675389': 0.90670065, '0.07407407': 5.943e-05, '0.078125': 0.00014086, '0.07894737': 0.00033454, '0.07936508': 0.00013866, '0.07964602': 0.00024871, '0.08': 0.00049521, '0.08064516': 0.00013646, '0.08181818': 0.00048421, '0.0818584': 0.00099482, '0.08231708': 0.00072191, '0.08239701': 0.00058765, '0.08264463': 0.00026631, '0.08277405': 0.00090405, '0.08333334': 0.0007131, '0.08403362': 0.00075954, '0.08411215': 0.0007065, '0.08433735': 0.00054803, '0.08482143': 0.00049301, '0.08510638': 0.00020689, '0.08661418': 0.00027952, '0.0875': 0.00017608, '0.08860759': 0.00017387, '0.09375': 7.043e-05, '0.09677419': 6.823e-05, '0.1001698': 0.00127438, '0.1001773': 0.00248266, '0.1006404': 0.00225254, '0.1019012': 0.01604787, '0.1020202': 0.03350373, '0.1021075': 0.00702696, '0.1021597': 0.00891925, '0.1024033': 0.00825325, '0.1030303': 0.00217893, '0.1050228': 0.00142506, '0.1428571': 3.081e-05, '0.1538462': 2.861e-05, '0.1666667': 2.641e-05, '0.2': 2.201e-05, '0.25': 1.761e-05, '0.2857143': 4.622e-05, '0.3333333': 1.321e-05, '0.4': 1.1e-05, '0.5': 1.761e-05, '0.6666667': 6.6e-06, '1': 6.6e-06}
+state: [email, attachments]
+clip: {email: 6000, attachments: 2000}
+questions:
+  lobbying:
+    type: noul
+    instructions: >-
+      `email` is an email from Enron's files and `attachments` the text of its attachments, if any. In a
+      lawsuit, the other side asked Enron to produce "All documents or communications that describe,
+      discuss, refer to, report on, or relate to activities, plans or efforts (whether past, present or
+      future) aimed, intended or directed at lobbying public or other officials regarding any actual,
+      pending, anticipated, possible or potential legislation, including but not limited to, activities
+      aimed, intended or directed at influencing or affecting any actual, pending, anticipated, possible or
+      potential rule, regulation, standard, policy, law or amendment thereto." Does this email, with its
+      attachments, fall under that request?
+    gold: gold
