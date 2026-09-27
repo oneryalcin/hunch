@@ -285,11 +285,14 @@ def compile_where(expr: str):
                     return False
                 left = right
             return True
-        return bool(val(node, row))
+        x = val(node, row)  # a bare column: false when it reads false or 0, or is blank, as `== False` reads it
+        return bool(x) and not (isinstance(x, str) and (not x.strip() or _cell(x, False) == 0))
 
     def cmp(o, a, b) -> bool:
         if o in (ast.In, ast.NotIn) and isinstance(b, list):  # item by item, as == and != compare
             return any(cmp(ast.Eq, a, x) for x in b) if o is ast.In else all(cmp(ast.NotEq, a, x) for x in b)
+        if o in (ast.In, ast.NotIn) and not (isinstance(a, str) and isinstance(b, str)):
+            return False  # substring: text in text only; anything else matches neither `in` nor `not in`
         if o not in (ast.In, ast.NotIn):  # CSV values are text: compare as numbers when one side is
             if isinstance(b, (int, float)) and isinstance(a, str):
                 if (a := _cell(a, b)) is None:
