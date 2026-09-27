@@ -58,6 +58,16 @@ def test_a_number_in_text_matches_nothing_not_a_crash(hunch):  # `in <string>` n
     assert output(hunch, "recent") == []
 
 
+def test_a_bare_yes_no_answer_in_where_is_a_lint_warning(hunch, capsys):  # it keeps the 'no' rows too
+    (hunch.dir / "rows.csv").write_text("id,text,year\n1,a,2010\n")
+    (hunch.dir / "spec.yml").write_text(SPEC)
+    (hunch.dir / "down.yml").write_text("judgment: down\nmodel: fake:big\nsource: ref(recent)\nkey: id\nstate: [text]\n"
+                                        "where: recent\nquestions:\n  old: {type: noul, instructions: \"Old?\"}\n")
+    hunch.project = hunch.dir
+    hunch("lint")
+    assert "down: where: 'recent' on its own holds for 'no' too" in capsys.readouterr().err
+
+
 def test_an_empty_csv_is_a_lint_error_not_a_traceback(hunch, capsys):
     (hunch.dir / "rows.csv").write_text("")
     (hunch.dir / "spec.yml").write_text(SPEC)

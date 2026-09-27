@@ -305,6 +305,17 @@ def compile_where(expr: str):
     return (lambda row: ev(tree.body, row)), {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
 
 
+def bare_names(expr: str) -> set[str]:
+    """Columns an expression reads on their own (`flag`, `not flag`, `a and flag`), not compared with anything."""
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except SyntaxError:
+        return set()  # lint reports it
+    kids = [tree.body, *(v for n in ast.walk(tree) if isinstance(n, ast.BoolOp) for v in n.values),
+            *(n.operand for n in ast.walk(tree) if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.Not))]
+    return {k.id for k in kids if isinstance(k, ast.Name)}
+
+
 def compile_baseline(b) -> tuple:
     """(rule, columns used) for a yes/no question's `baseline`: a rule that answers without a model, scored by `test`
     beside it. A where-expression over columns (yes when it holds), or {match: <regex>, columns: [...]} (yes when
@@ -836,11 +847,20 @@ def lint(project: dict) -> tuple[list[str], list[str]]:
     """Lint every judgment, tracking which columns flow along each ref() so where-clauses and state are
     checked before anything runs."""
     errors, warnings, columns = [], [], {}
+    yes_no = {}  # per judgment: the yes/no answers that reach it (its own, and every upstream's)
     for name in project["order"]:
         spec, ups = project["nodes"][name], upstream(project["nodes"][name])
         tag = lambda xs: [f"{name}: {x}" for x in xs]  # noqa: B023  (used within this iteration only)
-        e, w = lint_meta(spec, question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]]))
+        values = question_values(spec, [project["nodes"][u] for u in ups if u in project["nodes"]])
+        yes_no[name] = {q for q, vs in values.items() if set(vs) == {"yes", "no"}}.union(*(yes_no.get(u, ()) for u in ups))
+        e, w = lint_meta(spec, values)
         errors, warnings = errors + tag(e), warnings + tag(w)
+        rules = {"where": spec.get("where"),
+                 **{f"metrics.{k}": m.get("rule") for k, m in (spec.get("metrics") or {}).items() if isinstance(m, dict)},
+                 **{f"{k}: baseline": q.get("baseline") for k, q in (spec.get("questions") or {}).items() if isinstance(q, dict)}}
+        for where_, rule in rules.items():  # a yes/no answer is text: 'no' holds on its own
+            for col in sorted(bare_names(rule) & yes_no[name]) if isinstance(rule, str) else ():
+                warnings += tag([f"{where_}: {col!r} on its own holds for 'no' too; write {col} == 'yes'"])
         if "union" in spec:
             branches = [project["nodes"][u] for u in ups]
             for b in branches:
