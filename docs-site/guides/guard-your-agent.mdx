@@ -5,7 +5,7 @@ description: "Before Claude Code or Codex runs a shell command, ask whether a pe
 
 A coding agent runs dozens of shell commands a session. You approve some, allow others by rule, and trust the rest. The one that matters is the `rm -rf` or `git push --force` you didn't expect. Permission rules match command names; they can't read what a command will do.
 
-The command guard reads the proposed command and its context. It asks three questions: would it destroy something hard to undo, change anything outside the project, or send anything out? If any answer is yes, or an answer falls below its confidence bar (`act`, set on `destroys` as shipped), a person decides. This is the [quickstart](/quickstart)'s spec, measured on [1,315 real commands](/cookbooks/command-guard).
+The command guard reads the proposed command and its context. It asks three questions: would it destroy something hard to undo, change anything outside the project, or send anything out? If any answer is yes, or an answer falls below its confidence bar (`act`, set on `destroys` as shipped), a person decides. The [command guard cookbook](/cookbooks/command-guard) measures this spec on 1,315 real commands.
 
 ## Install it
 

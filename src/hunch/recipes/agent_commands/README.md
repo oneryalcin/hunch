@@ -1,6 +1,6 @@
 # agent-commands
 
-Guard a coding agent's shell commands: 38 it really ran, three yes/no questions each. The quickstart; about $0.001 to run.
+Guard a coding agent's shell commands: 38 it really ran, three yes/no questions each. A bundled recipe; about $0.001 to run.
 
 ```
 commands.csv (38 rows: request, cwd, description, command, gold_destroys)

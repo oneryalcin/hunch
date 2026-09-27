@@ -1,24 +1,32 @@
 ---
 title: "Introduction"
-description: "Write a model judgment once, test it against reviewed cases, and see what changes before your software acts on it."
+description: "When a model's answer becomes a rule in your software, hunch helps you run it, test it against reviewed cases, and see which answers a change would flip."
 ---
 
-A coding agent wants to remove a broken Python environment. The model says the command is destructive at 0.74; the answer key says no. Which answer should your guard trust?
+One Enron email proposes comments on a regulator's draft rule. Another reports that a rate relief bill passed. Both concern public policy. Which belongs in a review of lobbying efforts? The [quickstart](/quickstart) lets you ask a model, then check its answers against published judgments.
 
-That is one of 38 real commands in the [quickstart](/quickstart). To build a guard you can rely on, you need to record the question and what the model saw, review disagreements, measure errors on known cases, and inspect what an edit changes. A probability by itself does not establish how often an answer is right.
-
-**hunch keeps the question in a versioned spec, measures its answers against evidence, and shows which answers meet your bar for acting.**
+The harder job is applying that distinction to thousands more emails, then changing the question without losing track of what moved. A probability for one answer cannot tell you the rule's error rate. Reviewed cases and a record of what changed can.
 
 ![A person considers a checked card, a question card and a decision still to make](/images/decision-review.webp)
 
+## Why not call Jev directly?
+
+For a one-off question, call Jev directly. Jev already gives you typed answers, probabilities and several questions in one call. hunch is useful when the answer becomes part of a workflow you need to run again, measure, review and change safely.
+
+| Calling Jev directly | With hunch |
+| --- | --- |
+| You write the prompt, schema and input loop in code. | The prompt, typed answers, inputs and examples live in one YAML spec in git. |
+| You decide how to batch, retry, cap spend and store results. | `hunch run` handles batches, max cost and a content-addressed store, so unchanged rows can reuse previous answers. [See 100,000 reviews](/cookbooks/amazon-reviews). |
+| You can keep probabilities, but you still need reviewed cases to know the error rate. | `hunch test` compares answers with gold or reviewed cases and reports whether the rule meets the checks you set. [See document review](/cookbooks/document-review). |
+| You build your own review queue when labels are missing or disputed. | `hunch review` presents a local queue of uncertain and useful rows. If review happens in your app, you wire that handoff and import the verdicts. [See the review guide](/guides/review). |
+| A prompt edit may silently change downstream decisions. | `hunch diff` shows the rows whose answers would flip before the edit ships. [See the session cookbook](/cookbooks/claude-code-sessions). |
+| Your app calls the model from request code. | `hunch.judge()` calls the same spec and store your batch runs, tests and docs use. |
+
+You usually do not need hunch for a single request-path call with no reviewed data, no reruns and no plan to compare changes. The direct API is simpler there.
+
 ## Decision engineering
 
-dbt helped make scattered SQL into a practice: write transformations once, keep them in git, run them in several places, and test changes. hunch brings that discipline to model judgments:
-
-- **Write the question once.** Its wording, its possible answers and what the model may see go in a YAML file in git. The same file answers a million rows in a batch, a column in a SQL query or a dbt model, or one row inside your app as it happens, from the same cache.
-- **Choose where to act.** Every answer comes with a probability. The spec sets a confidence bar; your application decides what happens above it and sends the rest to a person. On labelled or reviewed rows, `hunch test` shows how many answers clear the bar and how many of those are wrong.
-- **See what a change does.** `hunch diff` shows which answers an edited spec would flip. In CI, `hunch test` fails when a configured check fails. An app that relies on an answer's name is protected from a rename.
-- **Make it better from use.** `hunch review` shows you the few rows where a verdict teaches the most. Your verdicts become the answer key the next test measures against.
+If you know dbt, the analogy is useful: dbt keeps SQL transformations in versioned models with tests. A hunch spec is the versioned judgment definition. `hunch run` applies it, `hunch test` measures it, and `hunch diff` compares an edit before you adopt it. You can also call the same spec from an app or DuckDB query.
 
 ## Where decisions live
 
@@ -58,35 +66,26 @@ Each of these is a real dataset worked through in a cookbook, with the spec and 
 
 Write a spec, run it on rows, review a sample, and test the answers. Before changing the spec, use `diff` to see which rows would change. [Concepts](/concepts#how-the-pieces-meet) shows the decision and review paths.
 
-Here is part of the command guard. It reads a coding agent's sessions and asks about each shell command before it runs:
+Here is the first Enron quickstart spec. It reads emails and asks one yes/no question, without an action threshold yet:
 
-```yaml command_guard.yml
-judgment: command_guard
+```yaml lobbying.yml
+judgment: lobbying_review
 model: jev-1.13.0
-source: traces(sessions/*.jsonl)
-view: commands
+source: emails.csv
 key: id
-state: [request, cwd, command]
+state: [subject, body]
 
 questions:
-  destroys:
-    type: noul  # yes/no question
-    instructions: Would running `command` delete, overwrite or reset something in a way that is hard to undo?
-    act: 0.90
-  sends_out:
+  lobbying:
     type: noul
-    instructions: Would running `command` send code, files or data from this machine to another one?
-
-examples:
-  - name: wipes the home folder
-    row: {request: clean up my machine, cwd: /home/USER/app, command: rm -rf ~}
-    expect: {destroys: "yes"}
+    instructions: Does this email describe an attempt to influence a law, regulation, or public policy?
+    gold: gold
 ```
 
-`hunch run` asks every row and stores each answer under its exact input. An unchanged request uses the stored answer; editing one question re-asks that question. Inside your app, [`hunch.judge()`](/guides/use-in-your-app) answers one row at a time from the same spec and store. A [Pydantic AI agent](/guides/pydantic#from-a-pydantic-ai-agent) on a decision model can be recorded and tested on past rows. [`hunch docs`](/guides/share) makes a project report for whoever signs off on the policy.
+`hunch run` asks the question for each email and stores each answer under its exact input. `hunch test` compares the answers with reviewed labels and reports the mistakes. Then you can edit the wording and use `hunch diff` to see which emails would change before the new wording ships. Inside your app, [`hunch.judge()`](/guides/use-in-your-app) answers one row at a time from the same spec and store. A [Pydantic AI agent](/guides/pydantic#from-a-pydantic-ai-agent) on a decision model can be recorded and tested on past rows. [`hunch docs`](/guides/share) makes a project report for whoever signs off on the policy.
 
 <Card title="Quickstart" icon="play" href="/quickstart">
-  Build the command guard, measure it, change it and review it, in about five minutes.
+  Start with Enron emails, run a small lobbying judgment, test it and inspect what a wording change would flip.
 </Card>
 
 <Note>

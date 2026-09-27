@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oneryalcin/hunch/main/src/hunch/spec.schema.json
+judgment: lobbying_review
+model: jev-1.13.0
+source: emails.csv
+key: id
+state: [subject, body]
+
+questions:
+  lobbying:
+    type: noul
+    instructions: Does this email describe an attempt to influence a law, regulation, or public policy?
+    gold: gold
