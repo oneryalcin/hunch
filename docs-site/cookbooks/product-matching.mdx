@@ -1,46 +1,53 @@
 ---
 title: "Match two product catalogues"
-description: "One shop calls it a PSLX350H, another a PS-LX350H. Here is how to teach a program that those are the same turntable, and that two cameras one digit apart are not."
+description: "Two shops list the same products under different names. Teach a program which ones match, and to say when it isn't sure."
 ---
 
-Here's a puzzle. One shop sells a `Sony Turntable - PSLX350H`. Another sells a `Sony PS-LX350H Belt-Drive Turntable`. You and I can see at a glance that it's the same record player.
+import { PairPuzzle, WrongMatches } from "/snippets/matching.jsx";
+import { PAIR_PUZZLES } from "/snippets/pair-puzzles.jsx";
 
-Now these two: a `Sony Cyber-Shot Black Digital Camera - DSCT500B` and a `Sony Cyber-shot DSC-T300 Digital Camera - Black`. They look even more alike. But one is a T500 and the other a T300. Different cameras.
+Two shops, about a thousand products each. Which products are the same?
 
-Suppose you have two catalogues like this, a thousand products each, and you need to know which products are the same. How would you write that program?
+<Info>
+Joining two lists of the same things is everywhere: catalogues after an acquisition, suppliers in two systems, customers who signed up twice. Rules get you most of the way. The rest is a judgment, and that's the part hunch is for.
+</Info>
 
-## The first idea: compare the codes
+## Try it first
 
-Almost everyone starts the same way, and it's a good start. Products have model codes. Strip out the hyphens, and `PSLX350H` matches `PS-LX350H`. When the codes don't help, count how many words the two names share.
+Pick the one that's the same product. Then see what simple rules chose, and what hunch said.
 
-This works surprisingly often. It also fails in a way that's worth looking at closely:
+<PairPuzzle puzzles={PAIR_PUZZLES} />
 
-```text
-Garmin 010-10723-02 Carrying Case      the rules pick   Garmin USB Cable - 010-10723-01
-                                       the real match   Garmin Leather GPS Case
+Rules compare characters, so a case and a cable one digit apart look alike. The question compares meaning, and says how sure it is. When nothing fits, it says so.
+
+## 1. Narrow the pairs with rules
+
+Comparing every product with every product is 1.18 million pairs. [`candidates.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/candidates.py) keeps each product's five likeliest partners in DuckDB, using model codes and shared words:
+
+```sql
+-- the idea; the full query is in candidates.py
+select abt_id, buy_id,
+       same_code(codes(a.name), codes(b.name || ' ' || b.description)) as code,   -- PSLX350H = PS-LX350H
+       shared_words(a.name, b.name) as overlap
+from abt a, buy b
+qualify row_number() over (partition by abt_id order by code desc, overlap desc) <= 5
 ```
 
-The codes are one digit apart, so the rules say the carrying case is a USB cable. No person would make that mistake. A case is a case, and a cable is a cable. But "is this a case?" isn't a question about characters. It's a question about meaning, and that's the one thing rules can't ask.
+That leaves 5,396 pairs, and nearly every true match is among them.
 
-So the rules are useful, but not as the judge. They're a sieve. Comparing every product with every product is over a million pairs, and nearly all of them are nonsense: a turntable against photo paper. The rules throw those out cheaply and keep, for each product, a handful of plausible partners. Then something that understands meaning looks at what's left.
+## 2. Write the question
 
-## Asking the question
-
-That something is a question, asked once for every pair: are these the same product?
-
-You could write a loop that sends each pair to a language model. Plenty of people do. It works on the first day, and then the questions start. You change the prompt: did it get better, or did it just change? You run the loop again tomorrow: do you pay for every pair again? The model says "yes" to a pair: how sure is it, and should anyone look?
-
-hunch is built around those questions. The question lives in a file, next to your code:
+One file says what to ask about each pair, and what the model may read:
 
 ```yaml same_product.yml
 judgment: same_product
 model: jev-1.13.0
-source: py(candidates.py:pairs)       # the pairs the rules kept
+source: py(candidates.py:pairs)
 key: id
 state: [abt_name, abt_description, abt_price, buy_name, buy_manufacturer, buy_description, buy_price]
 questions:
   same:
-    type: noul                         # a yes-or-no question
+    type: noul                         # yes or no, with how sure
     instructions: >-
       Two shops list a product: `abt_name` (with `abt_description` and `abt_price`) and `buy_name` (with
       `buy_manufacturer`, `buy_description` and `buy_price`). Are they the same product: the same maker and the same
@@ -50,75 +57,55 @@ questions:
       product agree, it is the same product. But when both listings name a colour and the colours differ, they are
       different products.
     gold: gold_same                    # the known answer, for testing
-    act: 0.9
+    act: 0.9                           # act on answers this sure; the rest go to a person
 ```
 
-Every answer comes back with a number: how sure. Here is the turntable against three of the candidates the rules kept for it:
-
-| Candidate | Same product? | How sure |
-| --- | --- | --- |
-| Sony PS-LX350H Belt-Drive Turntable | yes | 0.95 |
-| Sony PSLX300USB USB Record Turntable | no | 0.98 |
-| Sony Print Paper - SVMF40P | no | 0.99 |
-
-Look at the middle row. Same maker, nearly the same code, the same kind of thing, and it's still a different turntable. That's exactly where the rules get lost, and the question doesn't.
-
-Every answer is also kept, filed under exactly what was asked. Run it again tomorrow and nothing is asked twice.
-
-## Being sure is the point
-
-That "how sure" number changes what you can do with the answers.
-
-Without it, you have two bad choices: trust every answer, or check every answer. With it, you can say something more sensible: act on the answers that are sure, and show me the rest. That's what `act: 0.9` in the spec means. Think of a careful colleague who signs off on what they're certain of, and leaves the doubtful ones on your desk.
-
-Here, about nine in ten pairs are signed off. The rest wait for a person.
-
-## Back to SQL
-
-A "yes" for each pair isn't quite a list of matches yet. A product can have two candidates that both look right, and you want one. That last step is ordinary data work, so it belongs where the data is.
-
-hunch turns the spec into a function DuckDB can call, so the question's answer is just another column. Then a query keeps, for each product, its likeliest partner:
-
-```sql
-select * from (select * from decided where label = 'yes'
-               qualify row_number() over (partition by abt_id order by p_yes desc, rank::int, buy_id) = 1)
-qualify row_number() over (partition by buy_id order by p_yes desc, rank::int, abt_id) = 1;
-```
-
-Step back and look at what we have. A rule in SQL, a question in a file, a query in SQL. The judgment in the middle, the part that used to be a person squinting at two product names, is now a piece of your pipeline like any other.
-
-And it pays off where it matters. On the benchmark these catalogues come from, the rules alone make 126 wrong matches. With the question in the middle, 9.
-
-## The fix that looked right
-
-This is the part I'd most like you to take away.
-
-The first version of the question said nothing about shops adding their own letters to a code. So when one shop listed a wall mount as `PM1327BK` and the other as `PM1327`, the model said: different products. Fair enough, given what it was told.
-
-The fix seemed obvious. Add a sentence: shops add letters "for a colour, a finish or a region", and then it's the same product. You'd approve that in a code review. I would have.
-
-Before shipping it, `hunch diff` asked the new question of every pair and compared the answers with the old ones:
-
-```text
-same: 68/5396 rows flip (40 within noise band)
-  gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
-```
-
-It fixed 23 pairs and broke 40. The broken ones were cameras. A silver Cyber-shot and a gold Cyber-shot are two different products, and "a colour" in the new sentence had just told the model they were one.
-
-Nobody reading that sentence would have seen it coming. The only way to see it was to try the edit on everything, before it shipped. That's what `diff` is for, and it's the same instinct as running your tests before you merge.
-
-The sentence that shipped keeps the letters and draws the line at colours: if both listings name a colour and they differ, they're different products. `diff` again: 35 fixed, 4 broken.
-
-That's the real lesson here, bigger than product matching. The words in a question are code. A small edit can break things far from where you made it. So you treat them like code: kept in a file, tested, and checked on every row before they change.
-
-## Try it
+## 3. Run it
 
 ```sh
-uv run --extra sql python prototype/examples/product_matching/match.py    # about $0.14 the first time, then free
+hunch run prototype/examples/product_matching/same_product.yml --max-cost 0.25
 ```
 
-To match your own lists, point the `read_csv` lines in `candidates.py` at your files and keep the question. Then [review](/guides/review) a few dozen of your own pairs, and `hunch test` will tell you how often it's right on your products, not ours.
+All 5,396 pairs take about 90 seconds and $0.14. Every answer is kept, so running it again is free.
+
+## 4. Keep one match per product
+
+A product can have two candidates that both look right. Back in SQL, where the answer is just a column, keep the likeliest pair on both sides:
+
+```sql
+-- simplified from match.py, which also breaks ties
+select * from (select * from decided where label = 'yes'
+               qualify row_number() over (partition by abt_id order by p_yes desc) = 1)
+qualify row_number() over (partition by buy_id order by p_yes desc) = 1
+```
+
+[`match.py`](https://github.com/oneryalcin/hunch/blob/main/prototype/examples/product_matching/match.py) runs all four steps.
+
+## The result
+
+<WrongMatches bars={[["Rules alone", 126, 1081], ["Rules, then the question", 9, 980]]} />
+
+And the 682 matches it was sure of were all right.
+
+## Changing the question safely
+
+The question above is the third version. The second taught a lesson.
+
+Version one said nothing about shops adding letters to a code, so `PM1327BK` and `PM1327` came back as different products. The obvious fix: add a sentence saying such letters, "for a colour, a finish or a region", don't make a different product.
+
+Before shipping it, `hunch diff` asked the new wording of every pair:
+
+```text
+gold accuracy on the 5286 shared rows with gold 98.6% → 98.3%  (✓ 23 fixed, ✗ 40 broken, 0 wrong both times, 5 without gold)
+```
+
+It fixed 23 pairs and broke 40. A silver and a gold camera of the same model are two products, and "a colour" had just told the model they were one. The shipped wording draws the line at colours: 35 fixed, 4 broken.
+
+The words of a question are code. Test an edit on every row before it ships.
+
+## Use it on your data
+
+Point the `read_csv` lines in `candidates.py` at your two files, keep the question, [review](/guides/review) a few dozen pairs, and `hunch test` tells you how often it's right on your products.
 
 ## How it was measured
 
