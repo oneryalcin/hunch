@@ -35,11 +35,11 @@ A [metric](/reference/spec#metrics) is a rule over a row, such as "any of these 
 
 Which rows count against gold decides whether the number can be trusted. If every row has gold for the questions the rule reads (an answer key on every row), every row counts. Otherwise only random spot checks do. Rows reviewed because the model was unsure, or because a rule flagged them, were picked for a reason, and counting them would make the rule look better or worse than it is.
 
-Comparing the two on the same rows gives the misses (the rule did not hold on the answers but does on gold) and the false alarms (the other way round). Each is a share of its own rows, with a Wilson interval: 1 miss among 91 rows is 1.1%, but anywhere from 0.2% to 6.0%. Sampling weights are not applied to these overall numbers yet; the per-group numbers below use them.
+Comparing the two on the same rows gives the misses (the rule did not hold on the answers but does on gold) and the false alarms (the other way round). Each is a share of its own rows, with a Wilson interval: 1 miss among 91 rows is 1.1%, but anywhere from 0.2% to 6.0%. With sampling weights, each rate is weighted, and its interval is taken on Kish's effective sample size, (Σw)² / Σw², as for accuracy. The rate on answers then gets an interval too: the rows stand for a larger population.
 
 ## Metrics per group
 
-With `by`, the rule is counted in each group, on answers and on gold. Each rate has a Wilson interval. With sampling weights, the rate is weighted and the interval is taken on Kish's effective sample size, (Σw)² / Σw², as for accuracy.
+With `by`, the rule is counted in each group, on answers and on gold. Each rate has a Wilson interval, weighted as the overall numbers are.
 
 A comparison of two groups is judged on the interval of their difference, not on whether their own intervals overlap. That interval is Newcombe's, built from the two Wilson intervals. For rates p₁ and p₂ with intervals [l₁, u₁] and [l₂, u₂]:
 
