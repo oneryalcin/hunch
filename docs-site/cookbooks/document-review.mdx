@@ -1,0 +1,183 @@
+---
+title: "Find what a lawsuit asks for"
+description: "455,449 Enron emails, requests from a real legal exercise, and a question that reads them the way the senior lawyer does."
+---
+
+import { FoundBars, ReadSlider, ScopePuzzle } from "/snippets/discovery.jsx";
+import { DISCOVERY_FOUND, DISCOVERY_READ } from "/snippets/discovery-data.jsx";
+
+In a lawsuit, the other side can ask for every document that "relates to onshore or offshore oil and gas drilling or extraction activities". At Enron that means 455,449 emails. Nobody can read them all. So which ones do you read?
+
+<Info>
+Lawsuits, audits, investigations and journalists with a leaked archive all face this: a pile too big to read and a request about what's in it. The request is only words. What counts is how the lawyer in charge reads them, and hunch is for turning that reading into a question you can run, measure and change.
+</Info>
+
+## Try it first
+
+In 2010 a senior lawyer played this role for a public exercise, the TREC Legal Track, and wrote down what the drilling request covers. Would the lawyer count these?
+
+<ScopePuzzle items={[
+  { doc: "A weekly internal report that mentions, among other things, the company's drilling plans", yes: true, why: "Any document that discusses the company's own drilling or extraction counts, even in passing." },
+  { doc: "A newspaper summary about the oil industry, emailed automatically every morning", yes: false, why: "News about the industry doesn't count, unless an employee forwards it with comments tying it to the company." },
+  { doc: "A gas purchase agreement", yes: true, why: "Agreements that earn revenue from the business count: gas purchase, sale, gathering and field services." },
+  { doc: "Emails about moving gas through the company's pipelines", yes: true, why: "The lawyer reads extraction as including transport by pipeline." },
+  { doc: "A memo on staffing and headcount in the drilling business", yes: false, why: "Staffing documents are not about the activity itself." },
+  { doc: "Sections of federal regulations on offshore drilling", yes: false, why: "Regulations, and testimony about the industry, are about drilling in general, not the company's." },
+]} />
+
+The words say drilling. The lawyer meant the whole business of getting oil and gas out of the ground, moved and paid for, as the company did it, and not the talk around it.
+
+## 1. Get the emails
+
+```bash
+D=prototype/examples/discovery
+uv run python $D/fetch.py
+```
+
+This downloads the Enron emails and the lawyers' judgments. The lawyers read 25,353 emails, not 455,449: a sample, drawn so that each email stands for others, from one to about 150. It works like an opinion poll, where each person asked speaks for thousands. A spec's `weights:` tells hunch how many each one speaks for, so every number on this page is about the whole collection.
+
+## 2. Ask the request, word for word
+
+```yaml prototype/examples/discovery/request_only/drilling.yml
+judgment: drilling
+source: ../.cache/drilling.csv
+key: id
+state: [email, attachments]
+questions:
+  drilling:
+    type: noul      # yes or no, with how sure
+    instructions: >-
+      `email` is an email from Enron's
+      files ... the other side asked Enron
+      to produce "All documents or
+      communications that describe,
+      discuss, refer to, report on, or
+      relate to onshore or offshore oil
+      and gas drilling or extraction
+      activities, ..." Does this email,
+      with its attachments, fall under
+      that request?
+    gold: gold      # the lawyers' judgment
+```
+
+```bash
+hunch run $D/request_only/drilling.yml \
+  --max-cost 0.5
+```
+
+It reads 5,837 emails in about a minute and a half for $0.27, and finds 8 in every 100 of the emails the lawyer wanted. It read the request exactly as written, and that was the problem.
+
+## 3. Write down what the lawyer meant
+
+Add the lawyer's reading to the question, in a paragraph (condensed from eight pages of guidance):
+
+```yaml prototype/examples/discovery/drilling.yml
+    instructions: >-
+      ... The senior lawyer on the case
+      reads the request broadly. It covers
+      the company's own oil and gas
+      drilling or extraction business ...
+      and this includes moving oil or gas
+      through pipelines. It also covers
+      revenue from that business ...
+      agreements that earn it ... Not
+      responsive: news or third-party
+      reports about the industry in
+      general ...
+```
+
+<FoundBars bars={DISCOVERY_FOUND} />
+
+Same model, same emails. The only change is a paragraph that says what the request means.
+
+Before trusting the new wording, `hunch diff` asks it of every email and compares:
+
+```bash
+hunch diff $D/drilling.yml \
+  --against $D/request_only/drilling.yml
+```
+
+```text
+drilling: 869/5837 rows flip
+  (134 within noise band)
+  gold accuracy on the 5837 shared rows
+  with gold 86.2% → 88.1%
+  (✓ 489 fixed, ✗ 380 broken, ...)
+  paired sign test p=0.000 → significant
+```
+
+489 fixed and 380 broken sounds like a small win. Look at which. Of the fixes, 439 are emails the lawyer wanted that the plain question had missed; of the breaks, 367 are emails nobody wanted, now flagged for a person to read and set aside. In a review a miss is the expensive mistake, and weighted to the whole collection those 439 take what's found from 8 in 100 to 63.
+
+## 4. Decide how much a person reads
+
+Nobody hands over what a model picked without reading it. The model's job is the other side: setting aside the emails it is sure are not wanted, so a person reads the rest. `act` says how sure a "no" must be to be set aside, and `min_recall` says how much of what the lawyer wanted must still reach a person:
+
+```yaml prototype/examples/discovery/privileged.yml
+    act: {yes: 1.0, no: 0.75}
+    # a person reads every yes and every
+    # unsure no; a sure no is set aside
+tests:
+  privileged: {min_recall: 0.8}
+```
+
+This is the privilege review, the emails Enron could keep from the other side because they carry legal advice. `hunch test` checks the worst plausible case, the bottom of the 95% interval, not the average:
+
+```text
+PASS recall of yes 84.1%
+  (95% CI 80.5%–87.2%)
+  of 941 gold-yes rows at act 0.75:
+  a person reads 15% of rows, the
+  confident "no" answers are set aside
+  (min 80% on the interval's lower bound)
+```
+
+A person reads about 68,000 emails instead of 455,449, and even at the bottom of the interval, 80% of what should be withheld is among them. Drag the line to see what each amount of reading buys:
+
+<ReadSlider data={DISCOVERY_READ} />
+
+## The lesson
+
+The teams in the 2010 exercise, e-discovery firms and universities with hours of the same lawyer's time, hit the same wall on drilling. None found more than 25% of what the lawyer wanted, and the organisers wrote that none captured the lawyer's broad reading of the request.
+
+A request is not a question until someone writes down what it means. In hunch that writing is the spec: it is read, diffed and tested like code, so when the lawyer's reading changes you see which documents move before anyone relies on them.
+
+## Use it on your data
+
+Point `source:` at your documents, put the request and your review protocol in `instructions`, have a lawyer judge a few hundred, and `hunch test` tells you how much a person must read.
+
+## How it was measured
+
+<AccordionGroup>
+  <Accordion title="The data">
+    The [TREC 2010 Legal Track](https://trec.nist.gov/data/legal10.html) Interactive task: four requests for production from a mock complaint (drilling, responses to spills, lobbying, and a privilege review), over the [EDRM Enron Email Data Set v2](https://trec-legal.umiacs.umd.edu/corpora/trec/legal10/) (ZL Technologies, CC BY 3.0 US), 455,449 messages. Professional reviewers judged a stratified sample of each topic, and the topic's senior lawyer (the "Topic Authority") settled the calls teams appealed; this page uses those final judgments, 25,353 in all, leaving out 154 the reviewers marked as unreadable. Each judgment carries the probability its email was sampled; summing one over it gives 455,449 for every topic, and `weights:` in each spec reweights by it. `fetch.py` keeps the first 20,000 characters of an email and 10,000 of its attachments; the specs send 6,000 and 2,000. The emails name real people; they are public records, and this page quotes no email and names no one.
+  </Accordion>
+  <Accordion title="The results, in full">
+    From `measure.py`, weighted to the collection, 95% intervals from 1,000 bootstrap resamples within strata; hunch says yes at p(yes) ≥ 0.5.
+
+    | Topic | Reader | Found (recall) | Right when it says yes (precision) | F1 |
+    | --- | --- | --- | --- | --- |
+    | Drilling | keywords | 19% (15–24) | 9% (7–11) | 12% |
+    | | request's words | 8% (6–10) | 34% (24–45) | 13% |
+    | | lawyer's reading | 63% (57–69) | 46% (41–52) | 53% (48–58) |
+    | Privileged | keywords | 39% (35–43) | 24% (21–27) | 30% |
+    | | request's words | 25% (22–28) | 53% (47–59) | 34% |
+    | | lawyer's reading | 44% (40–49) | 53% (48–58) | 48% (44–52) |
+    | Lobbying | keywords | 42% (38–46) | 45% (39–52) | 44% |
+    | | request's words | 77% (73–81) | 54% (49–59) | 64% |
+    | | lawyer's reading | 68% (64–73) | 61% (55–66) | 64% (60–68) |
+
+    Keywords: `drill|oil and gas|well|rig`, `privilege|attorney|counsel|legal department`, `lobby|legislat|senator|congress`. On lobbying the request's words were already enough; the lawyer's reading moved precision up and recall down. To find 80% by ranking alone, a person reads the top 12.7% (9.3–17.4) for drilling, 12.2% (10.4–14.7) for privilege, 4.5% (3.8–5.1) for lobbying. The `min_recall` checks use a Wilson interval on the effective sample size (941 privileged emails weigh as 453).
+  </Accordion>
+  <Accordion title="Why spills is left out">
+    Only 184 of the judged emails were about responses to spills, and three of them, sampled from the part of the collection no team flagged, stand for most of the 575 spill emails the sample implies are in the collection. Weighted, the 184 count as 8. hunch's recall there is somewhere between 9% and 44%, and `hunch test` says no recall bar can be promised; the spec is in the example without one.
+  </Accordion>
+  <Accordion title="The human reviewers">
+    The first-pass reviewers' calls are published too, and against the final judgments they score far higher (F1 83% on drilling, 87% on privilege). That comparison is circular: the final judgments are the reviewers' calls, changed only where a team appealed, and no one appealed in the large part of the collection no team flagged. It is an upper bound on the reviewers, not a measurement. For a fair comparison of people and software on this data, see Grossman and Cormack, "Technology-Assisted Review in E-Discovery Can Be More Effective and More Efficient Than Exhaustive Manual Review", Richmond Journal of Law and Technology, 2011.
+  </Accordion>
+  <Accordion title="Against the 2010 teams, and why it isn't a race">
+    The track's overview reports each team's final result: the best F1 was 26% on drilling (no team above 25% recall), 67% on lobbying and 41% on privilege, against hunch's 53%, 64% and 48% above. It is not a fair race. The paragraph each spec adds is our condensation of the guidelines written for the reviewers who produced the judgments, summarising what each lawyer told the teams; the teams questioned the lawyer directly instead, for up to ten hours, and never saw this summary. A 2026 model is being compared with 2010 systems, and the Enron emails are all over the web (the judgments much less so). What the comparison does show is the cost: about $0.33 and a minute and a half per topic.
+  </Accordion>
+  <Accordion title="Cost">
+    Both wordings of all four topics, every judged email: $2.54 in total, including a 400-email trial run. The answers are kept, so every number here, `measure.py` and the widgets are rebuilt for $0.
+  </Accordion>
+</AccordionGroup>
