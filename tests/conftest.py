@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from hunch import core, engines
+from hunch import core, engines, settings
 
 
 class Fake:  # a free, local engine: p(yes) depends on the model, so answers say which engine gave them
@@ -23,7 +23,7 @@ def hunch(tmp_path, monkeypatch):
     (tmp_path / "rows.csv").write_text("id,text\n1,a\n2,b\n3,c\n")
     fake = Fake()
     monkeypatch.setattr(engines, "_loaded", {"fake": fake})
-    monkeypatch.setattr(core, "MAX_COST", None)
+    monkeypatch.setattr(settings, "MAX_COST", None)
     monkeypatch.setattr(core, "_conns", {})
     monkeypatch.delenv("HUNCH_STORE", raising=False)
 

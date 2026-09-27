@@ -98,9 +98,9 @@ def hold_reasons(answers: dict) -> list[str]:
 
 def decide(event: dict, spec: str, deny: bool = False) -> dict | None:
     """The hook's reply for one PreToolUse event, or None to leave the command to the agent's permission rules."""
-    from hunch import core
-    if core.MAX_COST is None:  # a hook runs unattended: cap it unless HUNCH_MAX_COST says otherwise
-        core.MAX_COST = DEFAULT_MAX_COST
+    from hunch import core, settings
+    if settings.MAX_COST is None:  # a hook runs unattended: cap it unless HUNCH_MAX_COST says otherwise
+        settings.MAX_COST = DEFAULT_MAX_COST
     tool_input = event.get("tool_input") or {}
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
     if event.get("tool_name") != "Bash" or not isinstance(command, str):

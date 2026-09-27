@@ -24,10 +24,10 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from hunch import core
+from hunch import core, settings
 
 FIELDS = (("label", "VARCHAR"), ("p", "DOUBLE"), ("route", "VARCHAR"))
-_lock = threading.Lock()  # DuckDB calls from several threads, and the cap (core.MAX_COST) is global: one batch at a time
+_lock = threading.Lock()  # DuckDB calls from several threads, and the cap (settings.MAX_COST) is global: one batch at a time
 
 
 class Budget:
@@ -35,7 +35,7 @@ class Budget:
     connection) and they all draw from it."""
 
     def __init__(self, cap: float | None = None):
-        self.cap = self.left = core.MAX_COST if cap is None else cap  # none given: $HUNCH_MAX_COST, else no cap
+        self.cap = self.left = settings.MAX_COST if cap is None else cap  # none given: $HUNCH_MAX_COST, else no cap
 
 
 def _run(coro):
@@ -97,8 +97,8 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
         live = [i for i, v in enumerate(vals) if any(x is not None for x in v)]
         rows = [{**{c: "" if x is None else x for c, x in zip(cols, vals[i])}, "_hunch_row": i} for i in live]
         with _lock:  # the budget is a total over every fill of the batch (each judgment, each escalation)
-            before = core.CHARGED
-            core.SPEND_LIMIT = None if budget.left is None else before + budget.left
+            before = settings.CHARGED
+            settings.SPEND_LIMIT = None if budget.left is None else before + budget.left
             try:
                 results = _run(core.aexecute(project, rows_in=rows))
             except SystemExit as e:  # the cap, as this function's budget: the engine's message names the CLI flag
@@ -108,9 +108,9 @@ def register(con, path: str | Path, *, name: str | None = None, max_cost: "float
                                  f"(a query over those rows is now free). Register again with a higher max_cost "
                                  f"to ask the rest. ({e})") from None
             finally:
-                core.SPEND_LIMIT = None
+                settings.SPEND_LIMIT = None
                 if budget.left is not None:  # what was charged, even when the batch stopped at the cap
-                    budget.left = max(0.0, budget.left - (core.CHARGED - before))
+                    budget.left = max(0.0, budget.left - (settings.CHARGED - before))
         out = {n: {} for n in judged}
         for n in judged:
             res = results[n]

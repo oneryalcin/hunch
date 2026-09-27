@@ -15,9 +15,10 @@ HERE = Path(__file__).parent
 HUNCH = HERE.parent.parent / "hunch.py"
 sys.path.insert(0, str(HUNCH.parent.parent / "src"))
 import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
+from hunch import settings  # noqa: E402
 
 LIVE, CANDIDATE = HERE / "intent.yml", HERE.parent / "banking77_tree"
-hunch.MAX_COST = 0.0
+settings.MAX_COST = 0.0
 
 print("1. 'live traffic': 40 customer messages, answered by the live spec; the candidate answers too, unseen")
 for r in list(csv.DictReader(open(HERE / "banking77_holdout.csv", newline="")))[:40]:

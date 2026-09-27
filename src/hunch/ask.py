@@ -16,7 +16,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from hunch import core
+from hunch import core, settings
 
 MODEL = "jev-1.13.0"
 ACT = 0.9  # a first bar for acting alone; below it a row is "unsure" (tune it later from `hunch test`'s dial)
@@ -75,7 +75,7 @@ def main(argv: list[str]) -> None:
     if not a.source.is_file():
         sys.exit(f"{a.source}: no such file")
     if a.max_cost is not None:
-        core.MAX_COST = a.max_cost
+        settings.MAX_COST = a.max_cost
     name = a.name.removesuffix(".yml") if a.name else name_of(a.question)
     options = list(dict.fromkeys(o.strip() for o in a.options.split(",") if o.strip())) if a.options else []
     if a.options and len(options) < 2:

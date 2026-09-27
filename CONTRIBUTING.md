@@ -5,6 +5,7 @@
 ```
 src/hunch/            the package (Apache-2.0)
   core.py             specs, lint, sources, engines, the store, run/test/diff/review/suggest, judge()
+  settings.py         how this process runs (--sample, --target, --max-cost, ...): read and set as settings.X
   traces.py           agent sessions → rows (Claude Code, Cursor, OpenCode, OpenTelemetry); stdlib only
   models.py           Pydantic classes ↔ specs and answers
   cli.py              the `hunch` command: `init` here, everything else in core.main
