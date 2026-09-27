@@ -225,7 +225,8 @@ def main() -> None:
         if command in {"run", "test", "diff"}:
             sp.add_argument("--verbose", action="store_true", help="show diagnostic tables and request details")
         sp.add_argument("--model", help="use another engine; keeps its tables separate")
-        sp.add_argument("--target", help="use settings from targets.NAME in the spec")
+        sp.add_argument("--target", default=os.environ.get("HUNCH_TARGET") or None,
+                        help="use settings from targets.NAME in the spec (default: $HUNCH_TARGET)")
         if command == "run":
             sp.add_argument("--allow-change", action="store_true", help="accept a spec change under on_change: freeze")
         if command == "test":

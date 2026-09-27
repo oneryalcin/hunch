@@ -102,3 +102,16 @@ def test_adding_targets_does_not_change_the_spec_hash(hunch):
     with_targets = load_spec(hunch.dir / "spec.yml")
     without = load_spec(hunch.dir / "spec.yml", SPEC.split("targets:")[0])
     assert spec_hash(with_targets) == spec_hash(without)
+
+
+def test_judge_with_a_target_answers_with_its_model_into_its_store(hunch):  # else an app's dev calls hit prod
+    from hunch.online import judge
+    assert judge(hunch.dir / "spec.yml", target="dev", text="a")["urgent"]["label"] == "no"  # fake:small says 0.2
+    assert (hunch.dir / "dev.sqlite").exists() and not (hunch.dir / ".hunch" / "store.sqlite").exists()
+
+
+def test_hunch_target_picks_the_target_for_judge(hunch, monkeypatch):  # how a server or app selects dev
+    from hunch.online import judge
+    monkeypatch.setenv("HUNCH_TARGET", "dev")
+    judge(hunch.dir / "spec.yml", text="b")
+    assert hunch.fake.asked == ["fake:small"]

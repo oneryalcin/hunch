@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures.thread  # noqa: F401  (see _join_shadows: its exit hook must come first)
 import csv
 import json
+import os
 import sqlite3
 import sys
 import threading
@@ -11,10 +12,11 @@ from pathlib import Path
 
 from hunch.answers import conf_of, decide, route
 from hunch.execute import aexecute
+from hunch.lint import apply_target
 from hunch.spec import canon, digest, load_project, redact, redaction_rules, upstream
 from hunch.store import open_store, store_path, write
 
-_projects: dict[Path, dict] = {}
+_projects: dict[tuple[Path, str | None], dict] = {}
 
 
 def roots(project: dict) -> list[str]:
@@ -58,9 +60,21 @@ def traffic_source(spec: dict) -> Path:
 _background: set = set()  # shadow candidates still running inside an app's event loop
 
 
-def _project(path: str | Path) -> dict:
+def _project(path: str | Path, target: str | None = None) -> dict:
+    """The project at path, loaded once per target. A target answers with its model (answers are keyed by model,
+    so dev and prod never share one) and its store; its sample and max_cost are for batch runs (online, the cap
+    is settings.MAX_COST)."""
     q = Path(path).resolve()
-    return _projects.get(q) or _projects.setdefault(q, load_project(q))
+    if (q, target) not in _projects:
+        project = load_project(q)
+        if target:
+            if not any(target in (s.get("targets") or {}) for s in project["nodes"].values()):
+                raise ValueError(f"{q}: no target {target!r} (targets are defined under targets: in a spec)")
+            store = apply_target(project, target).get("store")
+            for spec in project["nodes"].values() if store else []:
+                spec["_store"] = store
+        _projects[(q, target)] = project
+    return _projects[(q, target)]
 
 
 async def _shadow(path: str | Path, fields: dict) -> None:
@@ -79,7 +93,8 @@ def _shadow_names(live: dict, shadow: str | Path) -> list[str]:
 
 
 async def ajudge(path: str | Path, row: dict | None = None, /, *, node: str | None = None,
-                 shadow: str | Path | None = None, log: bool = False, **fields) -> dict | None:
+                 shadow: str | Path | None = None, log: bool = False, target: str | None = None,
+                 **fields) -> dict | None:
     """Judge one row inside an app: the whole project runs on it, same keys as batch (a row the batch already
     judged is a cache hit; a row judged online is a hit for the next batch). Returns {judgment: {question:
     answer}}; a judgment the row never reached (its where-clause said no) is None. For a one-judgment project,
@@ -90,9 +105,10 @@ async def ajudge(path: str | Path, row: dict | None = None, /, *, node: str | No
     `hunch diff CANDIDATE --against LIVE --traffic` compares them on real traffic for free.
     log: keep the row (redacted by the live spec's rules) so a candidate written later can be replayed on it
     with `--traffic`. Shadowing implies logging.
-    The row is `row` (a dict: use it when a column is named node, shadow or log) and/or keyword fields."""
+    target: run as targets.NAME in the spec (default $HUNCH_TARGET): its model and store.
+    The row is `row` (a dict: use it when a column is named node, shadow, log or target) and/or keyword fields."""
     fields = {**(row or {}), **fields}
-    project = _project(path)
+    project = _project(path, target or os.environ.get("HUNCH_TARGET") or None)
     results = await aexecute(project, rows_in=[fields])
     if shadow or log:
         log_traffic(project, roots(project) + (_shadow_names(project, shadow) if shadow else []), fields)
@@ -137,15 +153,16 @@ threading._register_atexit(_join_shadows)
 
 
 def judge(path: str | Path, row: dict | None = None, /, *, node: str | None = None, shadow: str | Path | None = None,
-          log: bool = False, **fields) -> dict | None:
+          log: bool = False, target: str | None = None, **fields) -> dict | None:
     """Sync ajudge. A shadow candidate runs in a thread after the live answer returns; the thread is not a
     daemon, so a script waits for it at exit and the candidate's answers are recorded."""
     fields = {**(row or {}), **fields}
-    out = asyncio.run(ajudge(path, fields, node=node, log=log or bool(shadow)))
+    target = target or os.environ.get("HUNCH_TARGET") or None
+    out = asyncio.run(ajudge(path, fields, node=node, log=log or bool(shadow), target=target))
     if shadow:  # the row was logged under the live names; add the candidate's own
-        extra = _shadow_names(_project(path), shadow)
+        extra = _shadow_names(_project(path, target), shadow)
         if extra:
-            log_traffic(_project(path), extra, fields)
+            log_traffic(_project(path, target), extra, fields)
         t = threading.Thread(target=lambda: asyncio.run(_shadow(shadow, fields)), name="hunch-shadow")
         _SHADOWS.append(t)
         t.start()

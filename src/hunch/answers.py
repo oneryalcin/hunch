@@ -251,17 +251,6 @@ def calib_pairs(its: list[dict], answers: dict, gold: str = "gold", weights: dic
     return out
 
 
-def _wmean(reviewed: list[dict], answers: dict, w) -> tuple[float, float, float]:
-    """Weighted share of hits among reviewed rows, with a Wilson interval on the effective sample size
-    (Kish: (Σw)² / Σw²). Unit weights give k/n and wilson(k, n) exactly."""
-    ws = [w(it) for it in reviewed]
-    sw = sum(ws)
-    p = sum(wi for wi, it in zip(ws, reviewed) if hit(it, answers[it["key"]])) / sw
-    n_eff = sw * sw / sum(wi * wi for wi in ws)
-    lo, hi = wilson(p * n_eff, n_eff)
-    return p, lo, hi
-
-
 def estimate_accuracy(its: list[dict], answers: dict, weights: dict | None = None) -> tuple[float, float, float, dict] | str:
     """Accuracy corrected by reviews, with a 95% interval. Rows are split by whether the model agreed with the
     source answer key: agreements are many (audit a random sample), disagreements few (review them all).
@@ -276,7 +265,7 @@ def estimate_accuracy(its: list[dict], answers: dict, weights: dict | None = Non
         audits = [it for it in its if it["gold_src"] == "review" and it["review_kind"] == "audit"]
         if not audits:
             return "no answer key and no random audits yet (hunch review)"
-        p, lo, hi = _wmean(audits, answers, w)
+        p, lo, hi, _ = wrate([(hit(it, answers[it["key"]]), w(it)) for it in audits])
         lo, hi = (p, p) if len(audits) >= len(its) else (lo, hi)
         return p, lo, hi, {"random": (len(audits), len(its))}
     groups: dict[str, list[dict]] = {"agree": [], "disagree": []}
@@ -296,7 +285,7 @@ def estimate_accuracy(its: list[dict], answers: dict, weights: dict | None = Non
             return f"no reviews of {name}ing rows yet"
         if name == "disagree" and len(reviewed) < len(members):
             return f"{len(members) - len(reviewed)} of {len(members)} disagreements unreviewed (hunch review --node …)"
-        p, l, h = _wmean(reviewed, answers, w)
+        p, l, h, _ = wrate([(hit(it, answers[it["key"]]), w(it)) for it in reviewed])
         l, h = (p, p) if len(reviewed) >= len(members) else (l, h)
         share = sum(w(it) for it in members) / total
         est, lo, hi = est + share * p, lo + share * l, hi + share * h

@@ -34,7 +34,7 @@ def open_store(spec: dict) -> sqlite3.Connection:
     One store per workspace: $HUNCH_STORE, else the nearest `.hunch/store.sqlite` in this folder or above,
     else a new one here. Answers are content-addressed facts; a store per folder made comparisons across
     projects pay twice."""
-    path = store_path(spec["_dir"])
+    path = spec.get("_store") or store_path(spec["_dir"])  # _store: the store a judge() target names
     if (path, threading.get_ident()) in _conns:  # one connection per thread: WAL lets them share the file
         return _conns[(path, threading.get_ident())]
     if not path.exists() and settings.VERBOSE:  # the command summary shows the chosen store; verbose explains why it is new

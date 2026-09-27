@@ -519,6 +519,8 @@ hunch test triage.yml --target dev
 
 A flag given on the command line wins over the target: `--target dev --model X` answers with X.
 
+In an app, `hunch.judge(spec, target="dev", ...)` answers with the target's `model` and `store`. `HUNCH_TARGET` sets the default for the CLI and for `judge()`, so a server runs as `dev` without a code change.
+
 In a folder of specs, each judgment answers with its own `targets.NAME.model`, and a judgment without one uses its `model`. `sample`, `store` and `max_cost` apply to the whole run, so specs that set them must agree.
 
 Lint fails on an unknown key inside a target, and on a `--target` that no spec defines. `targets` is not part of the spec hash, so adding one makes no test stale. `test` records the target in its results and `hunch docs` shows it. `test --receipt` refuses a target: a receipt records the spec as written.
