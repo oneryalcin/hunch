@@ -48,6 +48,7 @@ A folder of specs is a project. A judgment can read another's output with `sourc
 - `examples/banking77/`: 770-row dev + disjoint 385-row holdout from BANKING77 (77 intents, CC BY 4.0). `intent.yml` = v3 (all 77 options described from the train split). `intent.reviews.csv` = 13 verdicts on holdout disputes (reviewer: claude, not a human).
 - `examples/swe_agent/`: 200 real SWE-agent trajectories (100 passed their tests, 100 failed; CC BY 4.0), built by `prepare.py`. `patch_eval.yml` asks: is it resolved (gold = tests passed)? does the agent claim it fixed it? `patch_only.yml` is the same question without the agent's messages (an ablation).
 - `examples/claude_code/`: 309 turns of real developer ↔ Claude Code sessions (Trace Commons, CC BY 4.0), read directly with `source: traces(...)` (download command in NOTICE.md; the sessions stay in the gitignored `.cache/`). `outcome.yml`: how did the turn go, from the developer's next message? `claims.yml`: does the agent say it's done?
+- `examples/discovery/`: document review in a lawsuit: 25,353 Enron emails the TREC 2010 Legal Track's lawyers judged for four requests (oil and gas drilling, spill responses, lobbying, privilege), a stratified sample of 455,449 messages, so `weights:` give numbers for the whole collection. `fetch.py` builds the data in the gitignored `.cache/`; each spec quotes the request and the senior lawyer's reading of it, `request_only/` the request alone; `measure.py` prints recall and precision against keywords, with intervals.
 
 ## Results (jev-1.13.0, 2026-09-24)
 
