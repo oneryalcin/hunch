@@ -274,6 +274,7 @@ Per-question thresholds for `hunch test`. A failure exits 1, unless the entry ha
 | `max_calibration_error` | Expected calibration error (10 bins) is at most this. | all |
 | `min_act_accuracy` | Accuracy among answers confident enough to act on (see `act`) is at least this. | questions with `act` |
 | `min_auroc` | p(yes) separates gold yes from gold no at least this well (0.5 is a coin toss). | `noul` |
+| `min_recall` | A person still sees at least this share of the gold-yes rows: every row is read except the "no" answers confident enough to act on. Checked on the 95% interval's lower bound, weighted when the source has `weights`; `test` also reports the lowest `act` for "no" that meets it and the share of rows a person then reads. For reviews that must not miss a rare yes. | `noul` with `act` |
 | `order_stability` | `{sample, permutations, max_flip_rate}`: re-asks `sample` rows (default 100) with options reordered `permutations` times (default 2); the share of changed answers is at most `max_flip_rate`. Costs money: it asks new questions. | `choice` |
 
 ```yaml

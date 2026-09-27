@@ -357,6 +357,93 @@
                 },
                 "needs_context": {
                   "type": "integer"
+                },
+                "recall": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "yes_rows"
+                  ],
+                  "description": "noul: share of gold-yes rows a person still sees when confident \"no\" answers are set aside",
+                  "properties": {
+                    "yes_rows": {
+                      "type": "integer"
+                    },
+                    "at_act": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "threshold",
+                        "value",
+                        "ci",
+                        "read"
+                      ],
+                      "properties": {
+                        "threshold": {
+                          "type": "number"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "ci": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "read": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of all rows a person reads (weighted when the source has weights)"
+                        }
+                      },
+                      "description": "At the spec's act bar for no"
+                    },
+                    "lowest_act": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "threshold",
+                        "value",
+                        "ci",
+                        "read"
+                      ],
+                      "properties": {
+                        "threshold": {
+                          "type": "number"
+                        },
+                        "value": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "ci": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          },
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "read": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of all rows a person reads (weighted when the source has weights)"
+                        }
+                      },
+                      "description": "The lowest bar for no whose interval's lower bound meets min_recall"
+                    }
+                  }
                 }
               }
             }
