@@ -19,12 +19,14 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parents[1] / "src"))
-import hunch.core as hunch  # noqa: E402  (engine internals: items, store, reviews)
+from hunch.answers import REVIEW_FIELDS  # noqa: E402  (engine internals: items, store, reviews)
+from hunch.spec import item, load_spec  # noqa: E402  (engine internals: items, store, reviews)
+from hunch.spec import rows as source_rows  # noqa: E402
 
 EX = HERE.parent / "examples" / "banking77"
-spec = hunch.load_spec(EX / "intent.yml")
+spec = load_spec(EX / "intent.yml")
 spec["source"] = (EX / "banking77_holdout.csv").resolve()
-rows = {r["id"]: r for r in hunch.rows(spec)}
+rows = {r["id"]: r for r in source_rows(spec)}
 
 key = json.load(open(HERE / "key/b77_map.json"))
 panel: dict[str, dict] = {}
@@ -48,14 +50,14 @@ for rid, p in panel.items():
         verdict, label = "confirmed", p["gold"]
     else:
         verdict, label = ("labeled", best) if votes >= 2 and best != p["gold"] else ("ambiguous", "")
-    it = hunch.item(spec, rows[rid], "intent")
+    it = item(spec, rows[rid], "intent")
     out.append({"qid": "intent", "row_id": rid, "state_hash": it["shash"], "verdict": verdict, "label": label,
                 "reviewer": "panel:opus+sonnet+sonnet", "at": now,
                 "kind": "disputed" if p["kind"] == "disagree" else "audit"})  # agreements were a random sample
 
 path = EX / "intent.reviews.csv"
 with open(path, "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=hunch.REVIEW_FIELDS, lineterminator="\n")
+    w = csv.DictWriter(f, fieldnames=REVIEW_FIELDS, lineterminator="\n")
     w.writeheader()
     w.writerows(sorted(out, key=lambda r: int(r["row_id"])))
 print(f"wrote {len(out)} verdicts to {path.name}:", dict(Counter(r["verdict"] for r in out)))

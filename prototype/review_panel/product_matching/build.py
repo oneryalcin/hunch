@@ -13,15 +13,17 @@ from pathlib import Path
 R = Path(__file__).parent
 sys.path.insert(0, str(R.parents[2] / "src"))
 import hunch  # noqa: E402
-import hunch.core as core  # noqa: E402  (engine internals: rows, state)
+from hunch.answers import reviews_path  # noqa: E402  (engine internals: rows, state)
+from hunch.spec import load_spec, state_of  # noqa: E402  (engine internals: rows, state)
+from hunch.spec import rows as source_rows  # noqa: E402
 
 SPEC = R.parent.parent / "examples/product_matching/same_product.yml"
-spec = core.load_spec(SPEC)
+spec = load_spec(SPEC)
 res = {r["id"]: r for r in hunch.results(SPEC)}
-rows = [{**r, **core.state_of(spec, r)} for r in core.rows(spec)]
+rows = [{**r, **state_of(spec, r)} for r in source_rows(spec)]
 by_hash = sorted(rows, key=lambda r: hashlib.sha256(r["id"].encode()).hexdigest())
 ROUND = sys.argv[1] if len(sys.argv) > 1 else ""
-done = {v["row_id"] for v in csv.DictReader(open(core.reviews_path(spec)))} if ROUND else set()
+done = {v["row_id"] for v in csv.DictReader(open(reviews_path(spec)))} if ROUND else set()
 audit = [] if ROUND else by_hash[:100]
 disputed = [r for r in by_hash if r not in audit and r["id"] not in done and res[r["id"]]["same"] != r["gold_same"]]
 sample = audit + disputed

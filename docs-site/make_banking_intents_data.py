@@ -13,17 +13,19 @@ from collections import Counter
 from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
-from hunch import core  # noqa: E402
+from hunch.answers import decide, load_reviews  # noqa: E402
+from hunch.execute import execute  # noqa: E402
+from hunch.spec import load_project  # noqa: E402
 
 EXAMPLE = Path("prototype/examples/banking77")
 PANEL = Path("prototype/review_panel")
 PUZZLES = ["562", "2496", "2691", "2751", "22", "1404", "2197", "1337", "621"]  # holdout row ids, in the order shown
 
-project = core.load_project(EXAMPLE / "intent.yml")
+project = load_project(EXAMPLE / "intent.yml")
 spec = project["nodes"]["intent"]
 spec["source"] = (EXAMPLE / "banking77_holdout.csv").resolve()
-res = core.execute(project)["intent"]
-reviews = core.load_reviews(spec)
+res = execute(project)["intent"]
+reviews = load_reviews(spec)
 describe = spec["questions"]["intent"]["criteria"]
 
 # votes[row id][label] = reviewers (of 3) who rated that label acceptable, from the blind panel's own answers
@@ -38,7 +40,7 @@ for rev in ["opus", "sonnet_a", "sonnet_b"]:
 
 rows, split = {}, Counter()
 for it in res["items"]:
-    label, conf, _ = core.decide(res["answers"][it["key"]])
+    label, conf, _ = decide(res["answers"][it["key"]])
     answer_key = it["row"]["gold_intent"]
     if label == answer_key:
         continue

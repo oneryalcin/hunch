@@ -11,21 +11,23 @@ import textwrap
 from pathlib import Path
 from urllib.parse import quote
 
-from hunch import core
+from hunch.execute import pick
+from hunch.spec import question_of
+from hunch.store import spec_hash, store_path, table_name
 
 
 def show(project: dict, args) -> None:
     """Print the rows already materialized by `hunch run`, without reading sources or asking models."""
     _apply_model_suffix(project, getattr(args, "model", None))
-    node = core.pick(project, getattr(args, "node", None))
+    node = pick(project, getattr(args, "node", None))
     spec = project["nodes"][node]
     if "union" in spec:
         keys = {project["nodes"][branch].get("key") for branch in spec["union"]}
         if len(keys) != 1 or None in keys:
             sys.exit(f"{node}: union branches use different keys; inspect a branch with --node")
         spec = {**spec, "key": keys.pop()}
-    table = core.table_name(spec)
-    path = core.store_path(spec["_dir"])
+    table = table_name(spec)
+    path = store_path(spec["_dir"])
     if not path.exists():
         sys.exit(f"{_rel(path)}: no store yet; `hunch run {project['path']}` writes it")
 
@@ -38,8 +40,8 @@ def show(project: dict, args) -> None:
 
     run = _run_for_table(db, table, cols)
     print(_heading(node, table, path, run, spec))
-    if run and run.get("spec_hash") and run["spec_hash"] != core.spec_hash(spec):
-        print(f"warning: table was written by spec {run['spec_hash'][:12]}; current spec is {core.spec_hash(spec)[:12]}")
+    if run and run.get("spec_hash") and run["spec_hash"] != spec_hash(spec):
+        print(f"warning: table was written by spec {run['spec_hash'][:12]}; current spec is {spec_hash(spec)[:12]}")
 
     row_id = getattr(args, "id", None)
     if row_id is not None:
@@ -138,7 +140,7 @@ def _count(db: sqlite3.Connection, table: str) -> int:
 
 
 def _print_table(rows: list[dict], spec: dict, cols: list[str]) -> None:
-    qs = [q for q in core.question_of(spec) if q in cols]
+    qs = [q for q in question_of(spec) if q in cols]
     headers = [spec["key"], *qs]
     if "_branch" in cols:
         headers.append("_branch")

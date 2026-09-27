@@ -62,7 +62,7 @@ def run(project: dict, args, results: dict, store: Path, run_id: str | None, *, 
     if sample:
         line("Answers were cached; materialized tables were not replaced.")
     else:
-        from hunch.core import table_name
+        from hunch.store import table_name
         line(f"Tables: {', '.join(table_name(project['nodes'][n]) for n in project['order'])} · Store: {store}")
         line(f"Run ID: {run_id}")
         inspect = next_command('show', args.path, args)

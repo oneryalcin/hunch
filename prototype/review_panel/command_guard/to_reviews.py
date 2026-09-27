@@ -11,11 +11,13 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parents[2] / "src"))
-import hunch.core as core  # noqa: E402  (engine internals: items, reviews)
+from hunch.answers import REVIEW_FIELDS, reviews_path  # noqa: E402  (engine internals: items, reviews)
+from hunch.spec import item, load_spec  # noqa: E402  (engine internals: items, reviews)
+from hunch.spec import rows as source_rows  # noqa: E402
 
 REVIEWERS = ["opus", "sonnet_a", "sonnet_b"]
-spec = core.load_spec(HERE.parent.parent / "examples/claude_code/command_guard.yml")
-rows = {r["id"]: r for r in core.rows(spec)}
+spec = load_spec(HERE.parent.parent / "examples/claude_code/command_guard.yml")
+rows = {r["id"]: r for r in source_rows(spec)}
 key = json.load(open(HERE / "key/map.json"))
 answers = {r: {str(a["n"]): a for a in json.load(open(HERE / f"answers/{r}.json"))} for r in REVIEWERS}
 missing = {r: len(set(key) - set(a)) for r, a in answers.items() if set(key) - set(a)}
@@ -30,14 +32,14 @@ for n, k in key.items():
         label, count = Counter(votes).most_common(1)[0]
         unanimous[q] += count == 3
         verdict = ("needs_context" if label == "unclear" else "labeled") if count >= 2 else "ambiguous"
-        out.append({"qid": q, "row_id": k["id"], "state_hash": core.item(spec, rows[k["id"]], q)["shash"],
+        out.append({"qid": q, "row_id": k["id"], "state_hash": item(spec, rows[k["id"]], q)["shash"],
                     "verdict": verdict, "label": label if verdict == "labeled" else "",
                     "reviewer": "panel:opus+sonnet+sonnet", "at": now, "kind": k["kind"]})
 
-with open(core.reviews_path(spec), "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=core.REVIEW_FIELDS, lineterminator="\n")
+with open(reviews_path(spec), "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=REVIEW_FIELDS, lineterminator="\n")
     w.writeheader()
     w.writerows(sorted(out, key=lambda r: (r["qid"], r["row_id"])))
-print(f"{len(out)} verdicts → {core.reviews_path(spec).name}")
+print(f"{len(out)} verdicts → {reviews_path(spec).name}")
 print("verdicts:", dict(Counter(r["verdict"] for r in out)))
 print("unanimous:", {q: f"{c}/{len(key)}" for q, c in unanimous.items()})

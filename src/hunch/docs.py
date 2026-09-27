@@ -12,7 +12,11 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from hunch import core, settings
+from hunch import settings
+from hunch.fill import llm_prompt
+from hunch.lint import uses_text
+from hunch.spec import NONE, api_question, is_llm, source_kind, state_columns, upstream
+from hunch.store import git_sha, results_path, spec_hash, store_path, table_name
 
 MANIFEST_VERSION = 1
 STATUS = {  # status → (label, what it means), in the order the inventory lists them: what needs a look first
@@ -58,16 +62,16 @@ def manifest(project: dict) -> dict:
         if "_written" in s:
             spec["questions"] = s["_written"]
         out[n] = {"file": str(f.relative_to(base)) if f and f.is_relative_to(base) else (str(f) if f else None),
-                  "spec_hash": core.spec_hash(s), "upstream": core.upstream(s), **spec}
+                  "spec_hash": spec_hash(s), "upstream": upstream(s), **spec}
     first = nodes[project["order"][0]]
-    return {"version": MANIFEST_VERSION, "git_sha": core.git_sha(first["_dir"]) or None, "target": settings.TARGET,
+    return {"version": MANIFEST_VERSION, "git_sha": git_sha(first["_dir"]) or None, "target": settings.TARGET,
             "project": root.stem if root.is_file() else root.name, "judgments": out}
 
 
 def runs(project: dict) -> dict[str, list[dict]]:
     """The last runs of each judgment, newest first, from the store's run log (read-only; none if no store)."""
     first = project["nodes"][project["order"][0]]
-    path = core.store_path(first["_dir"])
+    path = store_path(first["_dir"])
     if not path.exists():
         return {}
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -75,7 +79,7 @@ def runs(project: dict) -> dict[str, list[dict]]:
     if not db.execute("select 1 from sqlite_master where name = '_hunch_runs'").fetchone():
         return {}
     return {n: [dict(r) for r in db.execute("select * from _hunch_runs where judgment = ? order by finished_at desc limit 5",
-                                            (core.table_name(s),))] for n, s in project["nodes"].items()}
+                                            (table_name(s),))] for n, s in project["nodes"].items()}
 
 
 def checks_of(r: dict) -> list[dict]:
@@ -250,7 +254,7 @@ def source_node(m: dict) -> tuple[str, str, str] | None:
     """(id, label, full text) of a root judgment's source; None for one that reads other judgments."""
     if m["upstream"] or m.get("_hide_source"):  # _hide_source: a mini lineage cut off this node's own inputs
         return None
-    kind, value = core.source_kind(m)
+    kind, value = source_kind(m)
     return "src:" + value, (Path(value).name if kind == "csv" else value) or value, value
 
 
@@ -359,7 +363,7 @@ def decides(m: dict) -> str:
 def options_of(q: dict) -> list[tuple[str, object]]:
     c = q.get("criteria")
     rows = list(c.items()) if isinstance(c, dict) else [(str(i), v) for i, v in enumerate(c)] if isinstance(c, list) else []
-    return rows + ([(core.NONE, q["none"])] if q.get("none") else [])
+    return rows + ([(NONE, q["none"])] if q.get("none") else [])
 
 
 def search_text(n: str, m: dict) -> str:
@@ -368,8 +372,8 @@ def search_text(n: str, m: dict) -> str:
         "name": n, "description": m.get("description") or "",
         "questions": " ".join(f"{qid} {text_of(q.get('instructions'))}" for qid, q in qs.items()),
         "options": " ".join(f"{k} {text_of(v)}" for q in qs.values() for k, v in options_of(q)),
-        "columns": " ".join([*core.state_columns(m), m.get("key") or ""]), "source": str(m.get("source", "")),
-        "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')} {core.uses_text(x)}"
+        "columns": " ".join([*state_columns(m), m.get("key") or ""]), "source": str(m.get("source", "")),
+        "used by": " ".join(f"{x['name']} {x.get('kind', '')} {x.get('owner', '')} {x.get('description', '')} {uses_text(x)}"
                             for x in m.get("exposures") or [])})
 
 
@@ -424,14 +428,14 @@ def yaml_html(text: str) -> str:
 def request_example(spec: dict) -> tuple[str, str]:
     """(note, text): the shape of one request, as `compile` would print it, with the row's fields as placeholders.
     No real row: the page is meant to be shared, and a row can hold customer text."""
-    state = f"<{spec['state']}>" if isinstance(spec.get("state"), str) else {c: f"<{c}>" for c in core.state_columns(spec)}
-    aqs = {qid: core.api_question(q) for qid, q in spec.get("questions", {}).items()}
+    state = f"<{spec['state']}>" if isinstance(spec.get("state"), str) else {c: f"<{c}>" for c in state_columns(spec)}
+    aqs = {qid: api_question(q) for qid, q in spec.get("questions", {}).items()}
     if not aqs:
         return "A union asks nothing: it merges its branches' answers.", ""
-    if core.is_llm(spec["model"]):
+    if is_llm(spec["model"]):
         qid = next(iter(aqs))
         return (f"{spec['model']} gets one request per question; this is the prompt for {qid}.",
-                core.llm_prompt(aqs[qid], state)[0])
+                llm_prompt(aqs[qid], state)[0])
     return ("One request per row: every question reads the row once.",
             json.dumps({"model": spec["model"], "state": state, "questions": aqs}, indent=2, ensure_ascii=False))
 
@@ -624,12 +628,12 @@ def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: lis
     reads = f"<code>{e(src[2])}</code>" if (src := source_node(m)) else " + ".join(link(u) for u in m["upstream"])
     exposures = "".join(
         f"<li>{e(x['name'])} <span class='muted'>{e(x.get('kind', 'app'))}{' · ' + e(x['owner']) if x.get('owner') else ''}"
-        f" · {e(core.uses_text(x))}</span>"
+        f" · {e(uses_text(x))}</span>"
         + (f" <a href='{e(x['url'])}' rel='noopener'>open</a>" if str(x.get("url", "")).startswith(("https://", "http://")) else "")
         + (f"<div class='muted'>{e(x['description'])}</div>" if x.get("description") else "") + "</li>"
         for x in m.get("exposures") or [])
     rail = (f"<dl class='facts'><dt>Reads</dt><dd>{reads}" + (f"<div class='muted'>where <code>{e(m['where'])}</code></div>" if m.get("where") else "")
-            + f"</dd><dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in core.state_columns(m)) or '–'}"
+            + f"</dd><dt>Model sees</dt><dd>{', '.join(f'<code>{e(c)}</code>' for c in state_columns(m)) or '–'}"
             + (f"<div class='muted'>removed first: {e(', '.join(m['redact']))}</div>" if m.get("redact") else "")
             + f"</dd><dt>Feeds</dt><dd>{', '.join(link(d) for d in downstream) or '–'}</dd>"
             f"<dt>Used by</dt><dd>{f'<ul class=plain>{exposures}</ul>' if exposures else '–'}</dd>"
@@ -646,7 +650,7 @@ def judgment_page(n: str, m: dict, spec: dict, r: dict | None, st: str, run: lis
     f = spec.get("_file")
     note, req = request_example(spec)
     title = m.get("description") or n
-    tech = [("Output columns", f"<p class='note'>The table this judgment writes to the store, <code>{e(core.table_name(spec))}</code>: "
+    tech = [("Output columns", f"<p class='note'>The table this judgment writes to the store, <code>{e(table_name(spec))}</code>: "
              f"what an app or a downstream judgment reads.</p><div class='scroll'><table class='data'><tr><th>column</th><th>holds</th></tr>{cols}</table></div>"),
             ("Spec", f"<p class='note'><code>{e(m['file'])}</code> · spec hash <code>{e(m['spec_hash'])}</code></p>"
              f"<pre>{yaml_html(Path(f).read_text()) if f and Path(f).exists() else ''}</pre>"),
@@ -693,7 +697,7 @@ def page(project: dict, man: dict, results: dict | None, run: dict, st: dict[str
 
 
 def write_docs(project: dict) -> Path:
-    rp = core.results_path(project)
+    rp = results_path(project)
     results = json.loads(rp.read_text()) if rp.exists() else None
     man = manifest(project)
     st = {n: status(m, (results or {}).get("judgments", {}).get(n)) for n, m in man["judgments"].items()}

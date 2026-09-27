@@ -20,7 +20,8 @@ from pathlib import Path
 
 os.environ["HUNCH_MAX_COST"] = "0"
 import hunch  # noqa: E402
-import hunch.core as core  # noqa: E402  (rows and state, as the model saw them)
+from hunch.spec import load_spec, state_of  # noqa: E402  (rows and state, as the model saw them)
+from hunch.spec import rows as source_rows
 
 SPEC = Path("prototype/examples/claude_code/command_guard.yml")
 PUZZLES = {  # row id: (characters of the request to show, why it is here)
@@ -42,10 +43,10 @@ def clip(text: str, n: int) -> str:
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 
-spec = core.load_spec(SPEC)
+spec = load_spec(SPEC)
 Q = list(spec["questions"])
 res = {r["id"]: r for r in hunch.results(SPEC)}
-rows = {r["id"]: {**r, **core.state_of(spec, r)} for r in core.rows(spec)}
+rows = {r["id"]: {**r, **state_of(spec, r)} for r in source_rows(spec)}
 pyes = {i: {q: float(res[i][f"{q}_pyes"]) for q in Q} for i in rows}
 gold = defaultdict(dict)
 for r in csv.DictReader(open(SPEC.with_name("command_guard.reviews.csv"))):

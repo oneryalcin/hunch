@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from hunch import cli, core
+from hunch import cli
+from hunch.commands import main
+from hunch.measure import summary_markdown
 
 SPEC = """judgment: urgent
 model: fake:big
@@ -81,7 +83,7 @@ def test_ci_summary_names_checks_that_could_not_run():
         }}, "metrics": {"share": {"rate": 0.5, "missed": None, "checks": [],
                                  "unavailable_checks": ["max_missed"]}}}}}
 
-    summary = core.summary_markdown(doc, Path("spec"))
+    summary = summary_markdown(doc, Path("spec"))
 
     assert "NOT ASSESSED: min_auroc" in summary
     assert "NOT ASSESSED: max_missed" in summary
@@ -177,7 +179,7 @@ def test_diff_leads_with_changed_answers_and_keeps_diagnostics_optional(hunch, c
 def test_command_help_is_specific(hunch, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["hunch", "show", "--help"])
     with pytest.raises(SystemExit) as e:
-        core.main()
+        main()
     assert e.value.code == 0
     out = capsys.readouterr().out
     assert "--id" in out and "--limit" in out

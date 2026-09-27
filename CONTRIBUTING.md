@@ -4,11 +4,21 @@
 
 ```
 src/hunch/            the package (Apache-2.0)
-  core.py             specs, lint, sources, engines, the store, run/test/diff/review/suggest, judge()
+  spec.py             specs and the project graph, the where-language, sources, redaction, state
+  store.py            the answer store, tables, lineage, run records, results paths
+  answers.py          routing on confidence, gold and reviews, the statistics
+  lint.py             `hunch lint`
+  fill.py             asking engines: prices, cost caps, LLM prompts, requests
+  execute.py          running a project, judgment by judgment
+  measure.py          `hunch test` and the results file
+  diff.py, review.py, suggest.py   `hunch diff`, `review`, `suggest`
+  online.py           judge(), ajudge(), traffic, shadow specs
+  commands.py         the argparse main() and the other commands
+  core.py             a shim: old names say where they moved
   settings.py         how this process runs (--sample, --target, --max-cost, ...): read and set as settings.X
   traces.py           agent sessions → rows (Claude Code, Cursor, OpenCode, OpenTelemetry); stdlib only
   models.py           Pydantic classes ↔ specs and answers
-  cli.py              the `hunch` command: `init` here, everything else in core.main
+  cli.py              the `hunch` command: `init` here, everything else in commands.main
   recipes/            what `hunch init` copies: tickets, agent_eval
 server/               hunch-server, a Starlette app (Elastic License 2.0)
 prototype/            examples on public data, review panels, measured results

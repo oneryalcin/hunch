@@ -10,18 +10,33 @@ from pathlib import Path
 HERE = Path(__file__).parent
 SRC = HERE.parent / "src" / "hunch"
 sys.path.insert(0, str(SRC.parent))
-from hunch import core  # noqa: E402
+from hunch.spec import (  # noqa: E402
+    ENDPOINTS,
+    EXPOSURE_KEYS,
+    EXPOSURE_KINDS,
+    METRIC_TEST_KEYS,
+    ON_CHANGE,
+    QUESTION_KEYS,
+    SEVERITIES,
+    SPEC_KEYS,
+    TARGET_KEYS,
+    TEST_KEYS,
+    load_project,
+)
+from hunch.store import spec_hash  # noqa: E402
 
-code = (SRC / "core.py").read_text()
+code = (SRC / "commands.py").read_text()  # the argparse main(): commands and flags
+if not re.search(r'"(\w+)": cmd_\w+', code) or not re.search(r'add_argument\("--', code):
+    sys.exit("check.py found no commands or flags in commands.py: it would pass while checking nothing")
 env_code = "\n".join(p.read_text() for p in [*SRC.glob("*.py"), *(HERE.parent / "server" / "hunch_server").glob("*.py")])
 checks = {
-    "reference/spec.mdx": sorted(core.SPEC_KEYS | core.QUESTION_KEYS - {"_multi"} | core.TEST_KEYS | core.METRIC_TEST_KEYS | set(core.ON_CHANGE)
-                                 | core.TARGET_KEYS),
+    "reference/spec.mdx": sorted(SPEC_KEYS | QUESTION_KEYS - {"_multi"} | TEST_KEYS | METRIC_TEST_KEYS | set(ON_CHANGE)
+                                 | TARGET_KEYS),
     "reference/cli.mdx": sorted(set(re.findall(r'"(\w+)": cmd_\w+', code))
                                 | set(re.findall(r'sys\.argv\[1\] == "(\w+)"', (SRC / "cli.py").read_text()))
                                 | set(re.findall(r'add_argument\("(--[\w-]+)"', code))),
     "reference/environment.mdx": sorted(set(re.findall(r'environ(?:\.get\(|\[)"([A-Z_]+)"', env_code))
-                                        | {e["key"] for e in core.ENDPOINTS.values()}),
+                                        | {e["key"] for e in ENDPOINTS.values()}),
 }
 missing = {page: [w for w in words if f"`{w}" not in (HERE / page).read_text()] for page, words in checks.items()}
 for page, words in missing.items():
@@ -39,15 +54,15 @@ from hunch import traces  # noqa: E402
 schema = json.loads((SRC / "spec.schema.json").read_text())
 d = schema["definitions"]
 pairs = {
-    "spec keys": (set(schema["properties"]), core.SPEC_KEYS),
-    "question keys": (set(d["question"]["properties"]), core.QUESTION_KEYS - {"_multi"}),
-    "tests": (set(d["tests"]["properties"]), core.TEST_KEYS | core.METRIC_TEST_KEYS),
-    "on_change": (set(schema["properties"].get("on_change", {}).get("enum", [])), set(core.ON_CHANGE)),
+    "spec keys": (set(schema["properties"]), SPEC_KEYS),
+    "question keys": (set(d["question"]["properties"]), QUESTION_KEYS - {"_multi"}),
+    "tests": (set(d["tests"]["properties"]), TEST_KEYS | METRIC_TEST_KEYS),
+    "on_change": (set(schema["properties"].get("on_change", {}).get("enum", [])), set(ON_CHANGE)),
     "view": (set(schema["properties"].get("view", {}).get("enum", [])), set(traces.VIEWS)),
-    "severity": (set(d.get("severity", {}).get("enum", [])), set(core.SEVERITIES)),
-    "exposure keys": (set(schema["properties"]["exposures"]["items"]["properties"]), core.EXPOSURE_KEYS),
-    "target keys": (set(schema["properties"]["targets"]["additionalProperties"]["properties"]), core.TARGET_KEYS),
-    "exposure kinds": (set(schema["properties"]["exposures"]["items"]["properties"]["kind"]["enum"]), set(core.EXPOSURE_KINDS)),
+    "severity": (set(d.get("severity", {}).get("enum", [])), set(SEVERITIES)),
+    "exposure keys": (set(schema["properties"]["exposures"]["items"]["properties"]), EXPOSURE_KEYS),
+    "target keys": (set(schema["properties"]["targets"]["additionalProperties"]["properties"]), TARGET_KEYS),
+    "exposure kinds": (set(schema["properties"]["exposures"]["items"]["properties"]["kind"]["enum"]), set(EXPOSURE_KINDS)),
 }
 drift = {name: (a - b, b - a) for name, (a, b) in pairs.items() if a != b}
 for name, (extra, absent) in drift.items():
@@ -59,14 +74,14 @@ print(f"schema: {len(pairs)} key sets " + ("match the code" if not drift else "d
 stale = []
 receipts = sorted((SRC / "recipes").glob("*/results*.json"))
 for receipt in receipts:
-    project = core.load_project(receipt.parent)
+    project = load_project(receipt.parent)
     got = json.loads(receipt.read_text())["judgments"]
     where = f"recipes/{receipt.parent.name}/{receipt.name}"
     for name, spec in project["nodes"].items():
         j = got.get(name)
         if j is None:
             stale.append(f"{where}: no numbers for judgment {name!r}")
-        elif j["spec_hash"] != core.spec_hash({**spec, **({"model": j["model"]} if "model" in spec and j["model"] else {})}):
+        elif j["spec_hash"] != spec_hash({**spec, **({"model": j["model"]} if "model" in spec and j["model"] else {})}):
             stale.append(f"{where}: {name!r} was measured on another version of the spec")
     stale += [f"{where}: {name!r} is no longer in the battery" for name in got if name not in project["nodes"]]
 for s in stale:

@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from hunch import core
 from hunch.inspect import show
+from hunch.spec import load_project
 
 SPEC = """judgment: urgent
 model: fake:big
@@ -22,7 +22,7 @@ def args(**kw):
 
 
 def project(hunch):
-    return core.load_project(hunch.project)
+    return load_project(hunch.project)
 
 
 @pytest.fixture(autouse=True)

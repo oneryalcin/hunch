@@ -21,7 +21,13 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
-from hunch import core, settings
+from hunch import settings
+from hunch.answers import append_review, attach_gold, decide, load_reviews, ranked, reviews_path
+from hunch.execute import aexecute, pick
+from hunch.online import ajudge
+from hunch.review import review_key, review_queue
+from hunch.spec import load_project, state_parts
+from hunch.store import open_store, table_name
 
 ROOT = Path(os.environ.get("HUNCH_PROJECTS", ".")).resolve()
 TOKEN = os.environ.get("HUNCH_SERVER_TOKEN")
@@ -58,7 +64,7 @@ def project_path(rel: str | None) -> Path:
 
 def load(rel: str) -> dict:
     try:
-        project = core.load_project(project_path(rel))
+        project = load_project(project_path(rel))
     except SystemExit as e:  # the engine reports spec errors by exiting; a server must not
         raise Refused(422, str(e)) from None
     if not project["order"]:
@@ -101,8 +107,8 @@ def specs_under_root() -> list[str]:
 
 
 def runs_of(project: dict) -> list[dict]:
-    db = core.open_store(project["nodes"][project["order"][0]])
-    names = [core.table_name(s) for s in project["nodes"].values()]  # one store serves many projects
+    db = open_store(project["nodes"][project["order"][0]])
+    names = [table_name(s) for s in project["nodes"].values()]  # one store serves many projects
     try:
         cur = db.execute(f"select * from _hunch_runs where judgment in ({','.join('?' * len(names))}) "
                          "order by started_at desc limit 50", names)
@@ -128,7 +134,7 @@ async def api_judge(request: Request):
         raise Refused(422, f"{body.get('path')!r} is not a spec or a folder of specs")
     shadow = project_path(body["shadow"]) if body.get("shadow") else None
     try:
-        out = await core.ajudge(path, body.get("row") or {}, node=body.get("node"), shadow=shadow, log=bool(body.get("log")))
+        out = await ajudge(path, body.get("row") or {}, node=body.get("node"), shadow=shadow, log=bool(body.get("log")))
     except SystemExit as e:  # spec errors and the cost cap report by exiting
         raise Refused(422, str(e)) from None
     except KeyError as e:
@@ -145,15 +151,15 @@ def drift_of(project: dict, node: str) -> dict:
     """Label shares per run for each question, and the change from the previous run (total variation distance:
     half the sum of absolute share differences; 0 = same mix, 1 = disjoint)."""
     spec = project["nodes"][node]
-    db = core.open_store(spec)
+    db = open_store(spec)
     try:
         got = db.execute("""select r.run_id, r.qid, a.answer from _hunch_row_answers r join answers a on a.key = r.key
-                            where r.judgment = ? order by r.run_id""", (core.table_name(spec),)).fetchall()
+                            where r.judgment = ? order by r.run_id""", (table_name(spec),)).fetchall()
     except sqlite3.OperationalError:
         return {}
     by: dict[str, dict[str, Counter]] = {}
     for run_id, qid, answer in got:
-        by.setdefault(qid, {}).setdefault(run_id, Counter())[core.decide(json.loads(answer))[0]] += 1
+        by.setdefault(qid, {}).setdefault(run_id, Counter())[decide(json.loads(answer))[0]] += 1
     out = {}
     for qid, runs in by.items():
         series, prev = [], None
@@ -181,7 +187,7 @@ async def home(request: Request):
     rows = []
     for rel in specs_under_root():
         try:
-            project = core.load_project(ROOT / rel)
+            project = load_project(ROOT / rel)
         except (SystemExit, Exception):  # a folder of other YAML is not a project
             continue
         runs = runs_of(project)
@@ -220,16 +226,16 @@ async def runs_page(request: Request):
 async def queue_for(project: dict, node: str, audit: int = 30, with_answers: bool = False):
     """The review queue over answers already in the store (asks nothing)."""
     spec = project["nodes"][node]
-    res = (await core.aexecute(project, dry=True))[node]
+    res = (await aexecute(project, dry=True))[node]
     items = [it for it in res["items"] if it["key"] in res["answers"]]
-    core.attach_gold(items, core.load_reviews(spec))
-    queue = core.review_queue(items, res["answers"], audit)
+    attach_gold(items, load_reviews(spec))
+    queue = review_queue(items, res["answers"], audit)
     return (queue, res["answers"]) if with_answers else queue
 
 
 def node_of(project: dict, name: str | None) -> str:
     try:
-        return core.pick(project, name)
+        return pick(project, name)
     except SystemExit as e:
         raise Refused(400, str(e)) from None
 
@@ -247,10 +253,10 @@ async def review_page(request: Request):
     cards = []
     for kind, it in queue[:25]:
         a = answers[it["key"]]
-        top = core.ranked(a)[:3]
-        key = core.review_key(it, a)  # a spot check without an answer key confirms the model's answer
+        top = ranked(a)[:3]
+        key = review_key(it, a)  # a spot check without an answer key confirms the model's answer
         state = "".join(f"<div><span class='k'>{html.escape(c)}</span><br>{html.escape(str(v))[:1500]}</div>"
-                        for c, v in core.state_parts(spec, it["state"]).items())
+                        for c, v in state_parts(spec, it["state"]).items())
         choices = {"disputed": [("model_right", top[0][0], "model is right"), ("key_right", key, "answer key is right"),
                                 ("both_ok", f"{key}|{top[0][0]}", "both acceptable")],
                    "audit": [("confirmed", key, "label is right")]}.get(kind, [])
@@ -268,7 +274,7 @@ async def review_page(request: Request):
                      f"<p>model: {' · '.join(f'{html.escape(l)} {p:.2f}' for l, p in top)}</p>"
                      f"{buttons}</div>")
     head = (f"<h1>Review · {html.escape(node)}</h1><p>{kinds['disputed']} disputed · {kinds['audit']} audit · "
-            f"{kinds['uncertain']} uncertain; verdicts go to <code>{html.escape(core.reviews_path(spec).name)}</code>"
+            f"{kinds['uncertain']} uncertain; verdicts go to <code>{html.escape(reviews_path(spec).name)}</code>"
             f"{' as ' + html.escape(reviewer) if reviewer else ' (add &amp;reviewer=you to the address to sign them)'}</p>"
             "<p>Judge only from the text shown, as a stranger would. If you can only decide because you know more "
             "than this, choose <b>needs more context</b>: it counts as missing context, not a model error.</p>")
@@ -291,7 +297,7 @@ async def review_post(request: Request):
     offered = {(it["qid"], it["id"], it["shash"]): kind for kind, it in queue}
     if offered.get((form.get("qid"), form.get("row_id"), form.get("state_hash"))) != form.get("kind"):
         raise Refused(409, "that row is not in the review queue as that kind (already reviewed, or changed)")
-    core.append_review(spec, {"qid": form["qid"], "row_id": form["row_id"], "state_hash": form["state_hash"],
+    append_review(spec, {"qid": form["qid"], "row_id": form["row_id"], "state_hash": form["state_hash"],
                               "kind": form["kind"], "verdict": form["verdict"], "label": form.get("label", ""),
                               "reviewer": request.headers.get("x-reviewer") or form.get("reviewer") or "server",
                               "at": datetime.now(UTC).isoformat(timespec="seconds")})
