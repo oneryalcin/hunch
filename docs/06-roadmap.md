@@ -262,6 +262,17 @@ Known engineering; do it once phases 1–3 have settled the shapes.
 
 Trigger: a distilled model running in a real app, where drift matters. Until then these stay measured-on-BANKING77 experiments. Details and done-when conditions are in #76.
 
+## Ideas borrowed from internlm/intern-decision (read 2026-11-08, [#76](https://github.com/oneryalcin/hunch/issues/76))
+
+[internlm/intern-decision](https://github.com/internlm/intern-decision) is a family of open decision models (0.8B, 2B, 4B, fine-tuned from Qwen3.5, Apache-2.0, weights on Hugging Face) that answer typed `choice`, `score` and `noul` questions. We read its README only; its numbers are its own and none was reproduced here. What might be useful:
+
+- **A calibration benchmark.** 96 cases about random outcomes, scored against exact reference distributions by a standard-library script, evaluation-only. It tests whether an engine's probabilities match known true probabilities, a different check from our labelled rows. Its own README calls it a small diagnostic study.
+- **An open engine to try.** The 4B model reports 90.0% average accuracy over seven suites against Jev's 88.7%, at about 44 ms a request on an RTX 4090. It asks for Linux and CUDA, and the weights' licence is unchecked, so whether it can be a `hunch-engine-*` plugin on our hardware is the first question.
+- **Several questions in one forward pass.** One request answers every typed question at once. For specs with many questions per row that could cut calls with a local engine.
+- **A map of the open imitators.** In their table Kev averages 79.6% (ECE 0.262) and JevK5 85.2% (ECE 0.047), against Jev's 88.7% (ECE 0.095): a guide to which open engine to try first.
+
+Trigger: wanting a local engine, or a calibration check that doesn't depend on our own labels. Details and done-when conditions are in #76.
+
 ## Ideas borrowed from Great Expectations (UX, not integration)
 
 GX is a reference for what makes quality checks *useful to people*, not a dependency. Decided 2026-09-24: no GX integration unless a user needs it. What to borrow:
