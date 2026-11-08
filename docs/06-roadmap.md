@@ -252,6 +252,16 @@ Known engineering; do it once phases 1–3 have settled the shapes.
 - **dlt interop**: dlt resources as sources (done: `py()`); hunch results loadable by dlt to any destination (next, see "the gaps against dbt").
 - **Run-level checks (built in, need run history)**: label-distribution drift vs the previous run, review-rate ceiling, confidence drift, cost budget per run. Generic checks on the output table (nulls, accepted values, ranges) are *not* built: documented as Great Expectations / Soda / dbt tests pointed at hunch's table.
 
+## Ideas borrowed from undrgrnd-labs/hunch (read 2026-11-08, [#76](https://github.com/oneryalcin/hunch/issues/76))
+
+[undrgrnd-labs/hunch](https://github.com/undrgrnd-labs/hunch) is a different project that happens to share the name: a CPU proxy that learns from a teacher model and then answers on its own, which is close to what `hunch distill` does. We read its README only, not its code, and its speed and accuracy numbers are its own. Three things it does that `distill` does not, as far as our docs say:
+
+- **Keep checking after it takes over.** A fraction of the student's confident answers also goes to the teacher, so drift appears as falling agreement without a manual `hunch test`. Today the cascade escalates below `act` and does not re-check answers above it.
+- **Escalate what looks unfamiliar.** A distance check against the training embeddings would send inputs the student never learned from to the teacher, whatever its confidence says.
+- **A different encoder.** It runs EmbeddingGemma 2 on its own CPU engine (`eg2cpu`, usable separately) and claims image and audio input; `distilled:` uses a frozen MiniLM. Swapping the encoder is a small experiment on the BANKING77 split, and it would not fix the pair failure in [#41](https://github.com/oneryalcin/hunch/issues/41), which comes from reading a pair as one text.
+
+Trigger: a distilled model running in a real app, where drift matters. Until then these stay measured-on-BANKING77 experiments. Details and done-when conditions are in #76.
+
 ## Ideas borrowed from Great Expectations (UX, not integration)
 
 GX is a reference for what makes quality checks *useful to people*, not a dependency. Decided 2026-09-24: no GX integration unless a user needs it. What to borrow:
