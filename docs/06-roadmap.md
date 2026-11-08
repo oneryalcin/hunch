@@ -273,6 +273,17 @@ Trigger: a distilled model running in a real app, where drift matters. Until the
 
 Trigger: wanting a local engine, or a calibration check that doesn't depend on our own labels. Details and done-when conditions are in #76.
 
+## Ideas borrowed from featherless-ai/simple-jev (read 2026-11-08, [#76](https://github.com/oneryalcin/hunch/issues/76))
+
+[featherless-ai/simple-jev](https://github.com/featherless-ai/simple-jev) (Apache-2.0) turns an ordinary open language model into a Jev-shaped `/v1/classifier` endpoint with no training, by reading the model's next-token scores for the allowed answer labels. We read its README and its fine-tuning guide only. It says itself that it does not establish accuracy or calibration equal to Jev's, and that its confidences are not calibrated probabilities of correctness, so these are things to try, not results:
+
+- **A local engine that may run on a laptop.** Its first example serves a 0.8B Qwen model on CPU, and its answers take Jev's shapes. The first question is whether a `hunch-engine-*` plugin pointed at it can answer a recipe we already measure.
+- **A shared prefix for many questions per row.** The common context is processed once and each question is scored from its own short suffix. For specs with several questions per row that could cut tokens a lot.
+- **Fine-tuning as a heavier student.** Its RFDT workflow trains a small model on the answer-token scores with a larger teacher labelling the rest, an alternative to the MiniLM student in `distill` when a question needs more language understanding.
+- **Prompt format as a variable**, tuned on a dev set and frozen before a test, as our own wording work already is.
+
+Trigger: wanting a local engine without a GPU. Details and done-when conditions are in #76.
+
 ## Ideas borrowed from Great Expectations (UX, not integration)
 
 GX is a reference for what makes quality checks *useful to people*, not a dependency. Decided 2026-09-24: no GX integration unless a user needs it. What to borrow:
