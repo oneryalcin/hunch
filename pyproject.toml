@@ -26,7 +26,7 @@ Issues = "https://github.com/oneryalcin/hunch/issues"
 
 [project.optional-dependencies]
 pydantic = ["pydantic>=2"]
-distill = ["fastembed>=0.7"]  # hunch distill: a MiniLM encoder on ONNX (CPU), plus numpy
+distill = ["fastembed>=0.7"]  # hunch distill: small encoders on ONNX (CPU) and the runtime they need, plus numpy
 sql = ["duckdb>=1.1", "pyarrow>=15", "numpy"]  # hunch.sql: a spec as a DuckDB function (vectorized: Arrow, numpy)
 
 [project.scripts]

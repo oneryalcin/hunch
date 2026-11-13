@@ -258,7 +258,7 @@ Known engineering; do it once phases 1–3 have settled the shapes.
 
 - **Keep checking after it takes over.** A fraction of the student's confident answers also goes to the teacher, so drift appears as falling agreement without a manual `hunch test`. Today the cascade escalates below `act` and does not re-check answers above it.
 - **Escalate what looks unfamiliar.** A distance check against the training embeddings would send inputs the student never learned from to the teacher, whatever its confidence says.
-- **A different encoder.** It runs EmbeddingGemma 2 on its own CPU engine (`eg2cpu`, usable separately) and claims image and audio input; `distilled:` uses a frozen MiniLM. Swapping the encoder is a small experiment on the BANKING77 split, and it would not fix the pair failure in [#41](https://github.com/oneryalcin/hunch/issues/41), which comes from reading a pair as one text.
+- **A different encoder.** It runs EmbeddingGemma 2 on its own CPU engine (`eg2cpu`, usable separately) and claims image and audio input; `distilled:` uses a frozen MiniLM. Swapping the encoder is a small experiment on the BANKING77 split, and it would not fix the pair failure in [#41](https://github.com/oneryalcin/hunch/issues/41), which comes from reading a pair as one text. **Measured 2026-11-13 (04 round 24, code read this time):** shipped as `hunch distill --encoder embeddinggemma-2`, on ONNX rather than `eg2cpu`: 79% of BANKING77 answers stay local at act 0.9 against MiniLM's 71%, at 58 ms for a short answer against 3.
 
 Trigger: a distilled model running in a real app, where drift matters. Until then these stay measured-on-BANKING77 experiments. Details and done-when conditions are in #76.
 
