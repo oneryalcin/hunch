@@ -10,7 +10,7 @@ The spec's `model` picks the engine. Every engine returns the same typed answers
 | `jev-1.13.0` | TypeSafe's Jev: a small model trained for typed judgments with calibrated probabilities | `TYPESAFE_API_KEY` |
 | `deepseek:<model id>` | DeepSeek's API, thinking disabled | `DEEPSEEK_API_KEY` |
 | `openrouter:<model id>[@provider]` | Any model on OpenRouter that returns log-probabilities | `OPENROUTER_API_KEY` |
-| `distilled:<folder>` | A local model trained by `hunch distill` on another engine's answers: a frozen MiniLM encoder and a linear layer per question, on the CPU | none |
+| `distilled:<folder>` | A local model trained by `hunch distill` on another engine's answers: a frozen encoder (mdbr-leaf-mt, or the one `hunch distill --encoder` named) and a linear layer per question, on the CPU | none |
 | `<prefix>:<model>` | An engine from an installed plugin package, registered under `<prefix>` | the plugin's own |
 
 ## LLM engines

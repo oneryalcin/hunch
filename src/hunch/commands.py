@@ -10,6 +10,8 @@ from pathlib import Path
 
 from hunch import engines, settings
 from hunch.diff import cmd_diff
+from hunch.distill import DEFAULT as ENCODER
+from hunch.distill import ENCODERS
 from hunch.execute import execute, pick, print_stats, with_upstream
 from hunch.fill import estimate_cost, llm_prompt, merge_stats, oversized, price_per_token
 from hunch.lint import apply_target, lint, lint_targets
@@ -161,18 +163,34 @@ def cmd_run(project: dict, args) -> None:
     presentation.run(project, args, results, presentation.relative(where), run_id, sample=None)
 
 
-def cmd_distill(project: dict, args) -> None:
-    """A small local model per question, trained on the answers already in the store; asks nothing."""
-    from hunch import distill
+def judgment(project: dict, args) -> str:
+    """The judgment a one-judgment command works on: --node, else the last one with questions."""
     node = args.node or next((n for n in reversed(project["order"]) if "union" not in project["nodes"][n]), "")
     if node not in project["nodes"] or "union" in project["nodes"][node]:
         sys.exit(f"--node {node!r}: pick a judgment with questions ({', '.join(project['order'])})")
-    out, report = distill.distill(project, node)
+    return node
+
+
+def cmd_distill(project: dict, args) -> None:
+    """A small local model per question, trained on the answers already in the store; asks nothing."""
+    from hunch import distill
+    node = judgment(project, args)
+    out, report = distill.distill(project, node, args.encoder)
     rel = os.path.relpath(out, project["nodes"][node]["_dir"])
     print(f"{node}: distilled to {out}\n" + "\n".join(report))
     print(f"measure it (free, local): hunch test {args.path} --model distilled:{rel}\n"
           f"use it: model: distilled:{rel}, with escalate: {{model: {project['nodes'][node]['model']}}} and act "
           f"on each question, so answers it isn't sure of go to {project['nodes'][node]['model']}")
+
+
+def cmd_export(project: dict, args) -> None:
+    """A distilled model as two files a web page can load; asks nothing."""
+    from hunch import distill
+    node = judgment(project, args)
+    out, report = distill.export(project, node)
+    print(f"{node}: exported to {out}\n" + "\n".join(report))
+    print('use it: import { load } from "./student.js"; const student = await load("./student.json");\n'
+          "        await student.check(); const answers = await student.answer(row)  // route \"review\": ask your server")
 
 
 def cmd_docs(project: dict, args) -> None:
@@ -191,7 +209,7 @@ def cmd_show(project: dict, args) -> None:
 def main() -> None:
     commands = {"lint": cmd_lint, "compile": cmd_compile, "run": cmd_run, "test": cmd_test, "suggest": cmd_suggest,
                 "diff": cmd_diff, "review": cmd_review, "docs": cmd_docs, "distill": cmd_distill,
-                "show": cmd_show}
+                "export": cmd_export, "show": cmd_show}
     descriptions = {
         "lint": "Check a spec without asking the model.",
         "compile": "Preview a request and estimate the cost of a run.",
@@ -203,6 +221,7 @@ def main() -> None:
         "docs": "Generate a shareable HTML report from the last test.",
         "suggest": "Try and measure question rewrites.",
         "distill": "Train a small local model from cached answers.",
+        "export": "Write a distilled model as files a web page can load.",
     }
     p = argparse.ArgumentParser(prog="hunch", description="Run, inspect, and measure model judgments.",
                                 epilog="Other commands: hunch ask, init, plugins, install, skill, hook.")
@@ -211,7 +230,7 @@ def main() -> None:
     for command, desc in descriptions.items():
         sp = sub.add_parser(command, help=desc, description=desc)
         sp.add_argument("path", type=Path, help="a spec file or folder of specs")
-        if command in {"compile", "run", "show", "test", "diff", "review", "suggest", "distill"}:
+        if command in {"compile", "run", "show", "test", "diff", "review", "suggest", "distill", "export"}:
             sp.add_argument("--node", help="one judgment in a project")
         if command in {"diff", "review"}:
             sp.add_argument("--against", help="old spec/project path or git:REF")
@@ -229,6 +248,9 @@ def main() -> None:
                         help="use settings from targets.NAME in the spec (default: $HUNCH_TARGET)")
         if command == "run":
             sp.add_argument("--allow-change", action="store_true", help="accept a spec change under on_change: freeze")
+        if command == "distill":
+            sp.add_argument("--encoder", choices=sorted(ENCODERS), default=ENCODER,
+                            help=f"the frozen encoder the student reads rows with (default {ENCODER})")
         if command == "test":
             sp.add_argument("--receipt", action="store_true", help="write a stable results file beside the spec")
         if command == "review":

@@ -29,6 +29,7 @@ hunch init [--list] RECIPE [DIR]
 | `skill` | Installs the skill that teaches a coding agent to use hunch | No |
 | `hook` | Guards a coding agent's shell commands: `install` wires it in, `run` is what the agent calls | Yes, per command |
 | `distill` | Trains a small local model per question on the answers already in the store | No |
+| `export` | Writes a distilled model as two files a web page can load | No |
 | `docs` | Writes a page people can read and search: each judgment's status, numbers and lineage | No |
 
 Commands ask only for answers the store lacks. `--max-cost 0` guarantees no spend: if anything is missing, the command stops before asking. For `suggest`, the cap also covers each writer call at its worst case.
@@ -96,9 +97,19 @@ hunch hook run hunch/command_guard.yml   # what the agent calls, with the event 
 hunch distill intent.yml                                  # from the answers for the spec's own rows
 hunch distill intent.yml --source banking77_unlabeled.csv # or for these rows
 hunch distill hunch/command_guard.yml --traffic           # or for rows logged by judge(..., log=True)
+hunch distill intent.yml --encoder gte-modernbert-base    # another encoder: this one reads four times as much of a long row
 ```
 
-Needs the `distill` extra. Asks nothing: it reads the store's answers for `--node` (default: the last judgment) and writes `distilled/<judgment>@<hash>/` next to the spec (`meta.json` and `weights.npz`). Per question it trains a linear layer on a frozen MiniLM encoder, class-balanced, on the row's gold where there is some and the engine's answer otherwise, holding out a fifth of the gold rows by a hash of their text, and fits a temperature so its confidence is a calibrated probability. It prints each question's training size and rarest answer, warning under 30 examples, and the lines to measure and use it. See [Distill a decision](/guides/distill).
+Needs the `distill` extra. Asks nothing: it reads the store's answers for `--node` (default: the last judgment) and writes `distilled/<judgment>@<hash>/` next to the spec (`meta.json` and `weights.npz`). Per question it trains a linear layer on a frozen encoder (mdbr-leaf-mt, or the one `--encoder` names; the model folder records which), class-balanced, on the row's gold where there is some and the engine's answer otherwise, holding out a fifth of the gold rows by a hash of their text, and fits a temperature so its confidence is a calibrated probability. It prints each question's training size and rarest answer, warning under 30 examples, and the lines to measure and use it. See [Distill a decision](/guides/distill).
+
+### `hunch export`
+
+```bash
+hunch export intent_distilled.yml                                    # the distilled model this spec names
+hunch export intent.yml --model distilled:distilled/intent@1a70f2d8  # or this one, with the spec's `act`
+```
+
+Needs the `distill` extra. Asks nothing and trains nothing: for `--node` (default: the last judgment) it writes `browser/student.json` and `browser/student.js` inside the model's folder, and leaves the model's own files as they are. `student.json` holds each question's layer, temperature and `act`, how a row becomes the text the encoder reads, which encoder files the page fetches, and a few made-up rows with this machine's results, which the module's `check()` compares in the browser. It holds no rows from your data. `student.js` answers with it: `load(url)`, then `answer(row)` returns the student's own `label`, `p`, `margin` and `route` for each question, in the shape `judge()` uses; it never asks the teacher. It stops on a judgment with `redact`, `chain` or an upstream judgment, which the module does not reproduce. See [Run it in a web page](/guides/distill#run-it-in-a-web-page).
 
 ### `hunch docs`
 
@@ -134,6 +145,7 @@ Writes two files beside the results file (see below), named after the spec or fo
 | `--verbose` | `run`, `test`, `diff` | off | Show detailed diagnostics; `test` includes calibration bins and the full threshold dial |
 | `--target NAME` | all | the spec as written | Run as the specs' [`targets`](/reference/spec#targets) entry of that name says: its engine, sample, store and cost cap. A flag given here wins over the target. `diff` and `review --against` run the old side on it too, if the old specs define it; otherwise the old side runs as written |
 | `--allow-change` | `run` | off | Accept a changed spec under `on_change: freeze` |
+| `--encoder NAME` | `distill` | `mdbr-leaf-mt` | The frozen encoder the student reads rows with: `mdbr-leaf-mt` (a 92 MB download, about 3 ms for a short text, 512 tokens), `minilm` (90 MB, about 3 ms, 256 tokens; the default through 0.4.0), `gte-modernbert-base` (600 MB, about 16 ms, 2,048 tokens) or `embeddinggemma-2` (350 MB, about 60 ms, 1,024 tokens, other languages). See [Choose the encoder](/guides/distill#choose-the-encoder) |
 | `--list` | `review` | off | Print the queue instead of prompting |
 | `--limit N` | `review`, `show` | no limit for review; 20 for show | Limit the review session or row list |
 | `--id KEY` | `show` | row list | Print every stored field for one row whose source key equals KEY |

@@ -3,7 +3,7 @@ title: "Distill a decision into a local model"
 description: "Train a small model on the answers your engine already gave, measure it like any engine, and let it answer what it is sure of while the engine answers the rest."
 ---
 
-Every answer your engine gives is kept in the store, under its exact input. After a few thousand of them, the store holds something valuable: a labelled dataset for that exact question, in your data, with your reviews on top. `hunch distill` turns it into a small model that runs on your machine in about 10 milliseconds, with no API call.
+Every answer your engine gives is kept in the store, under its exact input. After a few thousand of them, the store holds something valuable: a labelled dataset for that exact question, in your data, with your reviews on top. `hunch distill` turns it into a small model that runs on your machine in a few milliseconds, with no API call.
 
 A small model may be less accurate than the engine that taught it. Give it the rows on which it clears your `act` threshold, and send the rest to the original engine. Test both routes on held-out rows before deciding how much work to keep local.
 
@@ -19,13 +19,14 @@ hunch distill intent.yml --source banking77_unlabeled.csv
 ```
 
 ```text
-intent: distilled to distilled/intent@55a07d9f
+  encoding 3000 rows with mdbr-leaf-mt
+intent: distilled to distilled/intent@1a70f2d8
   intent: 3000 answers, 77 classes; rarest: 'contactless_not_working' (7)  ← few examples: measure what it misses (hunch test --model) before trusting it
-measure it (free, local): hunch test intent.yml --model distilled:distilled/intent@55a07d9f
-use it: model: distilled:distilled/intent@55a07d9f, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
+measure it (free, local): hunch test intent.yml --model distilled:distilled/intent@1a70f2d8
+use it: model: distilled:distilled/intent@1a70f2d8, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
 ```
 
-The student's frozen MiniLM encoder runs on your CPU. A small layer for each question learns from your gold where you have it and from the engine's stored answers elsewhere. The output is a model folder, 194 KB here, that you can commit with the spec.
+The student's frozen encoder, [mdbr-leaf-mt](https://huggingface.co/MongoDB/mdbr-leaf-mt) unless you [choose another](#choose-the-encoder), runs on your CPU. A small layer for each question learns from your gold where you have it and from the engine's stored answers elsewhere. The output is a model folder, 388 KB here, that you can commit with the spec.
 
 Distillation also fits a calibration temperature using predictions on rows held out from each training fold. This helps its reported confidence track observed accuracy; `hunch test` still checks that claim on fresh rows. If the held-out answers contain too few mistakes to fit a temperature, confidence is left as it is. The command reports the rarest answer because a handful of examples may not teach the student that class well.
 
@@ -36,28 +37,28 @@ It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastemb
 A distilled model is an engine, `distilled:<folder>`, so every command measures it. On the 385 held-out messages, which it never saw:
 
 ```bash
-hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@55a07d9f --max-cost 0
+hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@1a70f2d8 --max-cost 0
 ```
 
 ```text
 intent (choice, 385 rows)
-  PASS accuracy 91.2% (raw source gold: 85.7%) (min 85%)
-  PASS calibration error 0.033 (raw source gold: 0.049) (max 0.05)
+  PASS accuracy 92.7% (raw source gold: 86.5%) (min 85%)
+  PASS calibration error 0.017 (raw source gold: 0.053) (max 0.05)
        dial   automated   wrong among automated
-       0.70       86.8%                    3.9%
-       0.80       81.0%                    1.6%
-       0.90       73.2%                    1.1%  ← act
-       0.95       66.2%                    0.8%
+       0.70       89.9%                    3.2%
+       0.80       85.2%                    2.4%
+       0.90       77.1%                    1.3%  ← act
+       0.95       68.1%                    0.8%
 ```
 
-On its own it is right 91.2% of the time, where Jev is right 97.9%. It knows which answers those are: at 0.9 and above it answers three messages in four, and gets about one in a hundred wrong. `distill` holds back a fifth of any gold rows it could have learned from and records what it trained on, so `test` and `diff` grade a distilled model only on rows it never saw. (Never saw means never saw that exact text: 3 of these 385 messages differ from a training message only in case or punctuation.)
+On its own it is right 92.7% of the time, where Jev is right 97.9%. It knows which answers those are: at 0.9 and above it answers three messages in four, and gets about one in a hundred wrong (4 of 297). `distill` holds back a fifth of any gold rows it could have learned from and records what it trained on, so `test` and `diff` grade a distilled model only on rows it never saw. (Never saw means never saw that exact text: 3 of these 385 messages differ from a training message only in case or punctuation.)
 
 ## Put the engine behind it
 
 `intent_distilled.yml` is `intent.yml` with the student in front and Jev behind it:
 
 ```yaml intent_distilled.yml
-model: distilled:distilled/intent@55a07d9f
+model: distilled:distilled/intent@1a70f2d8
 questions:
   intent:
     # type, instructions, criteria as in intent.yml
@@ -71,31 +72,141 @@ hunch test intent_distilled.yml --source banking77_holdout.csv --max-cost 0
 
 ```text
 intent (choice, 385 rows)
-  PASS estimated accuracy 95.5% (95% CI 88.3%–97.6%) from reviews of 60/343 agreeing rows, 42/42 disagreeing rows (min 85%)
-  PASS calibration error 0.032 (raw source gold: 0.054) (max 0.05)
-  PASS accuracy among auto-acted 99.1% on 88% of rows at act=0.9 (min 97%)
+  PASS estimated accuracy 95.5% (95% CI 88.3%–97.6%) from reviews of 60/342 agreeing rows, 43/43 disagreeing rows (min 85%)
+  PASS calibration error 0.030 (raw source gold: 0.058) (max 0.05)
+  PASS accuracy among auto-acted 98.8% on 88% of rows at act=0.9 (min 97%)
   PASS order stability: 0/300 answers flip (0.0%, 0 within noise band), mean |Δp| of original answer 0.000 (max flip rate 5%)
-  escalated to jev-1.13.0: 103/385 rows use its answer, 55 of them confident enough to act; right on 97/103 with gold
+  escalated to jev-1.13.0: 88/385 rows use its answer, 42 of them confident enough to act; right on 83/88 with gold
 ```
 
-Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. Nearly three messages in four (282 of 385) were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
+Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. More than three messages in four (297 of 385) were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
 
-The share that stays local grows with the answers you keep. Students trained on more of Jev's answers, measured on the same holdout with a script that calls hunch's own training, kept more:
+The share that stays local grows with the answers you keep, up to a point. Students trained on more of Jev's answers (the 770 development messages, then with 1,000 and with all 3,000 of the unlabelled ones added), measured on the same holdout by a script that calls hunch's own training:
 
 | Jev's answers learned from | answered locally at 0.9 | combined plain accuracy |
 | --- | --- | --- |
-| 770 | 59% | 97.7% |
-| 1,770 | 71% | 97.9% |
-| 3,770 | 72% | 97.7% |
+| 770 | 64.9% | 97.4% |
+| 1,770 | 79.5% | 97.7% |
+| 3,770 | 78.7% | 97.7% |
 
 Every run and every review adds to the store, so distilling again later keeps more of the work local.
 
+## Choose the encoder
+
+The student reads each row through a frozen encoder. `mdbr-leaf-mt` is the default, and `--encoder` picks another:
+
+```bash
+hunch distill intent.yml --source banking77_unlabeled.csv --encoder gte-modernbert-base
+```
+
+The four students below learned from the same 3,000 answers. Times are on one Apple M1 Pro's CPU, one row at a time, and every measurement is on English text.
+
+| | [mdbr-leaf-mt](https://huggingface.co/MongoDB/mdbr-leaf-mt) (default) | [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | [gte-modernbert-base](https://huggingface.co/Alibaba-NLP/gte-modernbert-base) | [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) |
+| --- | --- | --- | --- | --- |
+| `--encoder` | `mdbr-leaf-mt` | `minilm` | `gte-modernbert-base` | `embeddinggemma-2` |
+| Languages | English | English | English | 100+ |
+| Licence | Apache-2.0 | Apache-2.0 | Apache-2.0 | Apache-2.0 |
+| Reads up to | 512 tokens | 256 tokens | 2,048 tokens | 1,024 tokens |
+| Download, once | 92 MB | 90 MB | 600 MB | 350 MB |
+| Memory | 0.2 GB | 0.3 GB | 1.1 GB | 0.9 GB |
+| A new answer, 17-token message | 3 ms | 3 ms | 16 ms | 58 ms |
+| A new answer, 210-token shell command | 17 ms | 19 ms | 0.13 s | 0.2 s |
+| First answer in a fresh process | 0.3 s | 0.3 s | 0.7 s | 0.9 s |
+| **BANKING77, 385 held-out messages** | | | | |
+| Right on its own | 92.7% | 91.2% | 94.3% | 95.8% |
+| Answered locally at 0.9 | 77.1% | 73.2% | 79.5% | 77.7% |
+| Wrong among those | 4 of 297 | 3 of 282 | 5 of 306 | 2 of 299 |
+| Plain accuracy with Jev behind it | 97.7% | 97.7% | 97.4% | 97.9% |
+| **BANKING77, the 3,000 training messages** | | | | |
+| Answered locally at matched quality | 73.1% | 68.2% | 80.1% | 76.1% |
+| **Command guard, 1,268 commands** | | | | |
+| Confident misses, of 121 | 15 | 17 | 13 | 10 |
+| Answered locally at 0.9 | 82% | 84% | 89% | 88% |
+
+How to read it:
+
+- **The holdout is small.** On 385 messages a share moves about ±4.4 points by chance, so a four-point gap there is not a finding on its own.
+- **Matched quality** is the larger sample. Each of the 3,000 training messages is answered by a student trained without it, and each student's threshold is set where it agrees with Jev on 97% of what it answers. The encoders' confidences are calibrated differently, so shares at one fixed threshold compare less fairly. (Measured by a script that calls hunch's own training, as are the guard rows.)
+- **The command guard** is data whose labels no encoder has seen: three yes/no questions, 121 yes answers in all. Every command is answered by a student trained without it. A confident miss is a no at 0.9 or above where the panel, or Jev where the panel gave no verdict, said yes. A gap of a few misses is within chance.
+- **BANKING77 is a public benchmark.** An encoder that met it in training would look better here than on your data. Two checks for that found no sign of it for mdbr-leaf-mt, MiniLM and gte-modernbert-base, and could not rule it out for EmbeddingGemma 2.
+- **Other languages are untested.** Only EmbeddingGemma 2 is built for them.
+- **Long rows cost time.** gte-modernbert-base took 0.9 s for 1,024 tokens and 2.3 s for 2,048. The model itself accepts 8,192, which took 31 s and 8 GB here, so hunch stops at 2,048; EmbeddingGemma 2 accepts as many and hunch stops it at 1,024. Use [`clip`](/reference/spec) to send less.
+
+Measure on your own rows before choosing: a second `distill` and `hunch test --model` ask nothing.
+
+The model folder records its encoder, so `model: distilled:…` and `hunch test` work whichever one trained it, and a student distilled before the default changed keeps running on MiniLM. Each encoder is pinned to one revision and runs on the onnxruntime the `distill` extra already installs. hunch uses a compressed build only where it computes the same embedding everywhere: on an Apple chip, on the Intel code path and in a browser. EmbeddingGemma 2's 8-bit build did, on every row. The 8-bit builds of mdbr-leaf-mt (23 MB) and gte-modernbert-base (150 MB) did not: between the Apple chip and the Intel code path they differed on 43 and 205 of 385 rows, so hunch uses their full-precision builds.
+
+## Run it in a web page
+
+A student is a frozen encoder and one small layer per question, so a browser can run it. The answers it is sure of then never leave the visitor's machine, and only the rest reach your server.
+
+```bash
+hunch export intent_distilled.yml
+```
+
+```text
+intent_distilled: exported to distilled/intent@1a70f2d8/browser
+  student.json: 1 question, 443 KB; student.js runs it
+  the page fetches the mdbr-leaf-mt encoder from huggingface.co/MongoDB/mdbr-leaf-mt
+```
+
+`student.json` holds each question's layer, temperature and `act`, and how a row becomes the text the encoder reads. It holds no rows from your data. Serve both files with your page:
+
+```js
+import { load } from "./student.js";
+
+const student = await load("./student.json");
+await student.check();   // this browser answers as the exporting machine did, or it throws
+
+const { intent } = await student.answer({ text: "How do I link my card" });
+// { label: "card_linking", p: 0.9991, margin: 0.9988, route: "act" }
+
+const unsure = await student.answer({ text: "How do I locate my card?" });
+// unsure.intent: { label: "card_linking", p: 0.4402, margin: 0.1406, route: "review" }: below act, ask your server
+```
+
+`answer` takes the spec's state columns as strings and returns the student's own answer for each question, in the shape [`judge()`](/guides/use-in-your-app) uses. It never asks the teacher: where `judge()` with `escalate` would return the teacher's answer, the module returns the student's with `route: "review"`, and asking is up to your page. On the 385 held-out messages, in Chrome on an Apple M1 Pro, all four students gave the label and the route Python gives on every message; 6 of the 1,540 confidences differed, each by 0.0001. A new answer took:
+
+| | mdbr-leaf-mt | MiniLM | gte-modernbert-base | EmbeddingGemma 2 |
+| --- | --- | --- | --- | --- |
+| WebGPU | 11 ms | 11 ms | 24 ms | 33 ms |
+| WebAssembly, 4 threads | 7 ms | 7 ms | not measured | 188 ms |
+| WebAssembly, 1 thread | 22 ms | 22 ms | 0.2 s | 0.7 s |
+| Downloaded on the first visit | 92 MB | 90 MB | 600 MB | 350 MB |
+
+The module runs the two larger encoders on WebGPU where the browser has it, and the two small ones on WebAssembly. WebAssembly gets its threads only on a [cross-origin isolated](https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated) page. The encoder is kept in the browser's Cache storage after the first visit: loading then took 0.2 s for the two small encoders, 1.7 s for gte-modernbert-base and 1.2 s for EmbeddingGemma 2, against 2 to 3 s, 12 s and 7.9 s with the download. A private window has less room: Chrome's held about 1 GB in all, so the larger encoders may be downloaded again there. `check()` took 0.2 s, and 3.7 s for EmbeddingGemma 2 on one-thread WebAssembly, so call it once after loading or in a test, not before every answer.
+
+On WebAssembly the work runs on the page's main thread, and the page cannot scroll or respond until an answer is done. That is unnoticeable for the two small encoders. For the two larger ones in a browser without WebGPU it is 0.2 to 0.7 s on every answer. The module runs unchanged in a Web Worker, which keeps the page free:
+
+```js worker.js
+import { load } from "./student.js";
+
+const student = load("./student.json");
+onmessage = async ({ data }) => postMessage({ id: data.id, answers: await (await student).answer(data.row) });
+```
+
+```js
+const worker = new Worker("./worker.js", { type: "module" });
+worker.onmessage = ({ data }) => { /* data.answers.intent: { label, p, margin, route } */ };
+worker.postMessage({ id: 1, row: { text: "How do I link my card" } });
+```
+
+If you can't count on WebGPU, export a student on one of the small encoders: both are fast on every backend.
+
+Before you ship it:
+
+- **A visitor can change the answer.** The student runs on their machine, and `student.json` is public: anyone can read it and try inputs until one gets through. That is fine for a convenience, like routing a message or suggesting a category. For a decision that protects something (moderation, fraud, eligibility, a command guard), judge the row on your server and treat the browser's answer as a preview, or keep the student on the server.
+- **The teacher needs your server.** A key in a page is public, so a `review` goes to an endpoint of yours that asks the teacher: [hunch-server](/reference/server)'s `POST /v1/judge`, or your own route calling `judge()`. It sees only the rows the student was unsure of.
+- **The page fetches from two other hosts.** By default the ONNX runtime and tokenizer library come from jsdelivr and the encoder's files from Hugging Face, each at a pinned version. To serve everything yourself, pass `load(url, { files: "/models/mdbr-leaf-mt/", ort, Tokenizer })`: a folder with the encoder's files, onnxruntime-web's bundle for the backend in use (`ort.wasm` or `ort.webgpu`), and the tokenizer library's class. The page then asks no other host.
+- **Some specs are refused.** The module repeats what Python does to a row: line endings, `clip`, and the column layout. `redact`, `chain` and a judgment that reads another judgment are not reproduced, so `export` stops on them. A `where` filter is yours to apply: the module answers every row it is given.
+- **Export again** after distilling again or changing `act`.
+
 ## When not to use it
 
-A student learns an answer from examples of it. When one answer is rare and missing it is costly, a few thousand rows aren't enough. The [command guard](/guides/guard-your-agent) is that case: 2% of shell commands need a person, so its student saw only 11 destructive commands. Measured by a script on commands the panel had labelled and the student never saw, the student with Jev behind it (act 0.9) let through 2 of 6 destructive commands and 1 of 12 that send data out, where Jev alone let through none. `distill` flags the rare answers; `hunch test --model distilled:…` shows the misses on the dial's "act on no" side. For a guard like that, keep the engine until the store holds many more of the rare answer.
+A student learns an answer from examples of it. When one answer is rare and missing it is costly, a few thousand rows aren't enough. The [command guard](/guides/guard-your-agent) is that case: 2% of shell commands need a person, so its student saw only 11 destructive commands. Measured by a script on commands the panel had labelled and the student never saw, a MiniLM student with Jev behind it (act 0.9) let through 2 of 6 destructive commands and 1 of 12 that send data out, where Jev alone let through none. Another encoder narrows this and does not close it: with every command answered by a student trained without it, the students said no at 0.9 or above, where Jev is never asked, to between 10 and 17 of the guard's 121 yes answers ([the table above](#choose-the-encoder)). `distill` flags the rare answers; `hunch test --model distilled:…` shows the misses on the dial's "act on no" side. For a guard like that, keep the engine until the store holds many more of the rare answer.
 
 A distilled model answers only the questions it was trained on, word for word. Change a question and it refuses until you distill again, and `hunch diff` against the old engine shows what the new student changed.
 
 ## Speed and cost
 
-Inside a running app, a new answer takes about 11 ms: the encoder and the linear layer, on the CPU. A fresh process pays about 0.3 s to load the encoder first, so a per-command hook gains no speed, only cost and network. Distilled answers cost nothing and are stored like any other, so a row seen before comes from the store.
+Inside a running app, a new answer takes 3 ms for a short message and 17 ms for a long shell command with the default encoder: the encoder and the linear layer, on the CPU. A fresh process pays about 0.3 s to load the encoder first, so a per-command hook gains no speed, only cost and network. The larger encoders take longer on both counts (see [Choose the encoder](#choose-the-encoder)). Distilled answers cost nothing and are stored like any other, so a row seen before comes from the store.
