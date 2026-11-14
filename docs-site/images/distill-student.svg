@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 410" role="img" aria-labelledby="title desc">
+  <title id="title">Inside a student: a ready-made encoder reads the message, and one small trained layer decides</title>
+  <desc id="desc">The message My card hasn't arrived yet goes into the encoder, a ready-made model that is downloaded once and never changed. It comes out as a list of 1,024 numbers. One small layer, the part hunch distill trains, turns those numbers into a probability for each of the 77 possible answers: card_arrival 0.94, card_delivery_estimate 0.05, and 0.00 for the other 75 together.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .name { font-size: 19px; font-weight: 700; }
+    .detail { font-size: 15px; }
+    .small { font-size: 13px; }
+    .mid { text-anchor: middle; }
+    .end { text-anchor: end; }
+    .box { fill: #F7F8F5; stroke: #B8C9CA; stroke-width: 2; }
+    .local { fill: #E7EFF0; stroke: #405A60; stroke-width: 2; }
+    .remote { fill: #FFF2EB; stroke: #B7654D; stroke-width: 2; }
+    .line { fill: none; stroke: #607C81; stroke-width: 2.2; marker-end: url(#tip); }
+    .num { fill: #607C81; }
+    .bar { fill: #405A60; }
+    .axis { stroke: #B8C9CA; stroke-width: 1.5; }
+  </style>
+  <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="600" height="410" fill="#FFFFFF"/>
+  <rect x="10" y="26" width="170" height="108" rx="12" class="box"/>
+  <text x="26" y="62" class="name">A message</text><text x="26" y="90" class="detail">“My card hasn't</text><text x="26" y="112" class="detail">arrived yet”</text>
+  <path d="M180 80 H206" class="line"/>
+  <rect x="210" y="26" width="170" height="108" rx="12" class="box"/>
+  <text x="226" y="62" class="name">Encoder</text><text x="226" y="90" class="detail">reads the text,</text><text x="226" y="112" class="detail">gives numbers</text>
+  <text x="295" y="156" class="small mid">ready-made · 92 MB · never changed</text>
+  <path d="M380 80 H406" class="line"/>
+  <text x="500" y="28" class="detail mid" font-weight="700">1,024 numbers</text>
+  <path d="M414 80 H586" class="axis"/>
+  <rect x="421" y="80.0" width="6" height="26.6" class="num"/><rect x="431" y="80.0" width="6" height="3.0" class="num"/><rect x="441" y="80.0" width="6" height="8.9" class="num"/><rect x="451" y="74.6" width="6" height="5.4" class="num"/><rect x="461" y="80.0" width="6" height="1.5" class="num"/><rect x="471" y="80.0" width="6" height="14.3" class="num"/><rect x="481" y="58.3" width="6" height="21.7" class="num"/><rect x="491" y="69.7" width="6" height="10.3" class="num"/><rect x="501" y="70.6" width="6" height="9.4" class="num"/><rect x="511" y="46.0" width="6" height="34.0" class="num"/><rect x="521" y="69.2" width="6" height="10.8" class="num"/><rect x="531" y="67.7" width="6" height="12.3" class="num"/><rect x="541" y="80.0" width="6" height="1.0" class="num"/><rect x="551" y="80.0" width="6" height="10.8" class="num"/><rect x="561" y="80.0" width="6" height="11.8" class="num"/><rect x="571" y="78.0" width="6" height="2.0" class="num"/>
+  <text x="500" y="132" class="small mid">the first 16</text>
+  <path d="M500 142 V176 H95 V208" class="line"/>
+  <rect x="10" y="212" width="170" height="108" rx="12" class="local"/>
+  <text x="26" y="248" class="name">Small layer</text><text x="26" y="276" class="detail">weighs them,</text><text x="26" y="298" class="detail">decides</text>
+  <text x="95" y="342" class="small mid">trained by hunch distill</text><text x="95" y="360" class="small mid">one per question · 391 KB</text>
+  <path d="M180 266 H206" class="line"/>
+  <rect x="210" y="194" width="380" height="172" rx="12" class="box"/>
+  <text x="226" y="228" class="name">Probabilities</text><text x="574" y="228" class="small end">one for each of 77 answers</text>
+  <text x="226" y="258" class="detail">card_arrival</text>
+  <rect x="226" y="266" width="273.9" height="9" rx="2" class="bar"/><text x="574" y="276" class="detail end">0.94</text>
+  <text x="226" y="302" class="detail">card_delivery_estimate</text>
+  <rect x="226" y="310" width="15.7" height="9" rx="2" class="bar"/><text x="574" y="320" class="detail end">0.05</text>
+  <text x="226" y="346" class="detail">the other 75 together</text>
+  <rect x="226" y="351" width="1.5" height="9" class="bar"/><text x="574" y="356" class="detail end">0.00</text>
+  <text x="10" y="396" class="detail">The encoder is the same for every question. Only the small layer learned yours.</text>
+</svg>

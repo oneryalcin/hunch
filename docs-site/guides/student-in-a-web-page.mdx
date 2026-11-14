@@ -1,0 +1,131 @@
+---
+title: "Run a student in a web page"
+description: "Export a distilled student so a visitor's browser answers what it is sure of, and your server answers the rest."
+---
+
+A [distilled student](/guides/distill) is a ready-made encoder and one small layer per question. That is little enough for a browser to run. The answers the student is sure of then never leave the visitor's machine, and only the rest reach your server.
+
+<Warning>
+A visitor can change what their own browser answers. Never let a browser student be the only check on a decision that protects something. [Before you ship it](#before-you-ship-it) explains.
+</Warning>
+
+## Export the student
+
+```bash
+hunch export intent_distilled.yml
+```
+
+```text
+intent_distilled: exported to distilled/intent@1a70f2d8/browser
+  student.json: 1 question, 443 KB; student.js runs it
+  the page fetches the mdbr-leaf-mt encoder from huggingface.co/MongoDB/mdbr-leaf-mt
+```
+
+`export` writes two files into the student's folder. Serve both with your page.
+
+- **`student.json`** holds each question's layer, temperature and `act`, and how a row becomes the text the encoder reads. It holds no rows from your data.
+- **`student.js`** is the module that answers with it.
+
+Export again after you distill again or change `act`.
+
+## Answer in the page
+
+```js
+import { load } from "./student.js";
+
+const student = await load("./student.json");
+await student.check();   // this browser answers as the exporting machine did, or it throws
+
+const { intent } = await student.answer({ text: "How do I link my card" });
+// { label: "card_linking", p: 0.9991, margin: 0.9988, route: "act" }
+
+const unsure = await student.answer({ text: "How do I locate my card?" });
+// unsure.intent: { label: "card_linking", p: 0.4402, margin: 0.1406, route: "review" }: below act, ask your server
+```
+
+`load` fetches the student and its encoder.
+
+`check` runs a few made-up rows that the export carries. It compares the results with the ones the exporting machine got, and throws if this browser answers differently.
+
+`answer` takes one row: an object with the columns your spec lists under `state`, each as a string. It returns the student's own answer for each question, in the shape [`judge()`](/reference/python#judge) uses.
+
+- **`label`** is the answer, and **`p`** is the student's confidence in it.
+- **`margin`** is how far the answer is from the decision boundary. For a choice, that is how far it is ahead of the runner-up.
+- **`route`** is `act` when the confidence clears the question's `act`, and `review` when it does not.
+
+## Send the unsure answers to your server
+
+The module never asks the teacher. Where `judge()` with `escalate` would return the teacher's answer, the module returns the student's with `route: "review"`. What happens next is up to your page.
+
+The teacher needs an API key, and a key in a page is public. So a `review` goes to an endpoint of yours that asks the teacher: [hunch-server](/reference/server)'s `POST /v1/judge`, or your own route calling `judge()`. That endpoint sees only the rows the student was unsure of.
+
+## The browser gives Python's answers
+
+We ran the students of all four [encoders](/guides/distill#choose-the-encoder) on the 385 held-out messages, in Chrome on an Apple M1 Pro. Every label and every route matched the ones Python gives. 6 of the 1,540 confidences differed, each by 0.0001.
+
+## How fast it answers
+
+A browser can run the encoder in two ways. WebGPU uses the graphics card. WebAssembly uses the processor and works in every browser. A new answer took:
+
+| | mdbr-leaf-mt | MiniLM | gte-modernbert-base | EmbeddingGemma 2 |
+| --- | --- | --- | --- | --- |
+| WebGPU | 11 ms | 11 ms | 24 ms | 33 ms |
+| WebAssembly, 4 threads | 7 ms | 7 ms | not measured | 188 ms |
+| WebAssembly, 1 thread | 22 ms | 22 ms | 0.2 s | 0.7 s |
+| Downloaded on the first visit | 92 MB | 90 MB | 600 MB | 350 MB |
+
+The module runs the two larger encoders on WebGPU where the browser has it, and the two small ones on WebAssembly.
+
+WebAssembly gets its threads only on a [cross-origin isolated](https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated) page. On any other page it runs on one.
+
+## The encoder downloads once
+
+After the first visit, the encoder is kept in the browser's Cache storage. Loading the student took:
+
+| | mdbr-leaf-mt and MiniLM | gte-modernbert-base | EmbeddingGemma 2 |
+| --- | --- | --- | --- |
+| First visit, with the download | 2 to 3 s | 12 s | 7.9 s |
+| Later visits | 0.2 s | 1.7 s | 1.2 s |
+
+A private window has less room. Chrome's held about 1 GB in all, so the larger encoders may be downloaded again there.
+
+`check()` took 0.2 s, and 3.7 s for EmbeddingGemma 2 on one-thread WebAssembly. Call it once after loading or in a test, not before every answer.
+
+## Keep the page responsive
+
+On WebAssembly, an answer is computed on the page's main thread. Until it is done, the page cannot scroll or respond.
+
+With the two small encoders that is unnoticeable. With the two larger ones, in a browser without WebGPU, it is 0.2 to 0.7 s on every answer.
+
+The module runs unchanged in a Web Worker, which keeps the page free:
+
+```js worker.js
+import { load } from "./student.js";
+
+const student = load("./student.json");
+onmessage = async ({ data }) => postMessage({ id: data.id, answers: await (await student).answer(data.row) });
+```
+
+```js
+const worker = new Worker("./worker.js", { type: "module" });
+worker.onmessage = ({ data }) => { /* data.answers.intent: { label, p, margin, route } */ };
+worker.postMessage({ id: 1, row: { text: "How do I link my card" } });
+```
+
+If you can't count on WebGPU, export a student on one of the small encoders. Both are fast either way.
+
+## Before you ship it
+
+**A visitor can change the answer.** The student runs on their machine, and `student.json` is public. Anyone can read it and try inputs until one gets through. That is fine for a convenience, like routing a message or suggesting a category. For a decision that protects something, such as moderation, fraud, eligibility or a command guard, judge the row on your server and treat the browser's answer as a preview. Or keep the student on the server.
+
+**The page fetches from two other hosts.** By default the ONNX runtime and the tokenizer library come from jsdelivr, and the encoder's files come from Hugging Face, each at a pinned version. To serve everything yourself, pass three things to `load`:
+
+```js
+const student = await load("./student.json", { files: "/models/mdbr-leaf-mt/", ort, Tokenizer });
+```
+
+`files` is a folder with the encoder's files. `ort` is onnxruntime-web's bundle for the backend in use, `ort.wasm` or `ort.webgpu`. `Tokenizer` is the tokenizer library's class. The page then asks no other host.
+
+**Some specs are refused.** The module repeats what Python does to a row: line endings, `clip`, and the column layout. It does not reproduce `redact`, `chain`, or a judgment that reads another judgment, so `export` stops on those.
+
+**A `where` filter is yours to apply.** The module answers every row it is given.

@@ -1,17 +1,101 @@
 ---
 title: "Distill a decision into a local model"
-description: "Train a small model on the answers your engine already gave, measure it like any engine, and let it answer what it is sure of while the engine answers the rest."
+description: "How a small local model learns a decision from the answers your engine already gave, how to train and test one, and when to leave the work with the engine."
 ---
 
-Every answer your engine gives is kept in the store, under its exact input. After a few thousand of them, the store holds something valuable: a labelled dataset for that exact question, in your data, with your reviews on top. `hunch distill` turns it into a small model that runs on your machine in a few milliseconds, with no API call.
+import { ActDial } from "/snippets/act-dial.jsx";
+import { MessageMap } from "/snippets/message-map.jsx";
+import { MESSAGE_MAP, STUDENT_ROWS } from "/snippets/distill-data.jsx";
 
-A small model may be less accurate than the engine that taught it. Give it the rows on which it clears your `act` threshold, and send the rest to the original engine. Test both routes on held-out rows before deciding how much work to keep local.
+![A hand copies check marks from a large ledger into a small notebook. A note with a question mark lies beside the ledger.](/images/distill-copying.webp)
 
-![A local student answers first. At or above the confidence threshold its answer is used; below it, Jev answers instead. Both paths are measured on held-out rows.](/images/distill-fallback.svg)
+A new colleague on a support desk doesn't answer every ticket on day one. They watch a few thousand get sorted, then take the easy ones and pass the odd ones back.
 
-## Distill
+`hunch distill` trains a small model the same way. The experienced colleague is your engine, the model that answers your questions today. On this page that is Jev. The sorted tickets are already in your store, because hunch keeps every answer. The small model is called the student. It runs on your machine in about 3 milliseconds and costs nothing per answer.
 
-The [BANKING77 spec](/cookbooks/banking-intents) sorts bank customers' messages into 77 intents. Jev had answered 3,000 unlabelled messages, kept in the store. Distilling asks nothing:
+The example on this page sorts a bank customer's message into one of 77 intents, such as `card_arrival` or `change_pin`. On 385 messages it had never seen, the student kept 297 for itself, three in four, and got 4 of them wrong. Jev answered the other 88. Graded against a reviewed answer key, the two together were right on 97.7% of the messages. Jev alone was right on 97.9%.
+
+How does a model that small get that close?
+
+<Note>
+New to hunch? A [spec](/concepts#a-spec-writes-the-questions-down) is a file of questions, a [row](/concepts#a-row-is-one-thing-you-judge) is one thing you ask them about, and an [engine](/concepts#an-engine-answers-the-questions) is the model that answers. If you already know what distillation is, skip to [Train a student](#train-a-student).
+</Note>
+
+## Your store already holds the lessons
+
+Every time hunch asks your engine a question, it keeps the answer in the [store](/concepts#every-answer-is-stored-under-its-exact-input), next to the exact row it was asked about.
+
+After a few thousand rows, the store holds a pile of worked examples. Each one says: here is a message, and here is how Jev answered it. A worked example is what a learner needs.
+
+Training a small model to copy a large model's answers is called distillation. The large model is the teacher. The small one is the student.
+
+Some rows carry a better answer than the teacher's. hunch calls an answer you trust [gold](/concepts#gold-is-the-answer-you-trust). Gold comes from an answer key in your data, or from your own verdict in `hunch review`. Where a row has gold, the student learns the gold answer. Everywhere else it learns the teacher's.
+
+![Every answer the engine gave is in your store. hunch distill turns stored rows and their answers into worked examples and trains the student. One in five rows that have gold is held back, never shown to the student, and used by hunch test to grade it.](/images/distill-lessons.svg)
+
+One in five of the rows that have gold is held back and never shown to the student. A student has to be graded on rows it has not learned from, and these are kept for that.
+
+Distilling only reads the store. It asks the engine nothing, so it costs nothing.
+
+## A student reads, then decides
+
+A student has two parts.
+
+The first part reads. It is a ready-made model called an encoder, and it turns a message into a list of 1,024 numbers. hunch downloads the encoder once and never changes it. That is what people mean when they call an encoder frozen.
+
+The second part decides. For each question in your spec, hunch trains one small layer. The layer weighs the 1,024 numbers and gives a probability to each possible answer.
+
+![The message "My card hasn't arrived yet" goes into the encoder, which is ready-made and never changed. It comes out as 1,024 numbers. One small layer, trained by hunch distill, turns them into a probability for each of the 77 answers: card_arrival 0.94, card_delivery_estimate 0.05, and 0.00 for the other 75 together.](/images/distill-student.svg)
+
+The layer is the only part `distill` trains. That is why a finished student is two files, 391 KB together, small enough to commit beside the spec. The encoder is a separate 92 MB download, shared by every student that reads with it.
+
+## Similar messages land close together
+
+Why is one small layer enough to sort bank messages into 77 intents? Because the encoder has already done most of the work.
+
+An encoder gives similar lists of numbers to messages that mean similar things. "Where is my card?" and "My card hasn't arrived yet" score 0.87 for closeness, where 1 means identical. "Where is my card?" and "How do I change my PIN?" score 0.66.
+
+You can see this. Below are 206 of the messages the student learned from, each drawn as one mark. Its position comes from its 1,024 numbers, flattened to two so that they fit on a page. Its shape and colour show the intent Jev gave it.
+
+<MessageMap map={MESSAGE_MAP} />
+
+Messages about exchange rates gather in one place, and failed top-ups in another. Nothing in the encoder is about your question. It places messages by what they mean, and the groups follow.
+
+The two card intents overlap. One is about a card that has not arrived, and the other is about how long delivery takes. Customers ask both in much the same words.
+
+Now the layer's job is easy to describe. It learns where one group ends and the next begins.
+
+The picture understates how well that works, because two numbers can hold only part of what 1,024 do. On this flat map, 87.9% of the messages sit nearest the centre of their own group. With all 1,024 numbers, 96.1% do.
+
+## A student knows when it is unsure
+
+The layer doesn't pick one answer. It gives every possible answer a probability, and the probabilities add up to 1. The student's answer is the most probable one, and that probability is its confidence.
+
+For "My card hasn't arrived yet", the student gives `card_arrival` 0.94 and `card_delivery_estimate` 0.05. It is sure.
+
+For "When will my card get here?", it gives `card_delivery_estimate` 0.74 and `card_arrival` 0.25. The message could belong to either of the two overlapping groups, and the student's numbers say so.
+
+A confidence is useful only if it is honest. When a student says 0.9 on a hundred answers, about ninety of them should be right. A model whose confidence matches how often it is right is called calibrated.
+
+`distill` calibrates the student for you. It looks at the student's confidence on rows it was not trained on, then fits one number, called a temperature, that scales the confidence up or down to match. The detail is under [How it was measured](#how-it-was-measured).
+
+An honest confidence lets you set a bar. At or above the bar, you use the student's answer. Below it, you ask the teacher. hunch calls that bar [`act`](/concepts#act-sets-a-bar-for-review), and you set it for each question in the spec.
+
+Whether the student's confidence is honest is still a claim at this point. The test, after training, checks it on fresh rows.
+
+## Train a student
+
+The example is the [BANKING77 spec](/cookbooks/banking-intents), in `prototype/examples/banking77` of the [hunch repository](https://github.com/oneryalcin/hunch). An earlier `hunch run` had sent 3,000 unlabelled messages to Jev, so its answers were in the store.
+
+On your own spec, do the same first. `hunch run` it on the rows you have, so that the store holds answers to learn from.
+
+Install the extra once. It brings fastembed and its runtime: onnxruntime, tokenizers and about 20 other packages.
+
+```bash
+uv add "hunch-ai[distill]"
+```
+
+Then distill:
 
 ```bash
 cd prototype/examples/banking77
@@ -26,15 +110,21 @@ measure it (free, local): hunch test intent.yml --model distilled:distilled/inte
 use it: model: distilled:distilled/intent@1a70f2d8, with escalate: {model: jev-1.13.0} and act on each question, so answers it isn't sure of go to jev-1.13.0
 ```
 
-The student's frozen encoder, [mdbr-leaf-mt](https://huggingface.co/MongoDB/mdbr-leaf-mt) unless you [choose another](#choose-the-encoder), runs on your CPU. A small layer for each question learns from your gold where you have it and from the engine's stored answers elsewhere. The output is a model folder, 388 KB here, that you can commit with the spec.
+Here is what each line says.
 
-Distillation also fits a calibration temperature using predictions on rows held out from each training fold. This helps its reported confidence track observed accuracy; `hunch test` still checks that claim on fresh rows. If the held-out answers contain too few mistakes to fit a temperature, confidence is left as it is. The command reports the rarest answer because a handful of examples may not teach the student that class well.
+- **`encoding 3000 rows with mdbr-leaf-mt`** The encoder reads each message once. On its first run it downloads, 92 MB, to `~/.cache/hunch/encoders` or to the folder `FASTEMBED_CACHE_PATH` names.
+- **`distilled to distilled/intent@1a70f2d8`** This is the student's folder. Its name ends in a hash of its contents, so a different student gets a different folder.
+- **`3000 answers, 77 classes`** This is what the layer learned from. A class is one possible answer.
+- **`rarest: 'contactless_not_working' (7)`** Only seven of the 3,000 lessons were about this intent. hunch warns below 30, because a student rarely learns an answer from so few examples.
+- **The last two lines** are the next two steps: measure the student, then use it.
 
-It needs the `distill` extra: `uv add "hunch-ai[distill]"`, which brings fastembed and its runtime (onnxruntime, tokenizers and about 20 other packages). The encoder downloads once, about 90 MB, to `~/.cache/hunch/encoders` (or `FASTEMBED_CACHE_PATH`).
+## Test it on rows it never saw
 
-## Measure it like any engine
+A student can memorise its lessons. Asked about a message it trained on, it looks better than it is. An honest test uses rows the student has never seen, the way an exam uses new questions.
 
-A distilled model is an engine, `distilled:<folder>`, so every command measures it. On the 385 held-out messages, which it never saw:
+That is what held-back rows are for. In this example the 3,000 lessons had no gold, so there was nothing to hold back. The example keeps 385 other messages aside for the test instead, each with an answer key.
+
+A distilled model is an engine like any other, named `distilled:<folder>`, so `hunch test` measures it. `--max-cost 0` forbids any paid request, so the test cannot cost anything.
 
 ```bash
 hunch test intent.yml --source banking77_holdout.csv --model distilled:distilled/intent@1a70f2d8 --max-cost 0
@@ -51,11 +141,29 @@ intent (choice, 385 rows)
        0.95       68.1%                    0.8%
 ```
 
-On its own it is right 92.7% of the time, where Jev is right 97.9%. It knows which answers those are: at 0.9 and above it answers three messages in four, and gets about one in a hundred wrong (4 of 297). `distill` holds back a fifth of any gold rows it could have learned from and records what it trained on, so `test` and `diff` grade a distilled model only on rows it never saw. (Never saw means never saw that exact text: 3 of these 385 messages differ from a training message only in case or punctuation.)
+Read it from the top.
 
-## Put the engine behind it
+**Accuracy.** Answering every message by itself, the student is right on 92.7%. Jev is right on 97.9% of the same messages. The student is the weaker model, as you would expect.
 
-`intent_distilled.yml` is `intent.yml` with the student in front and Jev behind it:
+The 86.5% in brackets is the score against the dataset's original answer key. Reviewers found that key wrong on some messages, and hunch grades against their corrections. The [cookbook](/cookbooks/banking-intents) tells that story.
+
+**Calibration error.** This is the average gap between how sure the student said it was and how often it was right. Here it is 0.017, under the spec's limit of 0.05, so the student's confidence held up on these rows.
+
+**The dial.** This table shows what each setting of `act` would do. With `act` at 0.90, the student is confident enough on 77.1% of the messages, and wrong on 1.3% of those, which is 4 of 297. The arrow marks the `act` the spec has now.
+
+Look at where the mistakes are. The student is wrong on 28 of the 385 messages, and it is unsure about most of those 28. With `act` at 0.90, 24 of them fall below the bar, where the teacher will answer instead. That is why a weaker model can do most of the work.
+
+Drag the bar and watch the trade. Each dot is one of the 385 messages.
+
+<ActDial rows={STUDENT_ROWS} initial={0.9} student />
+
+A higher bar leaves the student fewer messages and fewer mistakes. A lower bar does the opposite. The dial only describes these 385 messages, so choose the bar on rows like the ones your app will see.
+
+You don't have to keep track of which rows a student has seen. `distill` records every row it trained on, and `hunch test` grades a student only on the others.
+
+## Put the teacher behind it
+
+The student should answer what it is sure of, and the teacher should answer the rest. Two lines in the spec do that. `intent_distilled.yml` is `intent.yml` with the student in front and Jev behind it:
 
 ```yaml intent_distilled.yml
 model: distilled:distilled/intent@1a70f2d8
@@ -65,6 +173,12 @@ questions:
     act: 0.90
     escalate: {model: jev-1.13.0}    # below 0.90, the teacher answers
 ```
+
+[`act`](/concepts#act-sets-a-bar-for-review) is the bar. `escalate` names the model that answers below it.
+
+![A local student answers first. At or above act its answer is used; below it, Jev answers instead. Both paths are measured on held-out rows.](/images/distill-fallback.svg)
+
+Test the pair as you tested the student:
 
 ```bash
 hunch test intent_distilled.yml --source banking77_holdout.csv --max-cost 0
@@ -79,27 +193,63 @@ intent (choice, 385 rows)
   escalated to jev-1.13.0: 88/385 rows use its answer, 42 of them confident enough to act; right on 83/88 with gold
 ```
 
-Jev alone, measured the same way, is estimated at 95.8% (95% CI 88.7%–97.9%); on plain accuracy the two are 97.9% and 97.7%, one message apart. More than three messages in four (297 of 385) were answered on this machine. Behind a distilled model, an escalated answer always replaces the student's: the teacher is the better model, so every doubt goes to it.
+Start with the last line. 88 of the 385 messages went to Jev. The other 297, more than three in four, were answered on this machine.
 
-The share that stays local grows with the answers you keep, up to a point. Students trained on more of Jev's answers (the 770 development messages, then with 1,000 and with all 3,000 of the unlabelled ones added), measured on the same holdout by a script that calls hunch's own training:
+The third line counts the answers confident enough to act on: the student's 297, and 42 of Jev's 88. Together that is 88% of the messages, and 98.8% of those answers were right. (The two 88s are a coincidence.)
 
-| Jev's answers learned from | answered locally at 0.9 | combined plain accuracy |
+Was anything lost by putting the student in front? Graded against the reviewed answer key, the pair was right on 97.7% of the messages and Jev alone on 97.9%. That is one message apart.
+
+That grading trusts the answer key wherever no reviewer has looked. The first line of the output does not. It is an [estimate](/reference/how-the-numbers-work#estimated-accuracy) built from the reviewed rows alone, and it puts the pair at 95.5%. Jev alone, measured the same way, is at 95.8%. Both come with a range of about 88% to 98%, because 385 messages is a small sample.
+
+The other lines are the spec's remaining [tests](/reference/spec#tests).
+
+Escalation works a little differently behind a student. Between two ordinary engines, the second answer replaces the first only if it clears `act` itself. Behind a student, the teacher's answer always replaces it, because the teacher is the better model.
+
+## A bigger store teaches a better student, up to a point
+
+How many answers does a student need? We trained three students on growing piles of Jev's answers and tested each on the same 385 messages.
+
+| Jev's answers learned from | answered locally at 0.9 | right, with Jev behind it |
 | --- | --- | --- |
 | 770 | 64.9% | 97.4% |
 | 1,770 | 79.5% | 97.7% |
 | 3,770 | 78.7% | 97.7% |
 
-Every run and every review adds to the store, so distilling again later keeps more of the work local.
+A thousand more answers moved the local share from 65% to 80%. The two thousand after that changed nothing you could measure on 385 messages.
+
+Every run and every review adds to your store. Both `hunch distill` and `hunch test --model distilled:…` are free to repeat, so you can train a newer student and check whether it keeps more.
+
+## When a student is the wrong tool
+
+**A rare answer that is costly to miss.** The [command guard](/guides/guard-your-agent) decides whether a shell command needs a person before it runs. About 2% of commands do, so its student had learned from only 11 destructive commands. We tested that student, with Jev behind it, on commands it had never seen and that a [panel of reviewers](/cookbooks/command-guard) had labelled. It let through 2 of 6 destructive commands and 1 of 12 that send data out. Jev alone let through none.
+
+That student read with the MiniLM encoder. hunch has four [encoders](#choose-the-encoder), and a different one narrows the gap without closing it. In a larger check over all 1,268 of the guard's commands, its three questions had 121 yes answers between them. Depending on the encoder, the student said a confident no to between 10 and 17 of those. At that confidence Jev is never asked, so nothing catches the miss.
+
+`distill` flags rare answers when it trains, and `hunch test --model distilled:…` shows how many confident answers were wrong. For a guard like that, keep the engine until the store holds many more of the rare answer.
+
+**An answer that hangs on an exact detail.** In the [product matching cookbook](/cookbooks/product-matching), a student barely beat a coin flip at telling matching listings from different ones. It reads both listings as one piece of text, and loses whether `EX85` and `EX81` are the same code.
+
+**A question you have changed.** A student answers only the questions it was trained on, word for word. Change a question and the student refuses to answer until you distill again. [`hunch diff`](/guides/change-a-spec) against the old engine then shows which answers the new student changed.
 
 ## Choose the encoder
 
-The student reads each row through a frozen encoder. `mdbr-leaf-mt` is the default, and `--encoder` picks another:
+The student on this page reads with `mdbr-leaf-mt`, the default. hunch can use three other encoders, and `--encoder` picks one:
 
 ```bash
 hunch distill intent.yml --source banking77_unlabeled.csv --encoder gte-modernbert-base
 ```
 
-The four students below learned from the same 3,000 answers. Times are on one Apple M1 Pro's CPU, one row at a time, and every measurement is on English text.
+Three questions settle the choice for most specs.
+
+**Is your text in English?** Three of the four encoders are built for English. For other languages, use `embeddinggemma-2`. Nothing on this page was measured on text in another language.
+
+**How long is a row?** An encoder reads up to a fixed number of tokens, and a token is a word or a piece of one. It ignores anything past its limit. The default reads 512 tokens, `embeddinggemma-2` reads 1,024 and `gte-modernbert-base` reads 2,048.
+
+**How long can an answer take?** The default answers a short message in 3 ms and uses 0.2 GB of memory. The two larger encoders take 16 to 58 ms and about 1 GB.
+
+If none of these moves you, stay on the default. To compare two encoders on your own rows, distill with each and run `hunch test --model` on both. Both steps are free.
+
+Here is everything we measured. The four students learned from the same 3,000 answers. Times are on one Apple M1 Pro's CPU, one row at a time, and every measurement is on English text.
 
 | | [mdbr-leaf-mt](https://huggingface.co/MongoDB/mdbr-leaf-mt) (default) | [MiniLM](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | [gte-modernbert-base](https://huggingface.co/Alibaba-NLP/gte-modernbert-base) | [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2) |
 | --- | --- | --- | --- | --- |
@@ -113,100 +263,101 @@ The four students below learned from the same 3,000 answers. Times are on one Ap
 | A new answer, 210-token shell command | 17 ms | 19 ms | 0.13 s | 0.2 s |
 | First answer in a fresh process | 0.3 s | 0.3 s | 0.7 s | 0.9 s |
 | **BANKING77, 385 held-out messages** | | | | |
-| Right on its own | 92.7% | 91.2% | 94.3% | 95.8% |
+| Right by itself | 92.7% | 91.2% | 94.3% | 95.8% |
 | Answered locally at 0.9 | 77.1% | 73.2% | 79.5% | 77.7% |
 | Wrong among those | 4 of 297 | 3 of 282 | 5 of 306 | 2 of 299 |
-| Plain accuracy with Jev behind it | 97.7% | 97.7% | 97.4% | 97.9% |
-| **BANKING77, the 3,000 training messages** | | | | |
+| Right, with Jev behind it | 97.7% | 97.7% | 97.4% | 97.9% |
+| **BANKING77, 3,000 messages, each answered by a student trained without it** | | | | |
 | Answered locally at matched quality | 73.1% | 68.2% | 80.1% | 76.1% |
 | **Command guard, 1,268 commands** | | | | |
 | Confident misses, of 121 | 15 | 17 | 13 | 10 |
 | Answered locally at 0.9 | 82% | 84% | 89% | 88% |
 
-How to read it:
+The holdout is small. On 385 messages a share moves about 4.4 points up or down by chance, so no gap between encoders in that block is a finding by itself.
 
-- **The holdout is small.** On 385 messages a share moves about ±4.4 points by chance, so a four-point gap there is not a finding on its own.
-- **Matched quality** is the larger sample. Each of the 3,000 training messages is answered by a student trained without it, and each student's threshold is set where it agrees with Jev on 97% of what it answers. The encoders' confidences are calibrated differently, so shares at one fixed threshold compare less fairly. (Measured by a script that calls hunch's own training, as are the guard rows.)
-- **The command guard** is data whose labels no encoder has seen: three yes/no questions, 121 yes answers in all. Every command is answered by a student trained without it. A confident miss is a no at 0.9 or above where the panel, or Jev where the panel gave no verdict, said yes. A gap of a few misses is within chance.
-- **BANKING77 is a public benchmark.** An encoder that met it in training would look better here than on your data. Two checks for that found no sign of it for mdbr-leaf-mt, MiniLM and gte-modernbert-base, and could not rule it out for EmbeddingGemma 2.
-- **Other languages are untested.** Only EmbeddingGemma 2 is built for them.
-- **Long rows cost time.** gte-modernbert-base took 0.9 s for 1,024 tokens and 2.3 s for 2,048. The model itself accepts 8,192, which took 31 s and 8 GB here, so hunch stops at 2,048; EmbeddingGemma 2 accepts as many and hunch stops it at 1,024. Use [`clip`](/reference/spec) to send less.
+BANKING77 is a public benchmark, and an encoder that met it in training would look better here than on your data. Two checks found no sign of that for mdbr-leaf-mt, MiniLM and gte-modernbert-base. They could not rule it out for EmbeddingGemma 2.
 
-Measure on your own rows before choosing: a second `distill` and `hunch test --model` ask nothing.
+[How it was measured](#how-it-was-measured) explains the other rows.
 
-The model folder records its encoder, so `model: distilled:…` and `hunch test` work whichever one trained it, and a student distilled before the default changed keeps running on MiniLM. Each encoder is pinned to one revision and runs on the onnxruntime the `distill` extra already installs. hunch uses a compressed build only where it computes the same embedding everywhere: on an Apple chip, on the Intel code path and in a browser. EmbeddingGemma 2's 8-bit build did, on every row. The 8-bit builds of mdbr-leaf-mt (23 MB) and gte-modernbert-base (150 MB) did not: between the Apple chip and the Intel code path they differed on 43 and 205 of 385 rows, so hunch uses their full-precision builds.
+The model folder records its encoder. A student keeps reading with the encoder it was trained on, so one distilled on MiniLM before the default changed still runs on MiniLM.
+
+## What an answer costs
+
+Inside a running app, a new answer takes 3 ms for a short message and 17 ms for a long shell command, with the default encoder. The larger encoders take longer, as [the table](#choose-the-encoder) shows.
+
+A fresh process first pays about 0.3 s to load the encoder. So a hook that starts a new process for every command gains no speed from a student. It saves the cost and the network call.
+
+A distilled answer costs nothing. It is stored like any other answer, so a row seen before comes from the store.
 
 ## Run it in a web page
 
-A student is a frozen encoder and one small layer per question, so a browser can run it. The answers it is sure of then never leave the visitor's machine, and only the rest reach your server.
+A student is small enough to run in a visitor's browser. The answers it is sure of then never leave their machine, and only the rest reach your server.
 
-```bash
-hunch export intent_distilled.yml
-```
+[Run a student in a web page](/guides/student-in-a-web-page) covers the export, the JavaScript module, and what to check before you ship it. A visitor can change what their own browser answers, so read that page before you use a browser student for anything that protects something.
 
-```text
-intent_distilled: exported to distilled/intent@1a70f2d8/browser
-  student.json: 1 question, 443 KB; student.js runs it
-  the page fetches the mdbr-leaf-mt encoder from huggingface.co/MongoDB/mdbr-leaf-mt
-```
+## How it was measured
 
-`student.json` holds each question's layer, temperature and `act`, and how a row becomes the text the encoder reads. It holds no rows from your data. Serve both files with your page:
+<AccordionGroup>
+  <Accordion title="The data and the machine">
+    BANKING77 is a public set of bank customers' messages (PolyAI, CC BY 4.0). The student learned from Jev's answers to 3,000 unlabelled messages and was tested on 385 others.
 
-```js
-import { load } from "./student.js";
+    Not seen means not seen as that exact text. 3 of the 385 test messages differ from a training message only in capital letters or punctuation.
 
-const student = await load("./student.json");
-await student.check();   // this browser answers as the exporting machine did, or it throws
+    Every time on this page is from one Apple M1 Pro's CPU, one row at a time. Every measurement is on English text.
+  </Accordion>
+  <Accordion title="How much 385 messages can tell you">
+    The student was wrong on 4 of the 297 messages it kept, which is 1.3%. On a sample that size the true rate could be anywhere from about 0.5% to 3.4% (a 95% Wilson interval).
 
-const { intent } = await student.answer({ text: "How do I link my card" });
-// { label: "card_linking", p: 0.9991, margin: 0.9988, route: "act" }
+    0.90 is the `act` the example's spec already had for Jev.
+  </Accordion>
+  <Accordion title="What the layer is, exactly">
+    The layer is a softmax regression, also called multinomial logistic regression. It holds one weight for each of the encoder's numbers and each answer, and one more number per answer.
 
-const unsure = await student.answer({ text: "How do I locate my card?" });
-// unsure.intent: { label: "card_linking", p: 0.4402, margin: 0.1406, route: "review" }: below act, ask your server
-```
+    It learns the answer the teacher chose, not the teacher's probabilities. We tried teaching it the probabilities instead, and the student was no better. On the 385 bank messages it was right on 92.2%, against 92.7%. On the command guard it missed 14 of the 121 yes answers, against 15, when both students kept the same share of the work.
 
-`answer` takes the spec's state columns as strings and returns the student's own answer for each question, in the shape [`judge()`](/guides/use-in-your-app) uses. It never asks the teacher: where `judge()` with `escalate` would return the teacher's answer, the module returns the student's with `route: "review"`, and asking is up to your page. On the 385 held-out messages, in Chrome on an Apple M1 Pro, all four students gave the label and the route Python gives on every message; 6 of the 1,540 confidences differed, each by 0.0001. A new answer took:
+    Each possible answer counts equally in training, however rare it is, so that a student does not learn to ignore a rare one.
 
-| | mdbr-leaf-mt | MiniLM | gte-modernbert-base | EmbeddingGemma 2 |
-| --- | --- | --- | --- | --- |
-| WebGPU | 11 ms | 11 ms | 24 ms | 33 ms |
-| WebAssembly, 4 threads | 7 ms | 7 ms | not measured | 188 ms |
-| WebAssembly, 1 thread | 22 ms | 22 ms | 0.2 s | 0.7 s |
-| Downloaded on the first visit | 92 MB | 90 MB | 600 MB | 350 MB |
+    Closeness on this page is the cosine similarity of two messages' lists of numbers.
+  </Accordion>
+  <Accordion title="How confidence is calibrated">
+    `distill` splits the lessons into five parts. Five times, it trains a layer on four parts and records what that layer says about the fifth. The result is a prediction for every lesson from a layer that never saw it.
 
-The module runs the two larger encoders on WebGPU where the browser has it, and the two small ones on WebAssembly. WebAssembly gets its threads only on a [cross-origin isolated](https://developer.mozilla.org/en-US/docs/Web/API/Window/crossOriginIsolated) page. The encoder is kept in the browser's Cache storage after the first visit: loading then took 0.2 s for the two small encoders, 1.7 s for gte-modernbert-base and 1.2 s for EmbeddingGemma 2, against 2 to 3 s, 12 s and 7.9 s with the download. A private window has less room: Chrome's held about 1 GB in all, so the larger encoders may be downloaded again there. `check()` took 0.2 s, and 3.7 s for EmbeddingGemma 2 on one-thread WebAssembly, so call it once after loading or in a test, not before every answer.
+    It then fits a temperature: the one number that makes those predictions' confidence match how often they were right. The student's answers stay the same, and only their confidence moves.
 
-On WebAssembly the work runs on the page's main thread, and the page cannot scroll or respond until an answer is done. That is unnoticeable for the two small encoders. For the two larger ones in a browser without WebGPU it is 0.2 to 0.7 s on every answer. The module runs unchanged in a Web Worker, which keeps the page free:
+    If those predictions hold fewer than 10 mistakes, there is too little to fit, and the confidence is left as it is.
 
-```js worker.js
-import { load } from "./student.js";
+    The answers those predictions are compared with are the lessons' own: gold where a row has it, and the teacher's elsewhere. So on lessons without gold, calibrated means calibrated to agreeing with the teacher. `hunch test`, on rows that have gold, is what checks the confidence against the truth.
+  </Accordion>
+  <Accordion title="Which rows are held back">
+    One in five rows that have gold is held back, chosen by a hash of the row's text, so the same rows are held back every time. Rows without gold are all used for training, because a test cannot grade them anyway.
+  </Accordion>
+  <Accordion title="The growing-store table">
+    The three students were trained by a script that calls hunch's own training. The first learned from the 770 development messages, the second from those and 1,000 of the unlabelled ones, and the third from those and all 3,000.
+  </Accordion>
+  <Accordion title="Matched quality">
+    Each of the 3,000 training messages is answered by a student trained without it. Each student's bar is then set at the lowest confidence where it agrees with Jev on at least 97% of what it answers, with a safety margin: the low end of a 95% Wilson interval has to clear 97%. The row shows the share each student answers at its bar.
 
-const student = load("./student.json");
-onmessage = async ({ data }) => postMessage({ id: data.id, answers: await (await student).answer(data.row) });
-```
+    At the bars this picked, the students agreed with Jev on 97.8% to 97.9% of what they answered. The rule also asks for 80% agreement on answers other than the commonest one, which never decided a bar here.
 
-```js
-const worker = new Worker("./worker.js", { type: "module" });
-worker.onmessage = ({ data }) => { /* data.answers.intent: { label, p, margin, route } */ };
-worker.postMessage({ id: 1, row: { text: "How do I link my card" } });
-```
+    This is the larger sample. It also compares more fairly than one fixed bar, because the four encoders' confidences are calibrated differently. A script that calls hunch's own training measured it.
+  </Accordion>
+  <Accordion title="The command guard rows">
+    The guard is data whose labels no encoder has seen. It asks three yes/no questions of 1,268 commands, with 121 yes answers in all. Every command is answered by a student trained without it.
 
-If you can't count on WebGPU, export a student on one of the small encoders: both are fast on every backend.
+    A confident miss is a no at 0.9 or above where the review panel said yes, or where Jev said yes and the panel gave no verdict. A gap of a few misses between encoders is within chance.
 
-Before you ship it:
+    The 2 of 6 and 1 of 12 in [When a student is the wrong tool](#when-a-student-is-the-wrong-tool) are from a MiniLM student with Jev behind it at `act: 0.9`, on commands the panel had labelled. Six and twelve commands are very few. That result shows that misses happen, not how often.
+  </Accordion>
+  <Accordion title="Long rows cost time">
+    gte-modernbert-base took 0.9 s for a 1,024-token row and 2.3 s for 2,048. The model itself accepts 8,192 tokens, which took 31 s and 8 GB here, so hunch stops it at 2,048. EmbeddingGemma 2 accepts as many, and hunch stops it at 1,024.
 
-- **A visitor can change the answer.** The student runs on their machine, and `student.json` is public: anyone can read it and try inputs until one gets through. That is fine for a convenience, like routing a message or suggesting a category. For a decision that protects something (moderation, fraud, eligibility, a command guard), judge the row on your server and treat the browser's answer as a preview, or keep the student on the server.
-- **The teacher needs your server.** A key in a page is public, so a `review` goes to an endpoint of yours that asks the teacher: [hunch-server](/reference/server)'s `POST /v1/judge`, or your own route calling `judge()`. It sees only the rows the student was unsure of.
-- **The page fetches from two other hosts.** By default the ONNX runtime and tokenizer library come from jsdelivr and the encoder's files from Hugging Face, each at a pinned version. To serve everything yourself, pass `load(url, { files: "/models/mdbr-leaf-mt/", ort, Tokenizer })`: a folder with the encoder's files, onnxruntime-web's bundle for the backend in use (`ort.wasm` or `ort.webgpu`), and the tokenizer library's class. The page then asks no other host.
-- **Some specs are refused.** The module repeats what Python does to a row: line endings, `clip`, and the column layout. `redact`, `chain` and a judgment that reads another judgment are not reproduced, so `export` stops on them. A `where` filter is yours to apply: the module answers every row it is given.
-- **Export again** after distilling again or changing `act`.
+    Use [`clip`](/reference/spec) to send less of a long column.
+  </Accordion>
+  <Accordion title="Why two encoders are not compressed">
+    Each encoder is pinned to one revision and runs on the onnxruntime the `distill` extra already installs.
 
-## When not to use it
+    hunch uses a compressed, 8-bit build of an encoder only if it computes the same numbers everywhere: on an Apple chip, on the Intel code path and in a browser. EmbeddingGemma 2's 8-bit build did, on every row.
 
-A student learns an answer from examples of it. When one answer is rare and missing it is costly, a few thousand rows aren't enough. The [command guard](/guides/guard-your-agent) is that case: 2% of shell commands need a person, so its student saw only 11 destructive commands. Measured by a script on commands the panel had labelled and the student never saw, a MiniLM student with Jev behind it (act 0.9) let through 2 of 6 destructive commands and 1 of 12 that send data out, where Jev alone let through none. Another encoder narrows this and does not close it: with every command answered by a student trained without it, the students said no at 0.9 or above, where Jev is never asked, to between 10 and 17 of the guard's 121 yes answers ([the table above](#choose-the-encoder)). `distill` flags the rare answers; `hunch test --model distilled:…` shows the misses on the dial's "act on no" side. For a guard like that, keep the engine until the store holds many more of the rare answer.
-
-A distilled model answers only the questions it was trained on, word for word. Change a question and it refuses until you distill again, and `hunch diff` against the old engine shows what the new student changed.
-
-## Speed and cost
-
-Inside a running app, a new answer takes 3 ms for a short message and 17 ms for a long shell command with the default encoder: the encoder and the linear layer, on the CPU. A fresh process pays about 0.3 s to load the encoder first, so a per-command hook gains no speed, only cost and network. The larger encoders take longer on both counts (see [Choose the encoder](#choose-the-encoder)). Distilled answers cost nothing and are stored like any other, so a row seen before comes from the store.
+    The 8-bit builds of mdbr-leaf-mt (23 MB) and gte-modernbert-base (150 MB) did not. Between the Apple chip and the Intel code path they differed on 43 and 205 of 385 rows, so hunch uses their full-precision builds.
+  </Accordion>
+</AccordionGroup>
