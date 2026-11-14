@@ -97,7 +97,8 @@ def run_onnx(cache: Path, name: str, texts: list[str]):
     EmbeddingGemma 2's classification prefix kept fewer answers local (77.1% against 79.3% at act 0.9). Its 8-bit
     build gave the same students as full precision (cosine 0.9995 or more) at a third of the download; on an M1
     Pro it is the slower of the two (58 ms against 22 for a short message, about the same for a long one).
-    mdbr-leaf-mt kept 73.1% local at a threshold holding 97% agreement with the teacher, MiniLM 68.2%."""
+    mdbr-leaf-mt kept 73.1% local at the lowest threshold whose agreement with the teacher clears 97% at the low
+    end of a 95% Wilson interval, MiniLM 68.2%."""
     import numpy as np
     spec = FILES[name]
     if name not in _encoders:
