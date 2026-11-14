@@ -57,7 +57,8 @@
               "guides/use-in-your-app",
               "guides/pydantic",
               "guides/sql",
-              "guides/distill"
+              "guides/distill",
+              "guides/student-in-a-web-page"
             ]
           }
         ]

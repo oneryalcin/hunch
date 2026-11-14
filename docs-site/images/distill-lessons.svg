@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 330" role="img" aria-labelledby="title desc">
+  <title id="title">Where a student's lessons come from, and which rows are kept back to test it</title>
+  <desc id="desc">Every answer the engine gave is in your store. hunch distill turns the stored rows and their answers into worked examples and trains the student on them. One in five of the rows that have gold is held back and never shown to the student, so hunch test can grade it on rows it has not seen. The answer the student copies is your reviewed answer where a row has one, and the engine's answer elsewhere.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, Segoe UI, sans-serif; fill: #243237; }
+    .name { font-size: 19px; font-weight: 700; }
+    .detail { font-size: 15px; }
+    .small { font-size: 13px; }
+    .mid { text-anchor: middle; }
+    .end { text-anchor: end; }
+    .box { fill: #F7F8F5; stroke: #B8C9CA; stroke-width: 2; }
+    .local { fill: #E7EFF0; stroke: #405A60; stroke-width: 2; }
+    .remote { fill: #FFF2EB; stroke: #B7654D; stroke-width: 2; }
+    .line { fill: none; stroke: #607C81; stroke-width: 2.2; marker-end: url(#tip); }
+    .num { fill: #607C81; }
+    .bar { fill: #405A60; }
+    .axis { stroke: #B8C9CA; stroke-width: 1.5; }
+  </style>
+  <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#607C81"/></marker></defs>
+  <rect width="600" height="330" fill="#FFFFFF"/>
+  <rect x="10" y="16" width="150" height="83" rx="12" class="box"/>
+  <text x="26" y="51" class="name">Your store</text><text x="26" y="75" class="detail">every answer</text>
+  <path d="M160 57 H186" class="line"/>
+  <rect x="190" y="16" width="200" height="83" rx="12" class="box"/>
+  <text x="206" y="51" class="name">Worked examples</text><text x="206" y="75" class="detail">a row and its answer</text>
+  <path d="M390 57 H416" class="line"/>
+  <rect x="420" y="16" width="170" height="83" rx="12" class="local"/>
+  <text x="436" y="51" class="name">hunch distill</text><text x="436" y="75" class="detail">trains the layer</text>
+  <path d="M250 99 V140 H100 V180" class="line"/>
+  <text x="240" y="131" class="small end">1 in 5 rows that have gold</text>
+  <path d="M505 99 V180" class="line"/>
+  <rect x="10" y="184" width="180" height="92" rx="12" class="remote"/>
+  <text x="26" y="219" class="name">Held back</text><text x="26" y="243" class="detail">the student never</text><text x="26" y="261" class="detail">sees these</text>
+  <path d="M190 225 H216" class="line"/>
+  <rect x="220" y="184" width="170" height="83" rx="12" class="box"/>
+  <text x="236" y="219" class="name">hunch test</text><text x="236" y="243" class="detail">grades the student</text>
+  <path d="M420 225 H394" class="line"/>
+  <rect x="420" y="184" width="170" height="83" rx="12" class="local"/>
+  <text x="436" y="219" class="name">Student</text><text x="436" y="243" class="detail">a small folder</text>
+  <text x="10" y="298" class="detail">The answer to copy is your reviewed answer where a row has one,</text>
+  <text x="10" y="319" class="detail">and the engine's answer where it doesn't.</text>
+</svg>
